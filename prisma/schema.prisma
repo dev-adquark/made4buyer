@@ -22,6 +22,9 @@ model Review {
   platform String?
   priceTier String?
   imageUrl String?
+  imageSource String?
+  imageLicense String?
+  imageAttribution String?
   sourceUrl String?
   canonicalUrl String?
   status ReviewStatus @default(DRAFT)
