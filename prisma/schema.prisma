@@ -68,6 +68,7 @@ model IngestionRun {
   rejected Int @default(0)
   duplicate Int @default(0)
   errors Json?
+  lockKey String? @unique
   @@index([startedAt])
 }
 
