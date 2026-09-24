@@ -3,7 +3,7 @@ function slug(s:string){return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replac
 function cleanText(v:string){return v.replace(/\s+/g," ").trim()}
 function validReview(item:{title:string;summary:string;body:string;productName:string;confidence:number}){return item.title.length>=8&&item.body.length>=120&&item.productName.length>=2&&item.summary.length>=20&&Number.isFinite(item.confidence)}
 const LOCK_KEY="ingestion";
-const LOCK_MAX_AGE_MS=2*60*60*1000;
+const LOCK_MAX_AGE_MS=6*60*60*1000;
 async function acquireIngestionLock(){
  const now=new Date();
  await db.ingestionRun.updateMany({where:{lockKey:LOCK_KEY,startedAt:{lt:new Date(now.getTime()-LOCK_MAX_AGE_MS)}},data:{lockKey:null,status:"FAILED",finishedAt:now,errors:{message:"Stale ingestion lock cleared"}}});
@@ -46,4 +46,4 @@ export async function runIngestion(){
   throw error;
  }finally{await releaseIngestionLock(run.id)}
 }
-export async function revalidateDeals(){const deals=await db.deal.findMany({select:{id:true,url:true}});let valid=0;for(const d of deals){const ok=await verifyLink(d.url);await db.deal.update({where:{id:d.id},data:{verified:ok,lastChecked:new Date()}});if(ok)valid++}return{checked:deals.length,valid}}
+export async function revalidateDeals(){const deals=await db.deal.findMany({select:{id:true,url:true}});let valid=0;for(let i=0;i<deals.length;i+=8){const batch=deals.slice(i,i+8);const results=await Promise.all(batch.map(async d=>({id:d.id,ok:await verifyLink(d.url)})));await Promise.all(results.map(r=>db.deal.update({where:{id:r.id},data:{verified:r.ok,lastChecked:new Date()}})));valid+=results.filter(r=>r.ok).length}return{checked:deals.length,valid}}
