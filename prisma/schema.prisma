@@ -34,6 +34,9 @@ model Review {
   updatedAt DateTime @updatedAt
   deals Deal[]
   events AnalyticsEvent[]
+  @@index([status,publishedAt])
+  @@index([category,status,publishedAt])
+  @@index([canonicalUrl])
 }
 
 model Deal {
@@ -50,6 +53,8 @@ model Deal {
   lastChecked DateTime?
   createdAt DateTime @default(now())
   review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  @@index([reviewId,verified])
+  @@index([verified,lastChecked])
 }
 
 model IngestionRun {
@@ -63,6 +68,7 @@ model IngestionRun {
   rejected Int @default(0)
   duplicate Int @default(0)
   errors Json?
+  @@index([startedAt])
 }
 
 model SponsoredPlacement {
@@ -77,6 +83,7 @@ model SponsoredPlacement {
   endAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  @@index([active,startAt,endAt])
 }
 
 model AnalyticsEvent {
@@ -88,6 +95,10 @@ model AnalyticsEvent {
   metadata Json?
   createdAt DateTime @default(now())
   review Review? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  @@index([event,createdAt])
+  @@index([sessionId,createdAt])
+  @@index([reviewId,createdAt])
+  @@index([category,createdAt])
 }
 
 enum ReviewStatus {
