@@ -2,7 +2,9 @@ import {db} from "./db";import {fetchContent} from "./content-api";import {findD
 function slug(s:string){return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,180)}
 function cleanText(v:string){return v.replace(/\s+/g," ").trim()}
 function validReview(item:{title:string;summary:string;body:string;productName:string;confidence:number}){return item.title.length>=8&&item.body.length>=120&&item.productName.length>=2&&item.summary.length>=20&&Number.isFinite(item.confidence)}
+async function activeIngestion(){return db.ingestionRun.findFirst({where:{status:"RUNNING"},select:{id:true}})}
 export async function runIngestion(){
+ if(await activeIngestion())throw new Error("An ingestion run is already in progress");
  const run=await db.ingestionRun.create({data:{source:process.env.CONTENT_API_URL||"unconfigured",status:"RUNNING"}});
  let accepted=0,rejected=0,duplicate=0;const errors:string[]=[];
  try{
