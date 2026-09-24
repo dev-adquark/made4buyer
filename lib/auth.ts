@@ -1,7 +1,8 @@
-import crypto from "crypto";import{cookies}from"next/headers";
+import crypto from"crypto";import{cookies}from"next/headers";
 const SESSION_MAX_AGE=8*60*60*1000;
 const secret=()=>{const v=process.env.ADMIN_SESSION_SECRET;if(v)return v;if(process.env.NODE_ENV==="production")throw new Error("ADMIN_SESSION_SECRET is not configured");return"development-secret"};
 export function sign(v:string){return crypto.createHmac("sha256",secret()).update(v).digest("hex")}
-export async function isAdmin(){const c=await cookies();const v=c.get("admin_session")?.value;if(!v)return false;const p=v.split(".");if(p.length!==3||!p[0]||!p[1]||!p[2])return false;const ts=Number(p[0]);if(!Number.isFinite(ts)||Date.now()-ts<0||Date.now()-ts>SESSION_MAX_AGE)return false;const payload=p[0]+"."+p[1];const expected=sign(payload);try{return p[2].length===expected.length&&crypto.timingSafeEqual(Buffer.from(p[2]),Buffer.from(expected))}catch{return false}}
-export function validAdmin(e:string,p:string){const email=process.env.ADMIN_EMAIL,password=process.env.ADMIN_PASSWORD;if(!email||!password)return false;return e===email&&p===password}
+export function createSession(email:string){const payload=Buffer.from(JSON.stringify({ts:Date.now(),email})).toString("base64url");return payload+"."+sign(payload)}
+export async function isAdmin(){const v=(await cookies()).get("admin_session")?.value;if(!v)return false;const p=v.split(".");if(p.length!==2||!p[0]||!p[1])return false;try{const expected=sign(p[0]);if(p[1].length!==expected.length||!crypto.timingSafeEqual(Buffer.from(p[1]),Buffer.from(expected)))return false;const data=JSON.parse(Buffer.from(p[0],"base64url").toString()) as {ts?:unknown,email?:unknown};const ts=Number(data.ts);const email=typeof data.email==="string"?data.email:"";return Boolean(email&&Number.isFinite(ts)&&Date.now()-ts>=0&&Date.now()-ts<=SESSION_MAX_AGE&&validAdmin(email,process.env.ADMIN_PASSWORD||""))}catch{return false}}
+export function validAdmin(e:string,p:string){const email=process.env.ADMIN_EMAIL,password=process.env.ADMIN_PASSWORD;return Boolean(email&&password)&&e===email&&p===password}
 export const adminSessionMaxAge=Math.floor(SESSION_MAX_AGE/1000);
