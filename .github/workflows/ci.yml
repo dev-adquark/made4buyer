@@ -16,3 +16,15 @@ jobs:
       - run: npx prisma generate
       - run: npm run typecheck
       - run: npm run build
+  site-audit:
+    runs-on: ubuntu-latest
+    if: ${{ vars.AUDIT_BASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm run audit
+        env:
+          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL }}
