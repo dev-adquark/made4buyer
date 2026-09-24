@@ -1,0 +1,2 @@
+const rules:[RegExp,string][] = [[/laptop|notebook|macbook|chromebook/i,"Laptops"],[/iphone|android|pixel|galaxy|phone/i,"Phones"],[/chatgpt|claude|gemini|copilot|ai tool/i,"AI Tools"],[/github|gitlab|docker|kubernetes|ide|api|developer/i,"Developer Software"],[/monitor|keyboard|mouse|headphone|ssd|storage|webcam/i,"Accessories"]];
+export function categorize(text:string){const hit=rules.find(function(x){return x[0].test(text)});return {category:hit?hit[1]:"Technology",confidence:hit?.[1]?0.92:0.55};}
