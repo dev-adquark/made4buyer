@@ -1,0 +1,2 @@
+import {db} from "@/lib/db"; import {NextResponse} from "next/server";
+export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){const p=await params;const d=await db.deal.findUnique({where:{id:p.id},include:{review:true}});if(!d||!d.verified)return NextResponse.redirect(new URL("/",req.url));await db.analyticsEvent.create({data:{reviewId:d.reviewId,event:"affiliate_click",category:d.review.category,metadata:{dealId:d.id}}});return NextResponse.redirect(d.url)}
