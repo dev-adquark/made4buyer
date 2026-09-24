@@ -28,7 +28,7 @@ Pipeline: Content API → normalize/dedupe → taxonomy → image enrichment →
 3. Grant that service account access to the target Search Console property with appropriate read access.
 4. Set `GSC_SITE_URL` to the exact Search Console property URL.
 5. Set `GSC_SERVICE_ACCOUNT_JSON` to the service-account JSON as a single environment variable value.
-6. Open `/admin/gsc` after signing into the admin area and select a reporting date range.
+6. Open `/admin/gsc` after signing into the admin area; the current report uses the latest available complete reporting window.
 
 Production external requirements: actual Content API schema, Sovrn account/feed contract, image provider, PostgreSQL, Search Console credentials and analytics/consent configuration. Missing integrations remain explicitly unavailable rather than simulated.
 
