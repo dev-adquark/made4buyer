@@ -13,7 +13,8 @@ export async function POST(req:Request){
   if(!await isAdmin()) return NextResponse.json({error:"Unauthorized"},{status:401});
   const base=process.env.NEXT_PUBLIC_SITE_URL;
   if(!base)return NextResponse.json({error:"NEXT_PUBLIC_SITE_URL is not configured"},{status:503});
-  const origin=new URL(base);
+  let origin:URL;
+  try{origin=new URL(base)}catch{return NextResponse.json({error:"NEXT_PUBLIC_SITE_URL is invalid"},{status:503})}
   const checked=new Map<string,Awaited<ReturnType<typeof check>>>();
   const errors:Awaited<ReturnType<typeof check>>[]=[];
   for(const path of seeds){const u=new URL(path,origin).href;const r=await check(u);checked.set(u,r);if(!r.ok)errors.push(r)}
@@ -22,7 +23,7 @@ export async function POST(req:Request){
     try{
       const r=await fetch(sitemap.url,{cache:"no-store"});
       const xml=await r.text();
-      for(const match of xml.matchAll(/<loc>\\s*([^<]+?)\\s*<\\/loc>/gi)){
+      for(const match of xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)){
         const u=internal(match[1].trim(),origin);if(u&&!checked.has(u)&&checked.size<300)checked.set(u,await check(u));
       }
     }catch{}
