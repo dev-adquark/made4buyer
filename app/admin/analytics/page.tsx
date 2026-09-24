@@ -1,2 +1,3 @@
 import {db} from "@/lib/db"; import {isAdmin} from "@/lib/auth"; import {redirect} from "next/navigation";
+export const dynamic="force-dynamic";
 export default async function Analytics(){if(!await isAdmin())redirect("/admin/login");const events=await db.analyticsEvent.groupBy({by:["event","category"],_count:{_all:true},orderBy:{_count:{event:"desc"}}});return <main className="admin"><div className="container"><h1>Analytics</h1><p className="muted">First-party event counts from the platform event endpoint.</p><table className="table"><thead><tr><th>Event</th><th>Category</th><th>Count</th></tr></thead><tbody>{events.map((e,i)=><tr key={i}><td>{e.event}</td><td>{e.category||"—"}</td><td>{e._count._all}</td></tr>)}</tbody></table></div></main>}
