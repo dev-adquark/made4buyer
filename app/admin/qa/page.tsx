@@ -10,6 +10,6 @@ export default async function QA(){
   <td>{r.category}<br/><span className="muted">{r.subcategory||"No subcategory"} · {Math.round(r.confidence*100)}%</span></td>
   <td>{r.imageUrl?<span className="ok">Ready</span>:<span className="warn">Missing</span>}{r.imageUrl&&<><br/><span className="muted">{r.imageSource||"source unknown"}</span></>}</td>
   <td>{r.deals.length}</td><td>{verified}</td><td>{r.status}{failures.length>0&&<><br/><span className="warn">QA: {failures.join(", ")}</span></>}</td>
-  <td>{failures.length===0?<form action="/api/admin/publish" method="post"><input type="hidden" name="id" value={r.id}/><button className="btn" type="submit">{r.status==="PUBLISHED"?"Republish":"Publish"}</button></form>:<span className="muted">Fix QA</span>}</td>
+  <td><div className="btnrow">{failures.length===0?<form action="/api/admin/publish" method="post"><input type="hidden" name="id" value={r.id}/><button className="btn" type="submit">{r.status==="PUBLISHED"?"Republish":"Publish"}</button></form>:<span className="muted">Fix QA</span>}<form action="/api/admin/reject" method="post"><input type="hidden" name="id" value={r.id}/><button className="btn" type="submit">Reject</button></form></div></td>
   </tr>})}</tbody></table></div></main>;
 }
