@@ -28,7 +28,7 @@ export default async function Sponsored(){
         <td>{r.startAt?.toLocaleString()||"Any"} → {r.endAt?.toLocaleString()||"Any"}</td>
         <td>{r.active?"Active":"Off"}</td>
         <td><form action="/api/admin/sponsored" method="post">
-          <input type="hidden" name="id" value={r.id}/><input type="hidden" name="title" value={r.title}/><input type="hidden" name="label" value={r.label}/><input type="hidden" name="url" value={r.url}/><input type="hidden" name="minEvents" value={r.minEvents}/><input type="hidden" name="minSessions" value={r.minSessions}/>
+          <input type="hidden" name="id" value={r.id}/><input type="hidden" name="title" value={r.title}/><input type="hidden" name="label" value={r.label}/><input type="hidden" name="url" value={r.url}/><input type="hidden" name="minEvents" value={r.minEvents}/><input type="hidden" name="minSessions" value={r.minSessions}/><input type="hidden" name="startAt" value={r.startAt?new Date(r.startAt).toISOString().slice(0,16):""}/><input type="hidden" name="endAt" value={r.endAt?new Date(r.endAt).toISOString().slice(0,16):""}/>
           <input type="hidden" name="active" value={r.active?"":"on"}/>
           <button className="btn" type="submit">{r.active?"Disable":"Enable"}</button>
         </form></td>
