@@ -17,6 +17,7 @@ async function allowed(raw:string){
  }
  return true;
 }
+async function request(input:string,init:RequestInit){const c=new AbortController();const t=setTimeout(()=>c.abort(),8000);try{return await fetch(input,{...init,signal:c.signal})}finally{clearTimeout(t)}}
 export async function verifyLink(raw:string){
  try{
   let current=raw;
@@ -25,11 +26,11 @@ export async function verifyLink(raw:string){
    if(visited.has(current))return false;
    visited.add(current);
    if(!await allowed(current))return false;
-   const r=await fetch(current,{method:"HEAD",redirect:"manual",cache:"no-store"});
+   const r=await request(current,{method:"HEAD",redirect:"manual",cache:"no-store"});
    if(r.status>=300&&r.status<400){const location=r.headers.get("location");if(!location)return false;current=new URL(location,current).toString();continue}
    if(r.ok)return true;
    if([403,405,429].includes(r.status)){
-    const fallback=await fetch(current,{method:"GET",redirect:"manual",cache:"no-store",headers:{"Range":"bytes=0-1023"}});
+    const fallback=await request(current,{method:"GET",redirect:"manual",cache:"no-store",headers:{"Range":"bytes=0-1023"}});
     if(fallback.status>=300&&fallback.status<400){const location=fallback.headers.get("location");if(!location)return false;current=new URL(location,current).toString();continue}
     return fallback.ok;
    }
