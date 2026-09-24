@@ -1,6 +1,6 @@
 import Link from "next/link"; import {db} from "@/lib/db";
 export const dynamic="force-dynamic";
-const cats=[["Laptops","computers-laptops"],["Phones","phones-smartphones"],["AI Tools","ai-tools"],["Developer Software","developer-software"],["Accessories","computer-accessories"]];
+const cats=[["Computers","computers"],["Phones","phones"],["AI Tools","ai-tools"],["Developer Software","developer-software"],["Accessories","computer-accessories"]];
 export default async function Home(){
   const [reviews,placement]=await Promise.all([db.review.findMany({where:{status:"PUBLISHED"},orderBy:{publishedAt:"desc"},take:9}),db.sponsoredPlacement.findFirst({where:{active:true,AND:[{OR:[{startAt:null},{startAt:{lte:new Date()}}]},{OR:[{endAt:null},{endAt:{gte:new Date()}}]}]}})]);
   const since=new Date(Date.now()-30*24*60*60*1000);let sponsoredEligible=false;
