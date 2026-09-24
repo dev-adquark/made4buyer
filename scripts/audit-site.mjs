@@ -11,17 +11,16 @@ async function request(url, method="GET") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {method, redirect:"manual", signal:controller.signal, headers:{accept:"text/html,application/xml,text/plain,*/*"}});
-    return res;
+    return await fetch(url, {method, redirect:"manual", signal:controller.signal, headers:{accept:"text/html,application/xml,text/plain,*/*"}});
   } finally { clearTimeout(timer); }
 }
 async function check(url) {
   let res;
-  try { res = await request(url, "HEAD"); } catch (e) { return {url,status:0,error:String(e?.message || e)}; }
+  try { res = await request(url, "HEAD"); } catch (e) { return {url,status:0,ok:false,error:String(e?.message || e),contentType:""}; }
   if ([403,405,429].includes(res.status) || res.status >= 500) {
-    try { res = await request(url, "GET"); } catch (e) { return {url,status:0,error:String(e?.message || e)}; }
+    try { res = await request(url, "GET"); } catch (e) { return {url,status:0,ok:false,error:String(e?.message || e),contentType:""}; }
   }
-  return {url,status:res.status,ok:res.status >= 200 && res.status < 400};
+  return {url,status:res.status,ok:res.status >= 200 && res.status < 400,contentType:res.headers.get("content-type") || ""};
 }
 function internal(raw) {
   try {
@@ -34,15 +33,14 @@ function internal(raw) {
 }
 function extractLinks(html) {
   const out = new Set();
-  const re = /(?:href|src)\\s*=\\s*["']([^"'#]+)["']/gi;
+  const re = /(?:href|src)\s*=\s*["']([^"'#]+)["']/gi;
   let m;
   while ((m = re.exec(html))) { const u = internal(m[1]); if (u) out.add(u); }
   return [...out];
 }
 async function read(url) {
   const res = await request(url, "GET");
-  const text = await res.text();
-  return {res,text};
+  return {res,text:await res.text()};
 }
 
 const checked = new Map();
@@ -58,7 +56,7 @@ const sitemapUrl = new URL("/sitemap.xml", origin).href;
 try {
   const {res,text} = await read(sitemapUrl);
   if (res.ok) {
-    const locs = [...text.matchAll(/<loc>\\s*([^<]+?)\\s*<\\/loc>/gi)].map(m=>m[1].trim()).slice(0,maxUrls);
+    const locs = [...text.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map(m=>m[1].trim()).slice(0,maxUrls);
     for (const raw of locs) {
       const u = internal(raw);
       if (u && !checked.has(u)) checked.set(u, await check(u));
@@ -66,11 +64,11 @@ try {
   }
 } catch {}
 
-const crawl = [...checked.keys()].filter(u=>/text\\/html/i.test(checked.get(u)?.contentType || ""));
+const crawl = [...checked.keys()].filter(u=>/text\/html/i.test(checked.get(u)?.contentType || ""));
 for (const url of crawl.slice(0,50)) {
   try {
     const {res,text} = await read(url);
-    if (!res.ok || !/text\\/html/i.test(res.headers.get("content-type")||"")) continue;
+    if (!res.ok || !/text\/html/i.test(res.headers.get("content-type")||"")) continue;
     for (const link of extractLinks(text)) {
       if (checked.size >= maxUrls && !checked.has(link)) continue;
       if (!checked.has(link)) checked.set(link, await check(link));
