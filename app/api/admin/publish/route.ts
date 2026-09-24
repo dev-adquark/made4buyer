@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server"; import {isAdmin} from "@/lib/auth"; import {db} from "@/lib/db";
+export async function POST(req:Request){if(!await isAdmin())return NextResponse.json({error:"Unauthorized"},{status:401});const f=await req.formData();const id=String(f.get("id"));await db.review.update({where:{id},data:{status:"PUBLISHED",publishedAt:new Date()}});return NextResponse.redirect(new URL("/admin/qa",req.url))}
