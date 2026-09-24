@@ -1,0 +1,1 @@
+export async function verifyLink(url:string){try{const r=await fetch(url,{method:"HEAD",redirect:"follow",cache:"no-store"});return r.ok||[301,302,303,307,308].includes(r.status)}catch{return false}}
