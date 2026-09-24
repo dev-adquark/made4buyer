@@ -23,8 +23,8 @@ export async function runIngestion(){
       if(sourceDuplicate||canonicalDuplicate){duplicate++;continue}
       let finalSlug=slug(normalized.title)||"review";
       if(await db.review.findUnique({where:{slug:finalSlug}})) finalSlug=finalSlug+"-"+normalized.sourceId.slice(0,10).toLowerCase().replace(/[^a-z0-9]/g,"");
-      const imageUrl=await enrichImage(normalized.productName,normalized.imageUrl);
-      const review=await db.review.create({data:{sourceId:normalized.sourceId,title:normalized.title,slug:finalSlug,summary:normalized.summary,body:normalized.body,productName:normalized.productName,brand:normalized.brand,category:normalized.category,subcategory:normalized.subcategory,audience:normalized.audience,platform:normalized.platform,priceTier:normalized.priceTier,imageUrl,sourceUrl:normalized.sourceUrl,canonicalUrl:normalized.canonicalUrl,confidence:normalized.confidence,status:"QUEUED"}});
+      const image=await enrichImage(normalized.productName,normalized.imageUrl);
+      const review=await db.review.create({data:{sourceId:normalized.sourceId,title:normalized.title,slug:finalSlug,summary:normalized.summary,body:normalized.body,productName:normalized.productName,brand:normalized.brand,category:normalized.category,subcategory:normalized.subcategory,audience:normalized.audience,platform:normalized.platform,priceTier:normalized.priceTier,imageUrl:image?.url,imageSource:image?.source||normalized.imageSource,imageLicense:image?.license||normalized.imageLicense,imageAttribution:image?.attribution||normalized.imageAttribution,sourceUrl:normalized.sourceUrl,canonicalUrl:normalized.canonicalUrl,confidence:normalized.confidence,status:"QUEUED"}});
       try{
         const deals=await findDeals(normalized.productName);
         for(const d of deals.slice(0,5)){
