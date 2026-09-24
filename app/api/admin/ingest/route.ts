@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server"; import {isAdmin} from "@/lib/auth"; import {runIngestion} from "@/lib/engine";
+export async function POST(){if(!await isAdmin())return NextResponse.json({error:"Unauthorized"},{status:401});try{return NextResponse.json(await runIngestion())}catch(e){return NextResponse.json({error:String(e)},{status:500})}}
