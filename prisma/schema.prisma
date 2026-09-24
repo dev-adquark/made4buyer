@@ -1,9 +1,81 @@
-generator client { provider = "prisma-client-js" }
+generator client {
+  provider = "prisma-client-js"
+}
 
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
 
-model Review { id String @id @default(cuid()) sourceId String @unique title String slug String @unique summary String body String productName String? brand String? category String subcategory String? audience String? platform String? priceTier String? imageUrl String? sourceUrl String? canonicalUrl String? status ReviewStatus @default(DRAFT) confidence Float @default(0) publishedAt DateTime? createdAt DateTime @default(now()) updatedAt DateTime @updatedAt deals Deal[] events AnalyticsEvent[] }
-model Deal { id String @id @default(cuid()) reviewId String productName String merchant String? dealId String? url String price Float? currency String? availability String? verified Boolean @default(false) lastChecked DateTime? createdAt DateTime @default(now()) review Review @relation(fields:[reviewId],references:[id],onDelete:Cascade) }
-model IngestionRun { id String @id @default(cuid()) startedAt DateTime @default(now()) finishedAt DateTime? source String status String total Int @default(0) accepted Int @default(0) rejected Int @default(0) duplicate Int @default(0) errors Json? }
-model AnalyticsEvent { id String @id @default(cuid()) reviewId String? event String category String? sessionId String? metadata Json? createdAt DateTime @default(now()) review Review? @relation(fields:[reviewId],references:[id],onDelete:SetNull) }
-enum ReviewStatus { DRAFT QUEUED PUBLISHED REJECTED }
+model Review {
+  id String @id @default(cuid())
+  sourceId String @unique
+  title String
+  slug String @unique
+  summary String
+  body String
+  productName String?
+  brand String?
+  category String
+  subcategory String?
+  audience String?
+  platform String?
+  priceTier String?
+  imageUrl String?
+  sourceUrl String?
+  canonicalUrl String?
+  status ReviewStatus @default(DRAFT)
+  confidence Float @default(0)
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deals Deal[]
+  events AnalyticsEvent[]
+}
+
+model Deal {
+  id String @id @default(cuid())
+  reviewId String
+  productName String
+  merchant String?
+  dealId String?
+  url String
+  price Float?
+  currency String?
+  availability String?
+  verified Boolean @default(false)
+  lastChecked DateTime?
+  createdAt DateTime @default(now())
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+}
+
+model IngestionRun {
+  id String @id @default(cuid())
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  source String
+  status String
+  total Int @default(0)
+  accepted Int @default(0)
+  rejected Int @default(0)
+  duplicate Int @default(0)
+  errors Json?
+}
+
+model AnalyticsEvent {
+  id String @id @default(cuid())
+  reviewId String?
+  event String
+  category String?
+  sessionId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  review Review? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+}
+
+enum ReviewStatus {
+  DRAFT
+  QUEUED
+  PUBLISHED
+  REJECTED
+}
