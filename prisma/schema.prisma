@@ -26,7 +26,7 @@ model Review {
   imageLicense String?
   imageAttribution String?
   sourceUrl String?
-  canonicalUrl String? @unique
+  canonicalUrl String?
   status ReviewStatus @default(DRAFT)
   confidence Float @default(0)
   publishedAt DateTime?
