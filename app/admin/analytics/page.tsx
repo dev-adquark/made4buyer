@@ -18,4 +18,5 @@ export default async function Analytics(){
   <div className="stats"><div className="stat">Compare events<b>{compares}</b></div><div className="stat">Search events<b>{searches}</b></div></div>
   <section className="section"><h2>Events</h2><table className="table"><thead><tr><th>Event</th><th>Category</th><th>Count</th></tr></thead><tbody>{events.map((e,i)=><tr key={i}><td>{e.event}</td><td>{e.category||"—"}</td><td>{e._count._all}</td></tr>)}</tbody></table></section>
   <section className="section"><h2>Top categories</h2><table className="table"><thead><tr><th>Category</th><th>Events</th></tr></thead><tbody>{categories.map((c,i)=><tr key={i}><td>{c.category}</td><td>{c._count._all}</td></tr>)}</tbody></table></section>
-  </div></main>
+  </div></main>;
+}
