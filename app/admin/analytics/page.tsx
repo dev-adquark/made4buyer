@@ -3,13 +3,14 @@ export const dynamic="force-dynamic";
 export default async function Analytics(){
   if(!await isAdmin())redirect("/admin/login");
   const since=new Date(Date.now()-30*24*60*60*1000);
+  const traffic={createdAt:{gte:since},event:{in:["page_view","review_view"]}};
   const [published,views,clicks,compares,searches,sessions,events,categories]=await Promise.all([
     db.review.count({where:{status:"PUBLISHED"}}),
-    db.analyticsEvent.count({where:{event:"page_view",createdAt:{gte:since}}}),
+    db.analyticsEvent.count({where:traffic}),
     db.analyticsEvent.count({where:{event:"affiliate_click",createdAt:{gte:since}}}),
     db.analyticsEvent.count({where:{event:"compare",createdAt:{gte:since}}}),
     db.analyticsEvent.count({where:{event:"search",createdAt:{gte:since}}}),
-    db.analyticsEvent.findMany({where:{createdAt:{gte:since},sessionId:{not:null}},select:{sessionId:true},distinct:["sessionId"]}),
+    db.analyticsEvent.findMany({where:{...traffic,sessionId:{not:null}},select:{sessionId:true},distinct:["sessionId"]}),
     db.analyticsEvent.groupBy({by:["event","category"],where:{createdAt:{gte:since}},_count:{_all:true},orderBy:{_count:{event:"desc"}}}),
     db.analyticsEvent.groupBy({by:["category"],where:{createdAt:{gte:since},category:{not:null}},_count:{_all:true},orderBy:{_count:{category:"desc"}}})
   ]);
