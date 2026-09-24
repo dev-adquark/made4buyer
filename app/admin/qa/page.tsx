@@ -11,4 +11,5 @@ export default async function QA(){
   <td>{r.imageUrl?<span className="ok">Ready</span>:<span className="warn">Missing</span>}{r.imageUrl&&<><br/><span className="muted">{r.imageSource||"source unknown"}</span></>}</td>
   <td>{r.deals.length}</td><td>{verified}</td><td>{r.status}{failures.length>0&&<><br/><span className="warn">QA: {failures.join(", ")}</span></>}</td>
   <td>{failures.length===0?<form action="/api/admin/publish" method="post"><input type="hidden" name="id" value={r.id}/><button className="btn" type="submit">{r.status==="PUBLISHED"?"Republish":"Publish"}</button></form>:<span className="muted">Fix QA</span>}</td>
-  </tr>})}</tbody></table></div></main>
+  </tr>})}</tbody></table></div></main>;
+}
