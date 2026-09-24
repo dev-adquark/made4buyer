@@ -1,3 +1,10 @@
-import {NextResponse} from "next/server";import {isAdmin} from "@/lib/auth";import {querySearchConsole} from "@/lib/gsc";
+import{NextResponse}from"next/server";import{isAdmin}from"@/lib/auth";import{querySearchConsole}from"@/lib/gsc";
 export const dynamic="force-dynamic";
-export async function GET(){if(!await isAdmin())return NextResponse.json({error:"Unauthorized"},{status:401});try{const end=new Date();end.setUTCDate(end.getUTCDate()-2);const start=new Date(end);start.setUTCDate(start.getUTCDate()-29);const iso=(d:Date)=>d.toISOString().slice(0,10);return NextResponse.json({configured:true,data:await querySearchConsole(iso(start),iso(end))})}catch(error){return NextResponse.json({configured:false,error:error instanceof Error?error.message:"Search Console unavailable"},{status:200})}}
+export async function GET(){
+ if(!await isAdmin())return NextResponse.json({error:"Unauthorized"},{status:401});
+ try{
+  const end=new Date();end.setUTCDate(end.getUTCDate()-2);const start=new Date(end);start.setUTCDate(start.getUTCDate()-29);
+  const iso=(d:Date)=>d.toISOString().slice(0,10);
+  return NextResponse.json({configured:true,data:await querySearchConsole(iso(start),iso(end))});
+ }catch(error){return NextResponse.json({configured:false,error:error instanceof Error?error.message:"Search Console unavailable"},{status:503})}
+}
