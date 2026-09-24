@@ -1,2 +1,2 @@
-import {NextResponse} from "next/server"; import {revalidateDeals} from "@/lib/engine";
-export async function GET(req:Request){if(req.headers.get("authorization")!=="Bearer "+process.env.CRON_SECRET)return NextResponse.json({error:"Unauthorized"},{status:401});return NextResponse.json(await revalidateDeals())}
+import{NextResponse}from"next/server";import{revalidateDeals}from"@/lib/engine";
+export async function GET(req:Request){if(req.headers.get("authorization")!=="Bearer "+process.env.CRON_SECRET)return NextResponse.json({error:"Unauthorized"},{status:401});try{return NextResponse.json(await revalidateDeals())}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Revalidation failed"},{status:500})}}
