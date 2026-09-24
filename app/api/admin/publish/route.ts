@@ -10,6 +10,6 @@ export async function POST(req:Request){
   if(review.body.length<120)failures.push("body");
   if(review.confidence<0.75)failures.push("confidence");
   if(failures.length)return NextResponse.json({error:"QA gate failed",fields:failures},{status:422});
-  await db.review.update({where:{id},data:{status:"PUBLISHED",publishedAt:new Date()}});
+  await db.review.update({where:{id},data:{status:"PUBLISHED",publishedAt:review.publishedAt??new Date()}});
   return NextResponse.redirect(new URL("/admin/qa",req.url));
 }
