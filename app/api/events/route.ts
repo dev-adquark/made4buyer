@@ -1,0 +1,2 @@
+import {db} from "@/lib/db"; import {NextResponse} from "next/server";
+export async function POST(req:Request){try{const b=await req.json();await db.analyticsEvent.create({data:{reviewId:b.reviewId||undefined,event:String(b.event||"page_view"),category:b.category||undefined,sessionId:b.sessionId||undefined,metadata:b.metadata||undefined}});return NextResponse.json({ok:true})}catch{return NextResponse.json({ok:false},{status:400})}}
