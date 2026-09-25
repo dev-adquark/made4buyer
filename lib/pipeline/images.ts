@@ -2,6 +2,7 @@ import type { EnrichmentStatus, ImageSourceType, LicenseState } from "@prisma/cl
 import { config } from "@/lib/config";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import { searchPexels } from "./pexels";
 
 /**
  * Stage IMAGE_ENRICHMENT. Priority: (1) Content API image, (2) configured image service,
@@ -20,6 +21,7 @@ export type ImageDecision = {
   licenseState: LicenseState;
   license?: string;
   attribution?: string;
+  attributionUrl?: string;
   enrichmentStatus: EnrichmentStatus;
   isFallback: boolean;
   failureReason?: string;
@@ -61,9 +63,15 @@ export type ImageInput = {
   categorySlug?: string | null;
 };
 
-type ServiceImage = { url: string; license?: string; attribution?: string; licenseVerified?: boolean; width?: number; height?: number; source?: string };
+type ServiceImage = { url: string; license?: string; attribution?: string; attributionUrl?: string; licenseVerified?: boolean; width?: number; height?: number; source?: string };
 
 async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string }> {
+  if (config.images.pexelsKey()) {
+    const p = await searchPexels(input.productName, input.brand);
+    // Every photo served by the Pexels API is covered by the Pexels License.
+    if (p.image) return { image: { ...p.image, licenseVerified: true, source: "pexels" } };
+    if (!config.images.enrichmentUrl()) return { reason: p.reason };
+  }
   const base = config.images.enrichmentUrl();
   if (!base) return { reason: "IMAGE_ENRICHMENT_URL not configured (BLOCKED_BY_ENVIRONMENT)" };
   let endpoint: URL;
@@ -148,6 +156,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
         licenseState,
         license: service.image.license,
         attribution: service.image.attribution,
+        attributionUrl: service.image.attributionUrl,
         enrichmentStatus: "ENRICHED",
         isFallback: false,
         verifiedAt: now,
@@ -155,7 +164,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
       };
     }
     issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Image service result unusable: ${probe.reason}` });
-  } else if (service.reason && config.images.enrichmentUrl()) {
+  } else if (service.reason && (config.images.enrichmentUrl() || config.images.pexelsKey())) {
     issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: service.reason });
   }
 

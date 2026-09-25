@@ -40,7 +40,7 @@ export type PageRenderModel = {
   priceTier: { slug: string; name: string } | null;
   summary: string;
   bodyParagraphs: string[];
-  image: { url: string; alt: string; width: number; height: number; attribution: string | null; isFallback: boolean };
+  image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean };
   keyEntities: Array<{ label: string; value: string }>;
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
@@ -90,7 +90,7 @@ export type RenderInputs = {
   };
   entities: { brand: string | null; productName: string; modelNumber: string | null; deviceType: string | null; platform: string | null; useCase: string | null; rating: number | null; ratingScale: number | null; source: string } | null;
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
-  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null } | null | undefined;
+  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null } | null | undefined;
   deals: PublicDeal[];
 };
 
@@ -132,6 +132,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
       width: (!pub.isFallback && image?.width) || PLACEHOLDER_SIZE.width,
       height: (!pub.isFallback && image?.height) || PLACEHOLDER_SIZE.height,
       attribution: !pub.isFallback ? image?.attribution ?? null : null,
+      attributionUrl: !pub.isFallback ? image?.attributionUrl ?? null : null,
       isFallback: pub.isFallback,
     },
     keyEntities,

@@ -167,7 +167,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               </Link>
             </div>
           </div>
-          <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} />
+          <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} captionUrl={m.image.attributionUrl} />
         </div>
       </header>
       <SectionNav items={sections} />

@@ -34,7 +34,7 @@ export function SectionNav({ items }: { items: Array<{ id: string; label: string
 }
 
 /** Hero image with pointer tilt and gentle scroll parallax (disabled for reduced motion / touch). */
-export function ParallaxFigure({ src, fallback, alt, width, height, caption }: { src: string; fallback: string; alt: string; width: number; height: number; caption?: string | null }) {
+export function ParallaxFigure({ src, fallback, alt, width, height, caption, captionUrl }: { src: string; fallback: string; alt: string; width: number; height: number; caption?: string | null; captionUrl?: string | null }) {
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = frame.current;
@@ -71,7 +71,11 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption }: {
       <div className="frame" ref={frame}>
         <SafeImg src={src} fallback={fallback} alt={alt} width={width} height={height} fetchPriority="high" decoding="async" />
       </div>
-      {caption && <figcaption className="figcaption">Image: {caption}</figcaption>}
+      {caption && (
+        <figcaption className="figcaption">
+          Image: {captionUrl ? <a href={captionUrl} rel="noopener" target="_blank">{caption}</a> : caption}
+        </figcaption>
+      )}
     </figure>
   );
 }

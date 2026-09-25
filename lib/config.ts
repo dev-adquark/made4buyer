@@ -84,6 +84,7 @@ export const config = {
   images: {
     enrichmentUrl: () => str("IMAGE_ENRICHMENT_URL"),
     enrichmentKey: () => str("IMAGE_ENRICHMENT_API_KEY"),
+    pexelsKey: () => str("PEXELS_API_KEY"),
     cdnTemplate: () => str("IMAGE_CDN_URL_TEMPLATE"),
     requireLicense: () => bool("IMAGE_REQUIRE_LICENSE", true),
     timeoutMs: () => num("IMAGE_TIMEOUT_MS", 10000, 1000, 30000),
@@ -132,7 +133,7 @@ export function integrationStatus() {
     contentApi: state(Boolean(config.contentApi.url())),
     sovrn: state(Boolean(config.sovrn.apiUrl() && config.sovrn.apiKey())),
     sovrnLinkWrapper: state(Boolean(config.sovrn.siteKey())),
-    imageProvider: state(Boolean(config.images.enrichmentUrl())),
+    imageProvider: state(Boolean(config.images.enrichmentUrl() || config.images.pexelsKey())),
     imageCdn: state(Boolean(config.images.cdnTemplate())),
     gsc: state(Boolean(config.gsc.siteUrl() && config.gsc.serviceAccountJson())),
     admin: state(Boolean(config.admin.email() && config.admin.password() && config.admin.sessionSecret())),

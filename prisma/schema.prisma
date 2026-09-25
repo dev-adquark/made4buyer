@@ -523,6 +523,7 @@ model ImageAsset {
   licenseState       LicenseState
   license            String?
   attribution        String?
+  attributionUrl     String?
   enrichmentStatus   EnrichmentStatus
   isFallback         Boolean          @default(false)
   isPrimary          Boolean          @default(true)
