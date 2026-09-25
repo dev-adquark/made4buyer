@@ -61,7 +61,6 @@ async function main() {
   add("≥3 published categories", categories.length >= 3, `${categories.length} categories: ${categories.map((c) => c.categorySlug).join(", ")}`);
   const coverage = published.length ? withDeal / published.length : 0;
   add("≥70% of published pages have a verified Sovrn affiliate link", sovrnReady ? coverage >= 0.7 : null, `${withDeal}/${published.length} = ${(coverage * 100).toFixed(1)}%`);
-  const eventCount = (e: string) => events.find((x) => x.event === e)?._count._all ?? 0;
   add("Analytics recorded", events.length > 0, events.map((e) => `${e.event}: ${e._count._all}`).join(", ") || "no events");
 
   const base = process.env.MVP_BASE_URL?.replace(/\/+$/, "");
@@ -80,7 +79,6 @@ async function main() {
   } else {
     checks.push({ criterion: "Public pages / sitemap / health over HTTP", result: "NOT_CHECKED", detail: "set MVP_BASE_URL to check a running deployment" });
   }
-  void eventCount;
 
   const provenance = {
     contentApi: config.contentApi.url() ? (isSampleUrl(config.contentApi.url()) ? "SAMPLE_DATA (local stub)" : "LIVE") : "BLOCKED_BY_ENVIRONMENT",
@@ -89,7 +87,30 @@ async function main() {
   const failed = checks.filter((c) => c.result === "FAIL").length;
   const blocked = checks.filter((c) => c.result === "BLOCKED_BY_ENVIRONMENT").length;
   const verdict = failed ? "FAIL" : blocked ? "BLOCKED_BY_ENVIRONMENT" : provenance.contentApi === "LIVE" && provenance.sovrn === "LIVE" ? "PASS" : "PASS_ON_SAMPLE_DATA_ONLY";
-  console.log(JSON.stringify({ verdict, provenance, checks }, null, 2));
+  // Diagnostics for coverage below target: which products lack a verified offer, and why.
+  const unverified = await db.normalizedReview.findMany({
+    where: { status: "PUBLISHED", affiliateLinks: { none: { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } } },
+    select: { productName: true, categorySlug: true, dealStatus: true, dealStatusReason: true, affiliateLinks: { where: { isActive: true }, select: { verificationStatus: true, verificationReason: true } } },
+  });
+  const byCategory = new Map<string, { published: number; verified: number }>();
+  for (const p of published) {
+    const k = p.categorySlug ?? "none";
+    byCategory.set(k, { published: (byCategory.get(k)?.published ?? 0) + 1, verified: byCategory.get(k)?.verified ?? 0 });
+  }
+  const verifiedRows = await db.normalizedReview.groupBy({ by: ["categorySlug"], where: { status: "PUBLISHED", affiliateLinks: { some: { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } } }, _count: { _all: true } });
+  for (const v of verifiedRows) {
+    const k = v.categorySlug ?? "none";
+    const e = byCategory.get(k);
+    if (e) e.verified = v._count._all;
+  }
+  const providerStates = await db.sovrnOfferCache.groupBy({ by: ["providerStatus"], _count: { _all: true } });
+  const diagnostics = {
+    coverage: { verified: withDeal, published: published.length, percentage: published.length ? Math.round((withDeal / published.length) * 1000) / 10 : null },
+    weakCategories: [...byCategory.entries()].map(([slug, v]) => ({ category: slug, ...v, percentage: Math.round((v.verified / v.published) * 1000) / 10 })).filter((c) => c.percentage < 70).sort((a, b) => a.percentage - b.percentage),
+    unverifiedProducts: unverified.map((u) => ({ product: u.productName, category: u.categorySlug, dealStatus: u.dealStatus, reason: u.dealStatusReason, links: u.affiliateLinks.map((l) => `${l.verificationStatus}: ${l.verificationReason ?? ""}`) })),
+    providerResponseStates: Object.fromEntries(providerStates.map((p) => [p.providerStatus, p._count._all])),
+  };
+  console.log(JSON.stringify({ verdict, provenance, checks, diagnostics }, null, 2));
   if (failed) process.exitCode = 1;
 }
 

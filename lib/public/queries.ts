@@ -7,6 +7,9 @@ import { CATEGORIES } from "@/lib/taxonomy/definitions";
 /** Public read models. Only PUBLISHED reviews are ever returned. */
 
 export const BRAND_PAGE_MIN_REVIEWS = 2;
+export const TRENDING_MIN_VIEWS = 5;
+
+export const VERIFIED_LINK = { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } satisfies Prisma.AffiliateLinkWhereInput;
 
 export const cardSelect = {
   id: true,
@@ -19,6 +22,8 @@ export const cardSelect = {
   subcategorySlug: true,
   publishedAt: true,
   images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true } },
+  // Only a VERIFIED_OK link on a matched offer counts as a verified offer.
+  affiliateLinks: { where: VERIFIED_LINK, take: 1, select: { id: true } },
 } satisfies Prisma.NormalizedReviewSelect;
 
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;
@@ -93,4 +98,54 @@ export async function searchReviews(q: string, take = 30) {
   const score = (r: ReviewCard) =>
     lower.reduce((n, t) => n + (r.productName.toLowerCase().includes(t) ? 4 : 0) + ((r.brand ?? "").toLowerCase().includes(t) ? 3 : 0) + (r.canonicalTitle.toLowerCase().includes(t) ? 2 : 0) + (r.summary.toLowerCase().includes(t) ? 1 : 0), 0);
   return rows.sort((a, b) => score(b) - score(a)).slice(0, take);
+}
+
+export function hasVerifiedOffer(r: ReviewCard): boolean {
+  return r.affiliateLinks.length > 0;
+}
+
+export async function publishedReviews(page: number, pageSize = 24) {
+  const [total, rows] = await Promise.all([
+    db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
+    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
+  ]);
+  return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
+}
+
+/** Published reviews that currently have a verified offer, best-verified first. */
+export async function reviewsWithDeals(take = 24, categorySlug?: string) {
+  return db.normalizedReview.findMany({
+    where: { status: "PUBLISHED", ...(categorySlug ? { categorySlug } : {}), affiliateLinks: { some: VERIFIED_LINK } },
+    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+    take,
+    select: cardSelect,
+  });
+}
+
+/**
+ * Trending = most real page views of published review pages in the last `days` days.
+ * Reviews below TRENDING_MIN_VIEWS are excluded so a single visit never "trends".
+ */
+export async function trendingReviews(days = 7, take = 6) {
+  const since = new Date(Date.now() - days * 86_400_000);
+  const rows = await db.analyticsEvent.groupBy({
+    by: ["path"],
+    where: { event: "page_view", createdAt: { gte: since }, path: { startsWith: "/review/" } },
+    _count: { _all: true },
+    orderBy: { _count: { path: "desc" } },
+    take: 50,
+  });
+  const ranked = rows.filter((r) => r.path && r._count._all >= TRENDING_MIN_VIEWS).map((r) => ({ slug: r.path!.slice("/review/".length), views: r._count._all }));
+  if (!ranked.length) return [];
+  const reviews = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", slug: { in: ranked.map((r) => r.slug) } }, select: cardSelect });
+  const bySlug = new Map(reviews.map((r) => [r.slug, r]));
+  return ranked.flatMap((r) => (bySlug.has(r.slug) ? [{ review: bySlug.get(r.slug)!, views: r.views }] : [])).slice(0, take);
+}
+
+export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean };
+
+/** Instant search suggestions (published reviews only). */
+export async function suggest(q: string, take = 6): Promise<Suggestion[]> {
+  const rows = await searchReviews(q, take);
+  return rows.map((r) => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r) }));
 }
