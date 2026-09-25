@@ -112,7 +112,7 @@ test("9. public review page", async () => {
   await page.waitForURL(/\/review\//);
   state.macbookSlug = page.url().split("/review/")[1];
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MacBook Air");
-  await expect(page.getByRole("heading", { name: "Current deal" })).toBeVisible();
+  await expect(page.locator("#deal .verified-head")).toHaveText("Verified offer");
   await expect(page.getByRole("link", { name: /View deal/ })).toBeVisible();
   await expect(page.getByText(/may earn a commission/)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Laptops");
@@ -126,22 +126,25 @@ test("9. public review page", async () => {
   // A review without a verified offer shows the honest unavailable state.
   await page.goto("/category/ai-tools");
   await page.getByRole("link", { name: /ChatGPT Plus/ }).first().click();
-  await expect(page.getByText(/We don’t have a verified offer for this product right now/)).toBeVisible();
+  await expect(page.getByText("No verified offer available right now.")).toBeVisible();
+  await expect(page.locator("#deal .price")).toHaveCount(0);
 });
 
 test("10. category page with filters", async () => {
   await page.goto("/category/laptops");
   await expect(page.getByRole("heading", { level: 1, name: "Laptops" })).toBeVisible();
-  expect(await page.locator("article.card").count()).toBeGreaterThanOrEqual(3);
+  expect(await page.locator(".review-card").count()).toBeGreaterThanOrEqual(3);
   await page.getByRole("navigation", { name: "Filter by type" }).getByRole("link", { name: "MacBooks" }).click();
   await expect(page).toHaveURL(/sub=macbooks/);
-  await expect(page.locator("article.card")).toHaveCount(1);
+  await expect(page.locator(".review-card")).toHaveCount(1);
 });
 
 test("11. search", async () => {
   await page.goto("/");
-  await page.getByRole("searchbox", { name: "Search reviews" }).fill("pixel");
-  await page.getByRole("searchbox", { name: "Search reviews" }).press("Enter");
+  const box = page.locator("header").getByRole("combobox", { name: "Search reviews" });
+  await box.fill("pixel");
+  await expect(page.locator("header").getByRole("option").first()).toContainText("Pixel 10");
+  await box.press("Enter");
   await expect(page).toHaveURL(/\/search\?q=pixel/);
   await expect(page.getByText(/1 result for “pixel”/)).toBeVisible();
   await page.getByRole("link", { name: /Pixel 10/ }).first().click();
@@ -207,7 +210,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
   expect(JSON.stringify(health)).not.toMatch(/postgres:|e2e-sovrn|password/);
   expect(await (await request.get("/robots.txt")).text()).toMatch(/Sitemap: http:\/\/localhost:\d+\/sitemap\.xml/);
   expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { origin: "https://evil.example" } })).status()).toBe(403);
-  expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { accept: "application/json", origin: "http://localhost:3100" }, maxRedirects: 0 })).status()).toBe(401);
+  expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { accept: "application/json", origin: `http://localhost:${process.env.E2E_PORT ?? 3100}` }, maxRedirects: 0 })).status()).toBe(401);
   const legacy = await request.get("/reviews/some-review", { maxRedirects: 0 });
   expect(legacy.status()).toBe(308);
   expect(legacy.headers().location).toBe("/review/some-review");
@@ -217,7 +220,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
 });
 
 test("no dead links and no dead buttons", async () => {
-  const pages = ["/", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc"];
+  const pages = ["/", "/reviews", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc"];
   const hrefs = new Set<string>();
   for (const p of pages) {
     const res = await page.goto(p);
@@ -247,7 +250,7 @@ test("no dead links and no dead buttons", async () => {
 
 test("mobile layout has no horizontal overflow", async ({ browser }) => {
   const mobile = await browser.newPage({ viewport: { width: 375, height: 800 } });
-  for (const p of ["/", "/category/laptops", "/about"]) {
+  for (const p of ["/", "/reviews", "/deals", "/category/laptops", "/compare", "/about"]) {
     await mobile.goto(p);
     const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, p).toBeLessThanOrEqual(1);
@@ -265,11 +268,76 @@ test("mobile layout has no horizontal overflow", async ({ browser }) => {
 
 test("accessibility: no serious or critical axe violations", async () => {
   const review = await page.request.get("/sitemap.xml").then((r) => r.text()).then((x) => x.match(/<loc>[^<]*(\/review\/[^<]+)<\/loc>/)?.[1]);
-  const targets = ["/", "/category/laptops", review ?? "/", "/search?q=laptop", "/compare", "/admin", "/admin/qa", "/admin/csv", "/admin/links", `/admin/reviews/${state.gearId}`, "/admin/sponsored"];
+  const targets = ["/", "/reviews", "/deals", "/terms", "/contact", "/category/laptops", review ?? "/", "/search?q=laptop", "/compare", "/admin", "/admin/qa", "/admin/csv", "/admin/links", `/admin/reviews/${state.gearId}`, "/admin/sponsored"];
   for (const p of targets) {
     await page.goto(p);
+    // Audit the settled state a reader sees: finish scroll reveals before scanning.
+    await page.evaluate(() => document.querySelectorAll(".reveal").forEach((e) => e.classList.add("in")));
+    await page.waitForTimeout(900);
     const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => `${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(" | ")}`);
     expect(serious, p).toEqual([]);
+  }
+});
+
+test("search suggestions support keyboard navigation", async () => {
+  await page.goto("/reviews");
+  const box = page.locator("header").getByRole("combobox", { name: "Search reviews" });
+  await box.fill("sony");
+  const option = page.locator("header").getByRole("option", { name: /Sony WH-1000XM6/ });
+  await expect(option).toBeVisible();
+  await box.press("ArrowDown");
+  await expect(option).toHaveAttribute("aria-selected", "true");
+  await expect(box).toHaveAttribute("aria-activedescendant", /.+/);
+  await box.press("Enter");
+  await page.waitForURL(/\/review\/sony/);
+  await box.fill("zzzz-nothing");
+  await expect(page.locator("header").getByText(/No reviews match/)).toBeVisible();
+  await box.press("Escape");
+  await expect(box).toHaveAttribute("aria-expanded", "false");
+});
+
+test("mobile drawer is an accessible dialog", async ({ browser }) => {
+  const m = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await m.goto("/");
+  await m.getByRole("button", { name: "Open menu" }).click();
+  const dialog = m.getByRole("dialog", { name: "Menu" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Laptops" })).toBeVisible();
+  await m.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await m.getByRole("button", { name: "Open menu" }).click();
+  await m.getByRole("dialog", { name: "Menu" }).getByRole("link", { name: "Reviews" }).click();
+  await m.waitForURL(/\/reviews$/);
+  await expect(m.getByRole("dialog", { name: "Menu" })).toBeHidden();
+  await m.close();
+});
+
+test("3D hero: loads when allowed, stays off for reduced motion", async ({ browser }) => {
+  const full = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await full.goto("/?tier=2");
+  await expect(full.locator(".hero-canvas canvas")).toHaveCount(1, { timeout: 20_000 });
+  await expect(full.locator(".hero-canvas")).toHaveAttribute("aria-hidden", "true");
+  await expect(full.getByRole("heading", { level: 1 })).toContainText("Find the right tech.");
+  await full.close();
+  const reduced = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+  await reduced.goto("/");
+  await expect(reduced.locator(".hero-static-art")).toHaveAttribute("data-tier", "0");
+  await expect(reduced.locator(".hero-canvas canvas")).toHaveCount(0);
+  await reduced.close();
+});
+
+test("visual QA screenshots at four viewports", async ({ browser }, info) => {
+  const review = await page.request.get("/sitemap.xml").then((r) => r.text()).then((x) => x.match(/<loc>[^<]*(\/review\/[^<]+)<\/loc>/)?.[1] ?? "/");
+  const sizes: Array<[string, number, number]> = [["desktop", 1440, 900], ["laptop", 1280, 800], ["mobile", 390, 844], ["small", 320, 700]];
+  for (const [name, width, height] of sizes) {
+    const v = await browser.newPage({ viewport: { width, height } });
+    for (const [label, path] of [["home", "/"], ["review", review], ["category", "/category/laptops"], ["compare", "/compare"], ["deals", "/deals"]] as const) {
+      await v.goto(path);
+      const overflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, `${label}@${name}`).toBeLessThanOrEqual(1);
+      await info.attach(`${label}-${name}`, { body: await v.screenshot(), contentType: "image/png" });
+    }
+    await v.close();
   }
 });

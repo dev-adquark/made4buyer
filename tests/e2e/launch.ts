@@ -4,7 +4,7 @@
  * through the explicit test flag.
  */
 import { spawn } from "node:child_process";
-import { rmSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { migrate, startLocalPostgres } from "../../scripts/support/local-postgres";
 import { startStubServer } from "../../scripts/support/stub-server";
 
@@ -18,6 +18,14 @@ async function main() {
   } else {
     rmSync(".tmp/pg-e2e", { recursive: true, force: true });
     pg = await startLocalPostgres({ dir: ".tmp/pg-e2e", port: 56432, database: "made4buyers_e2e", fresh: true });
+  }
+  // Each run starts from an empty ISR cache so pages cached by an earlier run (possibly
+  // against a different database) can't leak into this one. The route template dir stays.
+  const isr = ".next/server/app/review";
+  try {
+    for (const f of readdirSync(isr)) if (f !== "[slug]") rmSync(`${isr}/${f}`, { recursive: true, force: true });
+  } catch {
+    /* no build output yet */
   }
   const stub = await startStubServer({ port: 4011, sovrnKey: "e2e-sovrn" });
   const env = {
