@@ -1,2 +1,0 @@
-export type NormalizedReview={sourceId:string;title:string;summary:string;body:string;productName:string;brand?:string;category:string;subcategory?:string;audience?:string;platform?:string;priceTier?:string;imageUrl?:string;imageSource?:string;imageLicense?:string;imageAttribution?:string;sourceUrl?:string;canonicalUrl?:string;confidence:number};
-export type DealCandidate={productName:string;merchant?:string;dealId?:string;url:string;price?:number;currency?:string;availability?:string;source?:string};

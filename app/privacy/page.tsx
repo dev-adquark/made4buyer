@@ -1,1 +1,0 @@
-export default function Privacy(){return <main className="section"><div className="container review"><h1>Privacy</h1><p className="review-body">We collect information required to operate the publishing platform and measure anonymous engagement. Production deployment should configure retention, consent and data-subject workflows for the actual analytics stack.</p></div></main>}

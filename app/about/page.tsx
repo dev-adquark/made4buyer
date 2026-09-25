@@ -1,1 +1,0 @@
-export default function About(){return <main className="section"><div className="container review"><h1>About Made4Buyers</h1><p className="review-body">Made4Buyers is a technology research platform built around current review data, transparent categorization and live offer verification.</p></div></main>}

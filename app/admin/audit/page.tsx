@@ -1,3 +1,0 @@
-import {isAdmin} from "@/lib/auth"; import {redirect} from "next/navigation"; import Link from "next/link"; import AuditButton from "./audit-button";
-export const dynamic="force-dynamic";
-export default async function AuditPage(){if(!await isAdmin())redirect("/admin/login");return <main className="admin"><div className="container"><div className="btnrow"><Link className="btn" href="/admin">Admin</Link><Link className="btn" href="/admin/qa">QA</Link><Link className="btn" href="/admin/gsc">Search Console</Link></div><section className="section"><h1>Site & Internal Link Audit</h1><p>Checks core routes, sitemap URLs, and same-origin links against the configured public site URL.</p><AuditButton/></section></div></main>}

@@ -1,2 +1,0 @@
-import {NextResponse} from "next/server"; import {isAdmin} from "@/lib/auth"; import {revalidateDeals} from "@/lib/engine";
-export async function POST(req:Request){if(!await isAdmin())return NextResponse.json({error:"Unauthorized"},{status:401});try{return NextResponse.json(await revalidateDeals())}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Revalidation failed"},{status:500})}}

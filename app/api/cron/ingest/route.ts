@@ -1,3 +1,0 @@
-import {NextResponse}from"next/server";import{runIngestion}from"@/lib/engine";
-function authorized(req:Request){const secret=process.env.CRON_SECRET;return Boolean(secret)&&req.headers.get("authorization")==="Bearer "+secret}
-export async function GET(req:Request){if(!authorized(req))return NextResponse.json({error:"Unauthorized"},{status:401});try{return NextResponse.json(await runIngestion())}catch(e){const message=e instanceof Error?e.message:String(e);const status=message.includes("already in progress")?409:500;return NextResponse.json({error:message},{status})}}
