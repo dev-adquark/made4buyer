@@ -1,59 +1,99 @@
 # Made4Buyers — RealTech Review Engine
 
-Automated technology review and affiliate-deal platform. EXPERTE.com is used as an information-architecture and UX reference; the implementation is original.
+A buyer-focused technology review site. Reviews arrive from a Content API and are
+normalized, de-duplicated and classified. They are then matched to Sovrn offers whose
+affiliate links are verified, checked in an admin QA step, and published as SEO pages with
+first-party analytics. EXPERTE.com was used only as a reference for information architecture
+and UX; the implementation, branding and content are original.
 
-## Implemented
-- Live Content API ingestion, normalization, canonical/source deduplication and ingestion locking
-- Buyer taxonomy classification with confidence
-- Configurable image enrichment and Sovrn offer adapter
-- Affiliate URL verification with redirect/timeouts and tracked redirects
-- SEO review/category pages, search, comparison entry point, sitemap and robots
-- Admin authentication with signed expiring sessions
-- Admin ingestion controls, run history, QA publishing, rejection, restore/unpublish and full review editing
-- Sponsored placements with traffic-threshold gating
-- First-party analytics, analytics/reporting and Day 30 reporting
-- Google Search Console reporting via service-account authentication
-- Automated daily ingestion and six-hour deal revalidation cron routes
-- Baseline production security headers
-- CI typecheck and production build
+**Nothing is fabricated.** When an integration has no credentials it reports
+`BLOCKED_BY_ENVIRONMENT` / `NOT_AVAILABLE_IN_ENVIRONMENT`. No offer, price, merchant, image
+licence, verification result, indexing figure or CTR is invented, and metrics with too
+little data report `INSUFFICIENT_DATA`.
 
-## Real integrations only
-No review text, price, affiliate offer, image, verification state or analytics result is fabricated. External integrations require real endpoint/credential configuration. Missing integrations remain explicitly unavailable rather than simulated.
+- Pipeline and data model: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Content API field contract: [docs/CONTENT_API_CONTRACT.md](docs/CONTENT_API_CONTRACT.md)
+- Deployment, migrations, cron, GSC: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
-## Setup
-Copy `.env.example` to `.env.local`, configure PostgreSQL and the external API contracts, then run:
-```bash
-npm install
-npm run db:push
-npm run dev
+## Pipeline
+
+```
+Content API → ContentItem → NormalizedReview → ExtractedEntities → CategoryTagSet → ImageAsset
+→ MatchedSovrnOfferSet → AffiliateLinkSet (verified) → PageRenderModel → PublishJob
+→ /review/{slug}, /category/{slug}, /brand/{slug}, sitemap → analytics → revalidation → Day-30 report
 ```
 
-For a production database, apply the Prisma schema to the target PostgreSQL database before the first deployment. Do not point a production deployment at an empty database and expect the Next.js build to create tables automatically.
+## Quick start (local, no credentials needed)
 
-Pipeline: Content API → normalize/dedupe → taxonomy → image enrichment → database → Sovrn matching → link verification → admin QA/edit → publish → analytics.
+Requires Node ≥ 22. Docker is not needed: `db:local` runs a real PostgreSQL from npm binaries.
 
-## Required production configuration
-- `DATABASE_URL`
-- `CONTENT_API_URL` + `CONTENT_API_KEY`
-- `SOVRN_API_URL` + `SOVRN_API_KEY`
-- `IMAGE_ENRICHMENT_URL` + `IMAGE_ENRICHMENT_API_KEY` when image enrichment is enabled
-- `ADMIN_EMAIL` + `ADMIN_PASSWORD` + strong `ADMIN_SESSION_SECRET`
-- `CRON_SECRET`
-- `NEXT_PUBLIC_SITE_URL`
-- `GSC_SITE_URL` + `GSC_SERVICE_ACCOUNT_JSON` when Search Console reporting is enabled
-- `NEXT_PUBLIC_ANALYTICS_ID` only when external analytics is intentionally enabled
+```bash
+npm install
+npm run pipeline:dry-run          # every stage on sample JSON — no DB, no network
 
-## Google Search Console
-1. Create/select the Google Cloud project used for Search Console reporting.
-2. Create a service account and generate its JSON credentials.
-3. Grant that service account access to the target Search Console property with appropriate read access.
-4. Set `GSC_SITE_URL` to the exact Search Console property URL.
-5. Set `GSC_SERVICE_ACCOUNT_JSON` to the service-account JSON as a single environment variable value.
-6. Open `/admin/gsc` after signing into the admin area.
+# Full local stack with SAMPLE data:
+npm run db:local                  # terminal 1: PostgreSQL on :54329, migrated + seeded
+npm run dev:stubs                 # terminal 2: SAMPLE Content API / Sovrn / merchant stub on :4010
+cp .env.example .env.local        # then set DATABASE_URL, ADMIN_* and the stub lines printed by dev:stubs
+npm run dev                       # terminal 3: http://localhost:3000, admin at /admin
+```
 
-## Cron authentication
-The ingestion and revalidation routes require:
-`Authorization: Bearer <CRON_SECRET>`.
-The Vercel cron schedules are defined in `vercel.json`.
+In the admin: **Run ingestion now** → review the **QA queue** → publish → open the public
+pages. Sample fixtures are fictional and are labelled `SAMPLE` wherever they appear.
 
-Reference: https://www.experte.com/
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run typecheck` / `lint` | TypeScript / ESLint |
+| `npm test` | Unit tests |
+| `npm run test:integration` | Integration tests on a real PostgreSQL (embedded, or `TEST_DATABASE_URL`) |
+| `npm run test:e2e` | Playwright E2E against `next start` (run `npm run build` first) |
+| `npm run db:migrate` | `prisma migrate deploy` |
+| `npm run db:local` | Local PostgreSQL (embedded) with migrations and taxonomy |
+| `npm run pipeline:dry-run` | Stage-by-stage dry-run over sample JSON → `docs/dry-run/sample-output.json` |
+| `npm run job -- <name>` | Run a scheduled job (`ingest`, `verify-links`, `revalidate-offers`, `retry-failed`, `publish-cycle`, `cleanup-cache`, `inspect-index`) |
+| `npm run mvp:verify` | MVP launch criteria from persisted data (+ HTTP checks with `MVP_BASE_URL`) |
+| `npm run report:day30` | Day-30 report → `reports/generated/*.json` and `*.html` |
+| `npm run legacy:import` | Import data from the pre-engine `db push` schema |
+| `npm run audit` | Live site audit (only when `AUDIT_BASE_URL` is set) |
+
+## Admin
+
+`/admin` (session login) has these pages:
+
+- **Overview:** counts, deal coverage, link health, image coverage, success metrics, integration states
+- **QA queue:** publish, bulk publish, reject, restore, unpublish
+- **Review detail:** edit, entity/category/deal overrides, accept/reject classification, re-run pipeline, revalidate links, full history
+- **Ingestion runs & items**
+- **Categorization queue** (low confidence, missing category)
+- **Deals**
+- **Link health** (with revalidation by date range)
+- **Images**
+- **CSV import:** upload → preview → process → retry → error report
+- **Analytics & CTR**
+- **Sponsored placements:** feature-flagged, traffic-gated, previewed
+- **Day-30 report:** JSON and HTML
+- **Jobs & runs**
+- **Failures**
+- **Audit log & live site audit**
+- **Search Console**
+
+## CSV overrides
+
+Header columns:
+
+- `normalized_review_key` (review id, slug or dedupe key)
+- one or more of `override_primary_category`, `entity_brand_override`, `entity_product_name_override`, `sovrn_deal_id_override`
+- optionally `override_subcategory`, `entity_model_number_override`, `entity_device_type_override`
+
+Rows are validated individually: unknown reviews, invalid categories, duplicate rows and
+malformed deal IDs are all caught, and valid rows still apply when others fail. Every applied
+override is audited and re-runs categorization, Sovrn matching, affiliate links and
+verification for that review. A deal ID that Sovrn does not return is reverted and reported.
+
+## Configuration
+
+Every variable is documented in [.env.example](.env.example). Integration status is shown on
+the admin overview and in `GET /api/health`, which never includes secrets or connection strings.

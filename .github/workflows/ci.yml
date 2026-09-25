@@ -1,30 +1,76 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: made4buyers_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NEXT_PUBLIC_SITE_URL: http://localhost:3100
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/made4buyers_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npx prisma generate
-      - run: npm run typecheck
-      - run: npm run build
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Prisma generate
+        run: npx prisma generate
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Integration tests (fresh DB migrated from zero)
+        run: npm run test:integration
+      - name: Production build
+        run: npm run build
+      - name: Create E2E database
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -c 'CREATE DATABASE made4buyers_e2e'
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests
+        run: npm run test:e2e
+        env:
+          E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/made4buyers_e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  # Opt-in live audit of a deployed environment. Runs only when the repository variable
+  # AUDIT_BASE_URL is set, so a missing live environment never fails unrelated builds.
   site-audit:
     runs-on: ubuntu-latest
     if: ${{ vars.AUDIT_BASE_URL != '' }}
+    needs: test-and-build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
       - run: npm run audit
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL }}

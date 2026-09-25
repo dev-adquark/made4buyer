@@ -1,83 +1,98 @@
-const base = process.env.AUDIT_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL;
-if (!base) throw new Error("AUDIT_BASE_URL or NEXT_PUBLIC_SITE_URL is required");
+// Opt-in live site audit (CI job runs only when AUDIT_BASE_URL is set).
+// Checks: homepage, a category page, a review page, search, admin login, sitemap, robots,
+// health endpoint, then every sitemap URL and same-origin links found on crawled HTML pages.
+const base = process.env.AUDIT_BASE_URL;
+if (!base) {
+  console.log("AUDIT_BASE_URL not set — live audit skipped.");
+  process.exit(0);
+}
 const origin = new URL(base);
-if (!["http:","https:"].includes(origin.protocol)) throw new Error("Audit base URL must use http or https");
-
-const seeds = ["/","/about","/privacy","/disclosure","/search","/compare","/robots.txt","/sitemap.xml"];
-const timeoutMs = Number(process.env.AUDIT_TIMEOUT_MS || 10000);
+if (!["http:", "https:"].includes(origin.protocol)) throw new Error("AUDIT_BASE_URL must use http or https");
+const timeoutMs = Number(process.env.AUDIT_TIMEOUT_MS || 15000);
 const maxUrls = Number(process.env.AUDIT_MAX_URLS || 300);
 
-async function request(url, method="GET") {
+async function request(url, method = "GET") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, {method, redirect:"manual", signal:controller.signal, headers:{accept:"text/html,application/xml,text/plain,*/*"}});
-  } finally { clearTimeout(timer); }
-}
-async function check(url) {
-  let res;
-  try { res = await request(url, "HEAD"); } catch (e) { return {url,status:0,ok:false,error:String(e?.message || e),contentType:""}; }
-  if ([403,405,429].includes(res.status) || res.status >= 500) {
-    try { res = await request(url, "GET"); } catch (e) { return {url,status:0,ok:false,error:String(e?.message || e),contentType:""}; }
+    return await fetch(url, { method, redirect: "manual", signal: controller.signal, headers: { accept: "text/html,application/xml,application/json,text/plain,*/*", "user-agent": "Made4BuyersSiteAudit/1.0" } });
+  } finally {
+    clearTimeout(timer);
   }
-  return {url,status:res.status,ok:res.status >= 200 && res.status < 400,contentType:res.headers.get("content-type") || ""};
 }
 function internal(raw) {
   try {
     const u = new URL(raw, origin);
     if (u.origin !== origin.origin) return null;
-    if (!["http:","https:"].includes(u.protocol)) return null;
     u.hash = "";
     return u.href;
-  } catch { return null; }
-}
-function extractLinks(html) {
-  const out = new Set();
-  const re = /(?:href|src)\s*=\s*["']([^"'#]+)["']/gi;
-  let m;
-  while ((m = re.exec(html))) { const u = internal(m[1]); if (u) out.add(u); }
-  return [...out];
-}
-async function read(url) {
-  const res = await request(url, "GET");
-  return {res,text:await res.text()};
-}
-
-const checked = new Map();
-const errors = [];
-for (const path of seeds) {
-  const url = new URL(path, origin).href;
-  const result = await check(url);
-  checked.set(url,result);
-  if (!result.ok) errors.push(result);
-}
-
-const sitemapUrl = new URL("/sitemap.xml", origin).href;
-try {
-  const {res,text} = await read(sitemapUrl);
-  if (res.ok) {
-    const locs = [...text.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map(m=>m[1].trim()).slice(0,maxUrls);
-    for (const raw of locs) {
-      const u = internal(raw);
-      if (u && !checked.has(u)) checked.set(u, await check(u));
-    }
+  } catch {
+    return null;
   }
-} catch {}
-
-const crawl = [...checked.keys()].filter(u=>/text\/html/i.test(checked.get(u)?.contentType || ""));
-for (const url of crawl.slice(0,50)) {
+}
+async function check(url, expect = (s) => s >= 200 && s < 400) {
   try {
-    const {res,text} = await read(url);
-    if (!res.ok || !/text\/html/i.test(res.headers.get("content-type")||"")) continue;
-    for (const link of extractLinks(text)) {
-      if (checked.size >= maxUrls && !checked.has(link)) continue;
-      if (!checked.has(link)) checked.set(link, await check(link));
-    }
-  } catch {}
+    const res = await request(url);
+    const type = res.headers.get("content-type") || "";
+    const body = /text\/html|xml|json|text\/plain/.test(type) ? await res.text() : "";
+    return { url, status: res.status, ok: expect(res.status), type, body };
+  } catch (e) {
+    return { url, status: 0, ok: false, error: String(e?.message || e), type: "", body: "" };
+  }
 }
 
-for (const r of checked.values()) if (!r.ok) errors.push(r);
-const uniqueErrors = [...new Map(errors.map(x=>[x.url,x])).values()];
-const summary = {base:origin.href,checked:checked.size,broken:uniqueErrors.length,errors:uniqueErrors};
-console.log(JSON.stringify(summary,null,2));
-if (uniqueErrors.length) process.exit(1);
+const results = new Map();
+const record = (r) => results.set(r.url, { url: r.url, status: r.status, ok: r.ok, ...(r.error ? { error: r.error } : {}), ...(r.note ? { note: r.note } : {}) });
+
+// Core routes.
+const core = ["/", "/search?q=laptop", "/admin/login", "/robots.txt", "/sitemap.xml"];
+const pages = [];
+for (const p of core) {
+  const r = await check(new URL(p, origin).href);
+  record(r);
+  pages.push(r);
+}
+const health = await check(new URL("/api/health", origin).href, (s) => s === 200);
+try {
+  const h = JSON.parse(health.body || "{}");
+  if (h.database !== "ok") health.ok = false;
+  health.note = `database: ${h.database}`;
+} catch {
+  health.ok = false;
+}
+record(health);
+const robots = pages.find((p) => p.url.endsWith("/robots.txt"));
+if (robots && !/sitemap:/i.test(robots.body)) record({ ...robots, ok: false, note: "robots.txt has no Sitemap line" });
+
+// Sitemap URLs (must include at least one category and one review page once content is published).
+const sitemap = pages.find((p) => p.url.endsWith("/sitemap.xml"));
+const locs = [...(sitemap?.body || "").matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gi)].map((m) => m[1].trim()).slice(0, maxUrls);
+const category = locs.find((u) => u.includes("/category/"));
+const review = locs.find((u) => u.includes("/review/"));
+if (!category) console.warn("warning: sitemap lists no category page (no published content yet?)");
+if (!review) console.warn("warning: sitemap lists no review page (no published content yet?)");
+for (const loc of locs) {
+  const u = internal(loc);
+  if (!u) {
+    record({ url: loc, status: 0, ok: false, error: "sitemap URL not on audit origin" });
+    continue;
+  }
+  if (!results.has(u)) {
+    const r = await check(u, (s) => s === 200);
+    record(r);
+    pages.push(r);
+  }
+}
+
+// Same-origin links on crawled HTML pages.
+for (const page of pages.filter((p) => /text\/html/.test(p.type)).slice(0, 60)) {
+  for (const m of page.body.matchAll(/href\s*=\s*["']([^"'#]+)["']/gi)) {
+    const u = internal(m[1]);
+    if (!u || results.has(u) || results.size >= maxUrls || u.includes("/go/")) continue;
+    record(await check(u));
+  }
+}
+
+const broken = [...results.values()].filter((r) => !r.ok);
+console.log(JSON.stringify({ base: origin.href, checked: results.size, sitemapUrls: locs.length, categoryPage: category ?? null, reviewPage: review ?? null, broken: broken.length, errors: broken }, null, 2));
+if (broken.length) process.exit(1);

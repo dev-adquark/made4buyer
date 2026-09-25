@@ -1,110 +1,792 @@
+// Made4Buyers — RealTech Review Engine
+// Data flow: Content API → ContentItem → NormalizedReview → ExtractedEntities → CategoryTagSet
+// (ReviewCategoryAssignment) → ImageAsset → MatchedSovrnOfferSet (SovrnOfferMatch) → AffiliateLinkSet
+// (AffiliateLink) → PageRenderModel → PublishJob. See docs/ARCHITECTURE.md.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
-model Review {
-  id String @id @default(cuid())
-  sourceId String @unique
-  title String
-  slug String @unique
-  summary String
-  body String
-  productName String?
-  brand String?
-  category String
-  subcategory String?
-  audience String?
-  platform String?
-  priceTier String?
-  imageUrl String?
-  imageSource String?
-  imageLicense String?
-  imageAttribution String?
-  sourceUrl String?
-  canonicalUrl String?
-  status ReviewStatus @default(DRAFT)
-  confidence Float @default(0)
-  publishedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  deals Deal[]
-  events AnalyticsEvent[]
-  @@index([status,publishedAt])
-  @@index([category,status,publishedAt])
-  @@index([canonicalUrl])
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum RunStatus {
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  SKIPPED
+
+  @@map("run_status")
 }
 
-model Deal {
-  id String @id @default(cuid())
-  reviewId String
-  productName String
-  merchant String?
-  dealId String?
-  url String
-  price Float?
-  currency String?
-  availability String?
-  verified Boolean @default(false)
-  lastChecked DateTime?
-  createdAt DateTime @default(now())
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  @@index([reviewId,verified])
-  @@index([verified,lastChecked])
-}
-
-model IngestionRun {
-  id String @id @default(cuid())
-  startedAt DateTime @default(now())
-  finishedAt DateTime?
-  source String
-  status String
-  total Int @default(0)
-  accepted Int @default(0)
-  rejected Int @default(0)
-  duplicate Int @default(0)
-  errors Json?
-  lockKey String? @unique
-  @@index([startedAt])
-}
-
-model SponsoredPlacement {
-  id String @id @default(cuid())
-  title String
-  label String @default("Sponsored")
-  url String
-  active Boolean @default(false)
-  minEvents Int @default(100)
-  minSessions Int @default(25)
-  startAt DateTime?
-  endAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@index([active,startAt,endAt])
-}
-
-model AnalyticsEvent {
-  id String @id @default(cuid())
-  reviewId String?
-  event String
-  category String?
-  sessionId String?
-  metadata Json?
-  createdAt DateTime @default(now())
-  review Review? @relation(fields: [reviewId], references: [id], onDelete: SetNull)
-  @@index([event,createdAt])
-  @@index([sessionId,createdAt])
-  @@index([reviewId,createdAt])
-  @@index([category,createdAt])
-}
-
-enum ReviewStatus {
-  DRAFT
+enum ContentProcessingStatus {
+  INGESTED
+  NORMALIZED
+  DUPLICATE
+  FAILED
   QUEUED
   PUBLISHED
   REJECTED
+
+  @@map("content_processing_status")
+}
+
+enum ReviewStatus {
+  NEEDS_REVIEW
+  QUEUED
+  PUBLISHED
+  UNPUBLISHED
+  REJECTED
+
+  @@map("review_status")
+}
+
+enum TagType {
+  CATEGORY
+  SUBCATEGORY
+  INTENT
+  PLATFORM
+  PRICE_TIER
+
+  @@map("tag_type")
+}
+
+enum AssignmentSource {
+  RULES
+  SOURCE_FIELD
+  ADMIN
+  CSV
+
+  @@map("assignment_source")
+}
+
+enum AssignmentReviewState {
+  UNREVIEWED
+  ACCEPTED
+  REJECTED
+
+  @@map("assignment_review_state")
+}
+
+enum DealStatus {
+  PENDING
+  MATCHED
+  NO_MATCH
+  STALE
+  FAILED
+  UNAVAILABLE
+
+  @@map("deal_status")
+}
+
+enum OfferMatchStatus {
+  MATCHED
+  BELOW_THRESHOLD
+  STALE
+  SUPERSEDED
+
+  @@map("offer_match_status")
+}
+
+enum LinkGenerationMethod {
+  PROVIDER_DEEPLINK
+  LINK_WRAPPER
+
+  @@map("link_generation_method")
+}
+
+enum LinkVerificationStatus {
+  PENDING
+  VERIFIED_OK
+  REDIRECT_MISMATCH
+  FORBIDDEN
+  BLOCKED
+  UNAVAILABLE
+  TIMEOUT
+  INVALID
+  PROVIDER_ERROR
+
+  @@map("link_verification_status")
+}
+
+enum ImageSourceType {
+  CONTENT_API
+  ENRICHMENT_SERVICE
+  PLACEHOLDER
+
+  @@map("image_source_type")
+}
+
+enum LicenseState {
+  VERIFIED
+  PROVIDER_ASSERTED
+  UNVERIFIED
+  OWNED_PLACEHOLDER
+
+  @@map("license_state")
+}
+
+enum EnrichmentStatus {
+  ENRICHED
+  FALLBACK
+  FAILED
+
+  @@map("enrichment_status")
+}
+
+enum PublishAction {
+  PUBLISH
+  UNPUBLISH
+
+  @@map("publish_action")
+}
+
+enum PublishJobStatus {
+  SUCCEEDED
+  FAILED
+
+  @@map("publish_job_status")
+}
+
+enum CsvJobStatus {
+  VALIDATED
+  REJECTED
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+
+  @@map("csv_job_status")
+}
+
+enum CsvItemStatus {
+  PENDING
+  INVALID
+  PROCESSING
+  APPLIED
+  FAILED
+
+  @@map("csv_item_status")
+}
+
+enum PipelineStage {
+  CONTENT_FETCH
+  VALIDATION
+  NORMALIZATION
+  DEDUPE
+  ENTITY_EXTRACTION
+  TAXONOMY
+  IMAGE_ENRICHMENT
+  OFFER_MATCHING
+  AFFILIATE_LINK
+  LINK_VERIFICATION
+  PAGE_RENDER
+  PUBLISH
+  CSV_IMPORT
+  REVALIDATION
+  INDEX_INSPECTION
+
+  @@map("pipeline_stage")
+}
+
+enum FailureKind {
+  RETRYABLE_FAILURE
+  PERMANENT_FAILURE
+
+  @@map("failure_kind")
+}
+
+enum RevalidationType {
+  OFFER_REFRESH
+  LINK_VERIFICATION
+  CACHE_CLEANUP
+  FAILED_RETRY
+  PUBLISH_CYCLE
+  INDEX_INSPECTION
+
+  @@map("revalidation_type")
+}
+
+enum SponsoredPosition {
+  HOME_HERO
+  CATEGORY_TOP
+  REVIEW_SIDEBAR
+
+  @@map("sponsored_position")
+}
+
+enum IndexVerdict {
+  INDEXED
+  NOT_INDEXED
+  UNKNOWN
+  ERROR
+
+  @@map("index_verdict")
+}
+
+// ─── Ingestion ──────────────────────────────────────────────────────────────
+
+model IngestionRun {
+  id                       String        @id @default(cuid())
+  startedAt                DateTime      @default(now())
+  completedAt              DateTime?
+  status                   RunStatus     @default(RUNNING)
+  source                   String
+  trigger                  String        @default("manual")
+  totalFetched             Int           @default(0)
+  normalizedCount          Int           @default(0)
+  duplicateCount           Int           @default(0)
+  unchangedCount           Int           @default(0)
+  updatedCount             Int           @default(0)
+  failedNormalizationCount Int           @default(0)
+  queuedCount              Int           @default(0)
+  failureCount             Int           @default(0)
+  failureReasonSummary     Json?
+  duplicateItems           Json?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  contentItems             ContentItem[]
+
+  @@index([startedAt])
+  @@index([status])
+  @@map("review_ingest_runs")
+}
+
+model ContentItem {
+  id                 String                  @id @default(cuid())
+  source             String
+  sourceId           String
+  sourceUrl          String?
+  rawPayload         Json
+  contentHash        String
+  publishedAt        DateTime?
+  fetchedAt          DateTime                @default(now())
+  lastSeenAt         DateTime                @default(now())
+  processingStatus   ContentProcessingStatus @default(INGESTED)
+  statusReason       String?
+  errorCode          String?
+  retryCount         Int                     @default(0)
+  dedupeKey          String?
+  ingestRunId        String?
+  normalizedReviewId String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  ingestRun          IngestionRun?           @relation(fields: [ingestRunId], references: [id], onDelete: SetNull)
+  normalizedReview   NormalizedReview?       @relation("ContentItemReview", fields: [normalizedReviewId], references: [id], onDelete: SetNull)
+
+  @@unique([source, sourceId])
+  @@index([processingStatus])
+  @@index([contentHash])
+  @@index([normalizedReviewId])
+  @@index([ingestRunId])
+  @@index([createdAt])
+  @@map("content_items")
+}
+
+// ─── Reviews ────────────────────────────────────────────────────────────────
+
+model NormalizedReview {
+  id                       String                     @id @default(cuid())
+  source                   String
+  sourceId                 String
+  sourceUrl                String?
+  canonicalUrl             String?
+  dedupeKey                String                     @unique
+  canonicalTitle           String
+  slug                     String                     @unique
+  productName              String
+  brand                    String?
+  brandSlug                String?
+  summary                  String
+  body                     String
+  author                   String?
+  sourcePublishedAt        DateTime?
+  entityConfidence         Float                      @default(0)
+  classificationConfidence Float                      @default(0)
+  confidence               Float                      @default(0)
+  categorySlug             String?
+  subcategorySlug          String?
+  status                   ReviewStatus               @default(NEEDS_REVIEW)
+  statusReason             String?
+  qaFailures               Json?
+  manualEditLocked         Boolean                    @default(false)
+  dealStatus               DealStatus                 @default(PENDING)
+  dealStatusReason         String?
+  dealCheckedAt            DateTime?
+  sovrnDealIdOverride      String?
+  publishedAt              DateTime?
+  unpublishedAt            DateTime?
+  rejectedAt               DateTime?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  contentItems             ContentItem[]              @relation("ContentItemReview")
+  entities                 ExtractedEntities?
+  assignments              ReviewCategoryAssignment[]
+  offerMatches             SovrnOfferMatch[]
+  affiliateLinks           AffiliateLink[]
+  images                   ImageAsset[]
+  renderModel              PageRenderModel?
+  publishJobs              PublishJob[]
+  events                   AnalyticsEvent[]
+  csvItems                 CsvImportItem[]
+  indexChecks              SearchIndexCheck[]
+
+  @@unique([source, sourceId])
+  @@index([status, publishedAt])
+  @@index([categorySlug, status, publishedAt])
+  @@index([brandSlug, status])
+  @@index([confidence])
+  @@index([dealStatus])
+  @@index([canonicalUrl])
+  @@index([createdAt])
+  @@map("normalized_reviews")
+}
+
+model ExtractedEntities {
+  id                  String           @id @default(cuid())
+  normalizedReviewId  String           @unique
+  productName         String
+  brand               String?
+  deviceType          String?
+  useCase             String?
+  platform            String?
+  price               Float?
+  currency            String?
+  modelNumber         String?
+  source              String
+  publishDate         DateTime?
+  rating              Float?
+  ratingScale         Float?
+  confidences         Json
+  overrides           Json?
+  lowConfidenceFields String[]         @default([])
+  overallConfidence   Float
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  review              NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+
+  @@index([overallConfidence])
+  @@map("extracted_entities")
+}
+
+// ─── Taxonomy ───────────────────────────────────────────────────────────────
+
+model CategoryTag {
+  id          String                     @id @default(cuid())
+  type        TagType
+  slug        String
+  name        String
+  description String?
+  parentId    String?
+  sortOrder   Int                        @default(0)
+  active      Boolean                    @default(true)
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+  parent      CategoryTag?               @relation("TagParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children    CategoryTag[]              @relation("TagParent")
+  assignments ReviewCategoryAssignment[]
+
+  @@unique([type, slug])
+  @@index([type, active])
+  @@map("category_tags")
+}
+
+model ReviewCategoryAssignment {
+  id                 String                @id @default(cuid())
+  normalizedReviewId String
+  categoryTagId      String
+  tagType            TagType
+  confidence         Float
+  reason             String
+  source             AssignmentSource
+  isPrimary          Boolean               @default(false)
+  isOverride         Boolean               @default(false)
+  overrideSource     String?
+  active             Boolean               @default(true)
+  reviewState        AssignmentReviewState @default(UNREVIEWED)
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  review             NormalizedReview      @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+  categoryTag        CategoryTag           @relation(fields: [categoryTagId], references: [id], onDelete: Restrict)
+
+  @@index([normalizedReviewId, active])
+  @@index([categoryTagId, active])
+  @@index([tagType, active, confidence])
+  @@index([reviewState])
+  @@index([createdAt])
+  @@map("review_category_assignments")
+}
+
+// ─── Sovrn ──────────────────────────────────────────────────────────────────
+
+model SovrnOfferCache {
+  id             String            @id @default(cuid())
+  queryKey       String
+  requestHash    String            @unique
+  fetchedAt      DateTime          @default(now())
+  expiresAt      DateTime
+  rawResponse    Json?
+  providerStatus String
+  httpStatus     Int?
+  errorMessage   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  matches        SovrnOfferMatch[]
+
+  @@index([expiresAt])
+  @@index([queryKey])
+  @@map("sovrn_offers_cache")
+}
+
+model SovrnOfferMatch {
+  id                   String           @id @default(cuid())
+  normalizedReviewId   String
+  cacheId              String?
+  offerId              String
+  title                String
+  merchantName         String?
+  merchantId           String?
+  offerUrl             String
+  providerAffiliateUrl String?
+  price                Float?
+  currency             String?
+  availability         String?
+  imageUrl             String?
+  score                Float
+  scoreBreakdown       Json
+  isBestOffer          Boolean          @default(false)
+  rank                 Int              @default(0)
+  matchStatus          OfferMatchStatus @default(MATCHED)
+  selectionReason      String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  review               NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+  cache                SovrnOfferCache? @relation(fields: [cacheId], references: [id], onDelete: SetNull)
+  affiliateLinks       AffiliateLink[]
+
+  @@unique([normalizedReviewId, offerId])
+  @@index([normalizedReviewId, isBestOffer])
+  @@index([matchStatus])
+  @@map("sovrn_offer_matches")
+}
+
+// ─── Affiliate ──────────────────────────────────────────────────────────────
+
+model AffiliateLink {
+  id                   String                 @id @default(cuid())
+  normalizedReviewId   String
+  offerMatchId         String?
+  sovrnOfferId         String
+  affiliateUrl         String
+  destinationUrl       String?
+  generationMethod     LinkGenerationMethod
+  isBest               Boolean                @default(false)
+  isActive             Boolean                @default(true)
+  verificationStatus   LinkVerificationStatus @default(PENDING)
+  verificationReason   String?
+  httpStatus           Int?
+  redirectChain        Json?
+  finalUrl             String?
+  verificationAttempts Int                    @default(0)
+  lastVerifiedAt       DateTime?
+  nextVerificationAt   DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  review               NormalizedReview       @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+  offerMatch           SovrnOfferMatch?       @relation(fields: [offerMatchId], references: [id], onDelete: SetNull)
+
+  @@unique([normalizedReviewId, sovrnOfferId])
+  @@index([normalizedReviewId, isActive])
+  @@index([verificationStatus])
+  @@index([nextVerificationAt])
+  @@index([lastVerifiedAt])
+  @@map("affiliate_links")
+}
+
+// ─── Images ─────────────────────────────────────────────────────────────────
+
+model ImageAsset {
+  id                 String           @id @default(cuid())
+  normalizedReviewId String
+  sourceType         ImageSourceType
+  sourceUrl          String?
+  cdnUrl             String?
+  contentType        String?
+  width              Int?
+  height             Int?
+  licenseState       LicenseState
+  license            String?
+  attribution        String?
+  enrichmentStatus   EnrichmentStatus
+  isFallback         Boolean          @default(false)
+  isPrimary          Boolean          @default(true)
+  failureReason      String?
+  verifiedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedReviewId, isPrimary])
+  @@index([enrichmentStatus])
+  @@index([licenseState])
+  @@map("image_assets")
+}
+
+// ─── Rendering / publishing ─────────────────────────────────────────────────
+
+model PageRenderModel {
+  id                 String           @id @default(cuid())
+  normalizedReviewId String           @unique
+  model              Json
+  modelHash          String
+  version            Int              @default(1)
+  builtAt            DateTime         @default(now())
+  review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+
+  @@map("page_render_models")
+}
+
+model PublishJob {
+  id                 String           @id @default(cuid())
+  normalizedReviewId String
+  action             PublishAction
+  status             PublishJobStatus
+  trigger            String
+  actor              String?
+  qaFailures         Json?
+  errorCode          String?
+  message            String?
+  createdAt          DateTime         @default(now())
+  review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedReviewId, createdAt])
+  @@index([status, createdAt])
+  @@map("publish_jobs")
+}
+
+model RevalidationRun {
+  id              String           @id @default(cuid())
+  type            RevalidationType
+  status          RunStatus        @default(RUNNING)
+  trigger         String
+  actor           String?
+  rangeStart      DateTime?
+  rangeEnd        DateTime?
+  checkedCount    Int              @default(0)
+  successCount    Int              @default(0)
+  failureCount    Int              @default(0)
+  reasonBreakdown Json?
+  errorMessage    String?
+  startedAt       DateTime         @default(now())
+  completedAt     DateTime?
+
+  @@index([type, startedAt])
+  @@map("revalidation_runs")
+}
+
+// ─── Failures / locks ───────────────────────────────────────────────────────
+
+model PipelineFailure {
+  id                 String        @id @default(cuid())
+  fingerprint        String        @unique
+  stage              PipelineStage
+  kind               FailureKind
+  errorCode          String
+  message            String
+  entityType         String
+  entityId           String
+  contentItemId      String?
+  normalizedReviewId String?
+  runId              String?
+  retryCount         Int           @default(0)
+  maxRetries         Int           @default(5)
+  nextRetryAt        DateTime?
+  resolvedAt         DateTime?
+  occurrences        Int           @default(1)
+  lastOccurredAt     DateTime      @default(now())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([stage, errorCode])
+  @@index([resolvedAt, kind, nextRetryAt])
+  @@index([normalizedReviewId])
+  @@index([lastOccurredAt])
+  @@map("pipeline_failures")
+}
+
+model JobLock {
+  name      String   @id
+  owner     String
+  lockedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  @@map("job_locks")
+}
+
+// ─── Analytics / sponsored / indexing ───────────────────────────────────────
+
+model AnalyticsEvent {
+  id                 String            @id @default(cuid())
+  event              String
+  normalizedReviewId String?
+  categorySlug       String?
+  sessionId          String?
+  path               String?
+  metadata           Json?
+  createdAt          DateTime          @default(now())
+  review             NormalizedReview? @relation(fields: [normalizedReviewId], references: [id], onDelete: SetNull)
+
+  @@index([event, createdAt])
+  @@index([categorySlug, event, createdAt])
+  @@index([normalizedReviewId, createdAt])
+  @@index([sessionId, createdAt])
+  @@map("analytics_events")
+}
+
+model SponsoredPlacement {
+  id                  String            @id @default(cuid())
+  title               String
+  advertiser          String
+  url                 String
+  label               String            @default("Sponsored")
+  disclosure          String
+  categorySlug        String?
+  position            SponsoredPosition
+  enabled             Boolean           @default(false)
+  startAt             DateTime?
+  endAt               DateTime?
+  minMonthlyPageViews Int               @default(1000)
+  minMonthlySessions  Int               @default(250)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([enabled, position, categorySlug])
+  @@map("sponsored_placements")
+}
+
+model SearchIndexCheck {
+  id                 String            @id @default(cuid())
+  normalizedReviewId String?
+  url                String
+  verdict            IndexVerdict
+  coverageState      String?
+  lastCrawlTime      DateTime?
+  error              String?
+  checkedAt          DateTime          @default(now())
+  review             NormalizedReview? @relation(fields: [normalizedReviewId], references: [id], onDelete: SetNull)
+
+  @@index([url, checkedAt])
+  @@index([checkedAt])
+  @@map("search_index_checks")
+}
+
+// ─── CSV import ─────────────────────────────────────────────────────────────
+
+model CsvImportJob {
+  id           String          @id @default(cuid())
+  fileName     String
+  fileSize     Int
+  rowCount     Int             @default(0)
+  status       CsvJobStatus
+  headerErrors Json?
+  validRows    Int             @default(0)
+  invalidRows  Int             @default(0)
+  appliedRows  Int             @default(0)
+  failedRows   Int             @default(0)
+  uploadedBy   String
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  items        CsvImportItem[]
+
+  @@index([createdAt])
+  @@map("csv_import_jobs")
+}
+
+model CsvImportItem {
+  id                        String            @id @default(cuid())
+  importJobId               String
+  rowNumber                 Int
+  normalizedReviewKey       String
+  normalizedReviewId        String?
+  overridePrimaryCategory   String?
+  entityBrandOverride       String?
+  entityProductNameOverride String?
+  sovrnDealIdOverride       String?
+  extraOverrides            Json?
+  processingStatus          CsvItemStatus     @default(PENDING)
+  errorCode                 String?
+  errorReason               String?
+  retryCount                Int               @default(0)
+  processedAt               DateTime?
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+  job                       CsvImportJob      @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+  review                    NormalizedReview? @relation(fields: [normalizedReviewId], references: [id], onDelete: SetNull)
+
+  @@unique([importJobId, rowNumber])
+  @@index([processingStatus])
+  @@index([normalizedReviewId])
+  @@map("csv_import_queue")
+}
+
+// ─── Admin / audit / reports ────────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  metadata   Json?
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model AdminSession {
+  id         String    @id
+  email      String
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model RateLimitBucket {
+  key         String   @id
+  windowStart DateTime
+  count       Int
+
+  @@map("rate_limit_buckets")
+}
+
+model Day30Report {
+  id          String   @id @default(cuid())
+  periodStart DateTime
+  periodEnd   DateTime
+  generatedAt DateTime @default(now())
+  generatedBy String
+  json        Json
+  html        String
+
+  @@index([generatedAt])
+  @@map("day30_reports")
 }

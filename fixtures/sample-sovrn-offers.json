@@ -1,0 +1,178 @@
+{
+  "_note": "SAMPLE Sovrn-shaped responses for the local stub server only. Not real offers.",
+  "responses": {
+    "Apple MacBook Air 13 (M4)": [
+      {
+        "id": "sv-mba-1",
+        "name": "Apple MacBook Air 13-inch M4 16GB 256GB Laptop",
+        "merchant": {
+          "name": "Best Buy",
+          "id": "bestbuy"
+        },
+        "salePrice": 999,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-mba-1",
+        "merchantUrl": "{BASE}/merchant/sv-mba-1"
+      },
+      {
+        "id": "sv-mba-2",
+        "name": "Apple MacBook Air 13 M4 Laptop - Midnight",
+        "merchant": {
+          "name": "Amazon",
+          "id": "amazon"
+        },
+        "salePrice": 949,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-mba-2",
+        "merchantUrl": "{BASE}/merchant/sv-mba-2"
+      },
+      {
+        "id": "sv-mba-case",
+        "name": "MacBook Air 13 Hard Shell Case",
+        "merchant": {
+          "name": "Amazon",
+          "id": "amazon"
+        },
+        "salePrice": 19.99,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-mba-case",
+        "merchantUrl": "{BASE}/merchant/sv-mba-case"
+      }
+    ],
+    "Dell XPS 14 9440": [
+      {
+        "id": "sv-xps-1",
+        "name": "Dell XPS 14 9440 Laptop OLED Intel Core Ultra",
+        "merchant": {
+          "name": "Dell",
+          "id": "dell"
+        },
+        "salePrice": 1699,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-xps-1",
+        "merchantUrl": "{BASE}/merchant/sv-xps-1"
+      }
+    ],
+    "Lenovo ThinkPad X1 Carbon Gen 13": [
+      {
+        "id": "sv-x1-1",
+        "name": "Lenovo ThinkPad X1 Carbon Gen 13 14\" Business Laptop",
+        "merchant": {
+          "name": "Lenovo",
+          "id": "lenovo"
+        },
+        "salePrice": 1849,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-x1-1",
+        "merchantUrl": "{BASE}/merchant/sv-x1-1"
+      },
+      {
+        "id": "sv-x1-2",
+        "name": "ThinkPad X1 Carbon Gen 13 Laptop",
+        "merchant": {
+          "name": "Newegg",
+          "id": "newegg"
+        },
+        "salePrice": 1799,
+        "currency": "USD",
+        "availability": "out of stock",
+        "deepLink": "{BASE}/aff/sv-x1-2",
+        "merchantUrl": "{BASE}/merchant/sv-x1-2"
+      }
+    ],
+    "Google Pixel 10": [
+      {
+        "id": "sv-px-1",
+        "name": "Google Pixel 10 128GB Unlocked Smartphone",
+        "merchant": {
+          "name": "Best Buy",
+          "id": "bestbuy"
+        },
+        "salePrice": 799,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-px-1",
+        "merchantUrl": "{BASE}/merchant/sv-px-1"
+      },
+      {
+        "id": "sv-px-case",
+        "name": "Pixel 10 Clear Phone Case",
+        "merchant": {
+          "name": "Amazon",
+          "id": "amazon"
+        },
+        "salePrice": 14.99,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-px-case",
+        "merchantUrl": "{BASE}/merchant/sv-px-case"
+      }
+    ],
+    "Samsung Galaxy S26 Ultra": [
+      {
+        "id": "sv-s26-1",
+        "name": "Samsung Galaxy S26 Ultra 256GB Unlocked",
+        "merchant": {
+          "name": "Samsung",
+          "id": "samsung"
+        },
+        "salePrice": 1299,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-s26-1",
+        "merchantUrl": "{BASE}/merchant/sv-s26-1"
+      }
+    ],
+    "Microsoft Visual Studio Code": [],
+    "Logitech MX Master 4": [
+      {
+        "id": "sv-mx4-1",
+        "name": "Logitech MX Master 4 Wireless Mouse",
+        "merchant": {
+          "name": "Amazon",
+          "id": "amazon"
+        },
+        "salePrice": 119.99,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-mx4-1",
+        "merchantUrl": "{BASE}/merchant/sv-mx4-1"
+      }
+    ],
+    "Anker Prime 100W Charger": [
+      {
+        "id": "sv-ank-1",
+        "name": "Anker Prime 100W GaN USB-C Charger 3-Port",
+        "merchant": {
+          "name": "Amazon",
+          "id": "amazon"
+        },
+        "salePrice": 84.99,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-ank-1",
+        "merchantUrl": "{BASE}/merchant/sv-ank-1"
+      }
+    ],
+    "Sony WH-1000XM6": [
+      {
+        "id": "sv-sony-1",
+        "name": "Sony WH-1000XM6 Wireless Noise Canceling Headphones",
+        "merchant": {
+          "name": "Best Buy",
+          "id": "bestbuy"
+        },
+        "salePrice": 449.99,
+        "currency": "USD",
+        "availability": "in stock",
+        "deepLink": "{BASE}/aff/sv-sony-1",
+        "merchantUrl": "{BASE}/merchant/sv-sony-1"
+      }
+    ]
+  }
+}

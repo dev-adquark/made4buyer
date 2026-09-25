@@ -1,8 +1,87 @@
-import crypto from"crypto";import{cookies}from"next/headers";
-const SESSION_MAX_AGE=8*60*60*1000;
-const secret=()=>{const v=process.env.ADMIN_SESSION_SECRET;if(v)return v;if(process.env.NODE_ENV==="production")throw new Error("ADMIN_SESSION_SECRET is not configured");return"development-secret"};
-export function sign(v:string){return crypto.createHmac("sha256",secret()).update(v).digest("hex")}
-export function createSession(email:string){const payload=Buffer.from(JSON.stringify({ts:Date.now(),email})).toString("base64url");return payload+"."+sign(payload)}
-export async function isAdmin(){const v=(await cookies()).get("admin_session")?.value;if(!v)return false;const p=v.split(".");if(p.length!==2||!p[0]||!p[1])return false;try{const expected=sign(p[0]);if(p[1].length!==expected.length||!crypto.timingSafeEqual(Buffer.from(p[1]),Buffer.from(expected)))return false;const data=JSON.parse(Buffer.from(p[0],"base64url").toString()) as {ts?:unknown,email?:unknown};const ts=Number(data.ts);const email=typeof data.email==="string"?data.email:"";return Boolean(email&&Number.isFinite(ts)&&Date.now()-ts>=0&&Date.now()-ts<=SESSION_MAX_AGE&&validAdmin(email,process.env.ADMIN_PASSWORD||""))}catch{return false}}
-export function validAdmin(e:string,p:string){const email=process.env.ADMIN_EMAIL,password=process.env.ADMIN_PASSWORD;return Boolean(email&&password)&&e===email&&p===password}
-export const adminSessionMaxAge=Math.floor(SESSION_MAX_AGE/1000);
+import crypto from "node:crypto";
+import { cookies } from "next/headers";
+import { config } from "@/lib/config";
+import { db } from "@/lib/db";
+
+/**
+ * Admin sessions: an opaque random session id stored server-side (admin_sessions) with a
+ * hard expiry, sent to the browser as `<id>.<hmac>` in an HttpOnly, SameSite=Strict cookie
+ * (Secure + __Host- prefix in production). Logout revokes the row, so a stolen cookie
+ * stops working immediately.
+ */
+
+export const ADMIN_COOKIE = process.env.NODE_ENV === "production" ? "__Host-m4b_admin" : "m4b_admin";
+
+function secret(): string {
+  const value = config.admin.sessionSecret();
+  if (value && (value.length >= 32 || process.env.NODE_ENV !== "production")) return value;
+  if (process.env.NODE_ENV === "production") throw new Error("ADMIN_SESSION_SECRET must be configured with at least 32 characters");
+  return "development-only-session-secret-not-for-production";
+}
+
+function sign(value: string): string {
+  return crypto.createHmac("sha256", secret()).update(value).digest("base64url");
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
+
+/** Constant-time credential check. Fails closed when admin credentials are not configured. */
+export function validCredentials(email: string, password: string): boolean {
+  const expectedEmail = config.admin.email();
+  const expectedPassword = config.admin.password();
+  if (!expectedEmail || !expectedPassword) return false;
+  const emailOk = safeEqual(email.trim().toLowerCase(), expectedEmail.toLowerCase());
+  const passwordOk = safeEqual(password, expectedPassword);
+  return emailOk && passwordOk;
+}
+
+export function sessionMaxAgeSeconds(): number {
+  return config.admin.sessionHours() * 3600;
+}
+
+export async function createSession(email: string): Promise<{ token: string; expiresAt: Date }> {
+  const id = crypto.randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + sessionMaxAgeSeconds() * 1000);
+  await db.adminSession.create({ data: { id, email, expiresAt } });
+  return { token: `${id}.${sign(id)}`, expiresAt };
+}
+
+function parseToken(token: string | undefined): string | null {
+  if (!token) return null;
+  const [id, mac, extra] = token.split(".");
+  if (!id || !mac || extra !== undefined) return null;
+  return safeEqual(mac, sign(id)) ? id : null;
+}
+
+export type AdminSession = { email: string; sessionId: string };
+
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value;
+  const id = parseToken(token);
+  if (!id) return null;
+  const row = await db.adminSession.findUnique({ where: { id } });
+  if (!row || row.revokedAt || row.expiresAt <= new Date()) return null;
+  // Credentials rotated since login → the session is no longer valid.
+  if (row.email.toLowerCase() !== (config.admin.email() ?? "").toLowerCase()) return null;
+  if (Date.now() - row.lastSeenAt.getTime() > 5 * 60_000) {
+    await db.adminSession.update({ where: { id }, data: { lastSeenAt: new Date() } }).catch(() => undefined);
+  }
+  return { email: row.email, sessionId: id };
+}
+
+export async function isAdmin(): Promise<boolean> {
+  return Boolean(await getAdminSession());
+}
+
+export async function revokeSession(token: string | undefined): Promise<void> {
+  const id = parseToken(token);
+  if (id) await db.adminSession.updateMany({ where: { id, revokedAt: null }, data: { revokedAt: new Date() } });
+}
+
+export function cookieOptions(maxAge: number) {
+  return { httpOnly: true, sameSite: "strict" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge };
+}
