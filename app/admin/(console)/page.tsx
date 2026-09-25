@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BarList, Meter } from "@/components/charts";
 import Flash from "@/components/flash";
 import { ActionForm, Badge, pct, Stat } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
@@ -53,6 +54,31 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
         <Stat label="Deal coverage" value={pct(published ? withDeal / published : null)} note={`${withDeal}/${published} published with verified deal`} />
         <Stat label="Link health" value={pct(linksTotal ? linksOk / linksTotal : null)} note={`${linksOk}/${linksTotal} active links verified`} />
         <Stat label="Image coverage" value={pct(images ? (images - fallbackImages) / images : null)} note={`${fallbackImages} fallback placeholders`} />
+      </div>
+
+      <div className="chart-grid">
+        <section className="chart-card" aria-labelledby="ch-coverage">
+          <h2 id="ch-coverage">Coverage</h2>
+          <p className="small muted">Share of published reviews / primary images.</p>
+          <Meter label="Verified deal coverage" value={published ? withDeal / published : null} note={`${withDeal} of ${published} published reviews have a verified offer (target ≥ 90%)`} />
+          <div style={{ height: 12 }} />
+          <Meter label="Image coverage (non-fallback)" value={images ? (images - fallbackImages) / images : null} note={`${images - fallbackImages} of ${images} primary images are real product images`} />
+        </section>
+        <section className="chart-card" aria-labelledby="ch-links">
+          <h2 id="ch-links">Link health</h2>
+          <p className="small muted">Active affiliate links by verification status.</p>
+          <BarList
+            label="Active links by status"
+            data={linkGroups
+              .map((g) => ({ label: g.verificationStatus, value: g._count._all, tone: (g.verificationStatus === "VERIFIED_OK" ? "ok" : g.verificationStatus === "PENDING" ? "neutral" : ["TIMEOUT", "PROVIDER_ERROR"].includes(g.verificationStatus) ? "warn" : "error") as "ok" | "warn" | "error" | "neutral" }))
+              .sort((a, b) => b.value - a.value)}
+          />
+        </section>
+        <section className="chart-card" aria-labelledby="ch-cats">
+          <h2 id="ch-cats">Reviews by category</h2>
+          <p className="small muted">All non-deleted reviews, any status.</p>
+          <BarList label="Reviews by category" data={categories.map((c) => ({ label: c.categorySlug ? categoryName(c.categorySlug) ?? c.categorySlug : "No category", value: c._count._all }))} />
+        </section>
       </div>
 
       <h2>Integrations</h2>

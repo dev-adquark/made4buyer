@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 const LINKS: Array<[string, string]> = [
   ["/admin", "Overview"],
   ["/admin/qa", "QA queue"],
+  ["/admin/reviews", "All reviews"],
+  ["/admin/entities", "Entities"],
   ["/admin/ingestion", "Ingestion"],
   ["/admin/categorization", "Categorization"],
   ["/admin/deals", "Deals"],
@@ -27,7 +29,7 @@ export default function AdminNav({ email }: { email: string }) {
     <nav className="admin-nav" aria-label="Admin">
       <ul>
         {LINKS.map(([href, label]) => {
-          const current = href === "/admin" ? path === "/admin" : path.startsWith(href);
+          const current = href === "/admin" ? path === "/admin" : href === "/admin/reviews" ? path === "/admin/reviews" : path.startsWith(href);
           return (
             <li key={href}>
               <Link href={href} aria-current={current ? "page" : undefined}>

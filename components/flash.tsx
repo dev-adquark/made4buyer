@@ -4,12 +4,12 @@ export default function Flash({ ok, error }: { ok?: string | string[]; error?: s
   return (
     <>
       {okMsg && (
-        <p className="notice ok" role="status">
+        <p className="notice ok toast" role="status">
           {okMsg}
         </p>
       )}
       {errMsg && (
-        <p className="notice error" role="alert">
+        <p className="notice error toast" role="alert">
           {errMsg}
         </p>
       )}

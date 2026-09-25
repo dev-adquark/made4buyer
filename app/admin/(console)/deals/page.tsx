@@ -1,6 +1,8 @@
 import type { DealStatus } from "@prisma/client";
 import Link from "next/link";
+import { BarList } from "@/components/charts";
 import Flash from "@/components/flash";
+import { categoryName } from "@/lib/taxonomy/definitions";
 import { ActionForm, Badge, Stat, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
@@ -36,6 +38,18 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
     }),
   ]);
   const count = (s: string) => counts.find((c) => c.dealStatus === s)?._count._all ?? 0;
+  const [byCategory, verifiedByCategory, providerStates, unmatched] = await Promise.all([
+    db.normalizedReview.groupBy({ by: ["categorySlug"], where: { status: "PUBLISHED" }, _count: { _all: true } }),
+    db.normalizedReview.groupBy({ by: ["categorySlug"], where: { status: "PUBLISHED", affiliateLinks: { some: { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } } }, _count: { _all: true } }),
+    db.sovrnOfferCache.groupBy({ by: ["providerStatus"], _count: { _all: true } }),
+    db.normalizedReview.findMany({ where: { status: "PUBLISHED", affiliateLinks: { none: { isActive: true, verificationStatus: "VERIFIED_OK" } } }, select: { id: true, productName: true, categorySlug: true, dealStatus: true, dealStatusReason: true }, orderBy: { productName: "asc" }, take: 50 }),
+  ]);
+  const coverage = byCategory
+    .map((c) => {
+      const verified = verifiedByCategory.find((v) => v.categorySlug === c.categorySlug)?._count._all ?? 0;
+      return { slug: c.categorySlug, published: c._count._all, verified, ratio: c._count._all ? verified / c._count._all : 0 };
+    })
+    .sort((a, b) => a.ratio - b.ratio);
   const sovrn = integrationStatus().sovrn;
 
   return (
@@ -48,6 +62,30 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
           <Stat key={s} label={s} value={count(s)} />
         ))}
       </div>
+      <div className="chart-grid">
+        <section className="chart-card" aria-labelledby="cov-cat">
+          <h2 id="cov-cat">Verified coverage by category</h2>
+          <p className="small muted">Published reviews with a verified offer, weakest first.</p>
+          <BarList label="Verified coverage by category (%)" unit="%" data={coverage.map((c) => ({ label: `${categoryName(c.slug) ?? "No category"} (${c.verified}/${c.published})`, value: Math.round(c.ratio * 100), tone: c.ratio >= 0.7 ? "ok" : c.ratio >= 0.4 ? "warn" : "error" }))} />
+        </section>
+        <section className="chart-card" aria-labelledby="prov-state">
+          <h2 id="prov-state">Sovrn response states</h2>
+          <p className="small muted">Cached provider responses by outcome.</p>
+          <BarList label="Sovrn responses by status" data={providerStates.map((p) => ({ label: p.providerStatus, value: p._count._all, tone: p.providerStatus === "OK" ? "ok" : p.providerStatus === "EMPTY" ? "warn" : "error" }))} />
+        </section>
+      </div>
+      {unmatched.length > 0 && (
+        <details className="card card-body" style={{ marginBottom: 16 }}>
+          <summary>Published reviews without a verified offer ({unmatched.length}{unmatched.length === 50 ? "+" : ""})</summary>
+          <ul>
+            {unmatched.map((u) => (
+              <li key={u.id}>
+                <Link href={`/admin/reviews/${u.id}`}>{u.productName}</Link> ({categoryName(u.categorySlug) ?? "no category"}) <Badge value={u.dealStatus} /> <span className="small muted">{u.dealStatusReason ?? ""}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="btnrow">
         <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin/deals" disabledReason={sovrn === "READY" ? undefined : "Sovrn not configured"} />
       </div>
