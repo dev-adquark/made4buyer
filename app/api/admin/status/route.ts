@@ -5,6 +5,6 @@ export async function POST(req:Request){
  if(!id||!["QUEUED","PUBLISHED","REJECTED","DRAFT"].includes(status))return NextResponse.json({error:"Invalid status change"},{status:422});
  const review=await db.review.findUnique({where:{id},select:{id:true,publishedAt:true}});
  if(!review)return NextResponse.json({error:"Review not found"},{status:404});
- await db.review.update({where:{id},data:{status:status as "QUEUED"|"PUBLISHED"|"REJECTED"|"DRAFT",publishedAt:status==="PUBLISHED"?(review.publishedAt??new Date()):review.publishedAt}});
+ await db.review.update({where:{id},data:{status:status as "QUEUED"|"PUBLISHED"|"REJECTED"|"DRAFT",publishedAt:status==="PUBLISHED"?(review.publishedAt??new Date()):null}});
  return NextResponse.redirect(new URL("/admin/qa",req.url))
 }
