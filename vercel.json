@@ -1,12 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
-    { "path": "/api/cron/ingest", "schedule": "15 * * * *" },
-    { "path": "/api/cron/revalidate-offers", "schedule": "30 */6 * * *" },
-    { "path": "/api/cron/verify-links", "schedule": "0 */6 * * *" },
-    { "path": "/api/cron/retry-failed", "schedule": "45 * * * *" },
-    { "path": "/api/cron/publish-cycle", "schedule": "50 * * * *" },
     { "path": "/api/cron/cleanup-cache", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/inspect-index", "schedule": "0 4 * * *" }
+    { "path": "/api/cron/inspect-index", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/ingest", "schedule": "15 6 * * *" },
+    { "path": "/api/cron/verify-links", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/revalidate-offers", "schedule": "30 7 * * *" },
+    { "path": "/api/cron/retry-failed", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/publish-cycle", "schedule": "30 8 * * *" }
   ]
 }

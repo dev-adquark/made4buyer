@@ -1,0 +1,41 @@
+# More frequent job cadence than Vercel Hobby cron allows (daily only).
+# Calls the same authenticated /api/cron/<job> endpoints. Inactive until the repository
+# secrets SITE_URL (e.g. https://made4buyers.vercel.app) and CRON_SECRET are set.
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "10 */6 * * *" # every 6 hours: offers + links
+    - cron: "40 * * * *" # hourly: ingestion + retries + publish cycle
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job to run (ingest, verify-links, revalidate-offers, retry-failed, publish-cycle, cleanup-cache, inspect-index)"
+        required: true
+        default: verify-links
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron endpoints
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          SCHEDULE: ${{ github.event.schedule }}
+          MANUAL_JOB: ${{ github.event.inputs.job }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "SITE_URL / CRON_SECRET secrets not set — skipping."; exit 0
+          fi
+          if [ -n "$MANUAL_JOB" ]; then JOBS="$MANUAL_JOB"
+          elif [ "$SCHEDULE" = "10 */6 * * *" ]; then JOBS="revalidate-offers verify-links"
+          else JOBS="ingest retry-failed publish-cycle"; fi
+          status=0
+          for job in $JOBS; do
+            code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 320 -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/$job")
+            echo "$job -> HTTP $code: $(head -c 400 /tmp/out.json)"
+            # 409 = already running (lock held) — not a failure.
+            if [ "$code" != "200" ] && [ "$code" != "409" ]; then status=1; fi
+          done
+          exit $status

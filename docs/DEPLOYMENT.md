@@ -40,26 +40,38 @@ For every later schema change, run `npm run db:migrate` before (or as part of) t
 
 ## 3. Cron
 
-`vercel.json` schedules:
+`vercel.json` schedules every job once a day (UTC), which is what the Vercel **Hobby** plan
+allows: more frequent expressions fail the deploy there.
 
 | Path | Schedule |
 |---|---|
-| `/api/cron/ingest` | hourly at :15 |
-| `/api/cron/verify-links` | every 6 h |
-| `/api/cron/revalidate-offers` | every 6 h (offset 30 min) |
-| `/api/cron/retry-failed` | hourly at :45 |
-| `/api/cron/publish-cycle` | hourly at :50 (no-op unless `AUTO_PUBLISH_ENABLED=true`) |
-| `/api/cron/cleanup-cache` | daily 03:00 UTC |
-| `/api/cron/inspect-index` | daily 04:00 UTC (no-op unless GSC is configured) |
+| `/api/cron/cleanup-cache` | 03:00 |
+| `/api/cron/inspect-index` | 04:00 (no-op unless GSC is configured) |
+| `/api/cron/ingest` | 06:15 |
+| `/api/cron/verify-links` | 07:00 |
+| `/api/cron/revalidate-offers` | 07:30 |
+| `/api/cron/retry-failed` | 08:00 |
+| `/api/cron/publish-cycle` | 08:30 (no-op unless `AUTO_PUBLISH_ENABLED=true`) |
+
+For the intended cadence (links and offers every 6 hours; ingestion, retries and publishing
+hourly), either upgrade to Vercel Pro and tighten the schedules, or set the GitHub repository
+secrets `SITE_URL` and `CRON_SECRET`. That activates `.github/workflows/scheduled-jobs.yml`,
+which calls the same authenticated endpoints; an HTTP 409 means the job's lock was already
+held.
 
 Vercel sends `Authorization: Bearer $CRON_SECRET` automatically once `CRON_SECRET` is set.
-Vercel Hobby plans only allow daily cron jobs; on Hobby, change every schedule to run at most
-once a day. Every job is also available as **Admin → Jobs & runs → Run now** and as
-`npm run job -- <name>`.
+Every job is also available as **Admin → Jobs & runs → Run now** and as
+`npm run job -- <name>`. Cron routes declare `maxDuration = 300`. Ingestion processes at most
+`INGEST_MAX_ITEMS_PER_RUN` items per invocation, and the rest continues on the next run.
 
-Cron routes declare `maxDuration = 300`. Ingestion processes at most
-`INGEST_MAX_ITEMS_PER_RUN` items per invocation; the remainder stays `INGESTED` and is picked up
-by the next run.
+## Neon
+
+Use the **pooled** host for the app and the **direct** host for migrations:
+
+```bash
+DATABASE_URL="postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/made4buyers?sslmode=require&pgbouncer=true&connect_timeout=15"   # Vercel
+DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/made4buyers?sslmode=require" npm run db:migrate                          # migrations
+```
 
 ## 4. Google Search Console (optional)
 
