@@ -5,7 +5,10 @@ import { cache } from "react";
 import Breadcrumbs, { breadcrumbJsonLd, type Crumb } from "@/components/breadcrumbs";
 import DealImpression from "@/components/deal-impression";
 import JsonLd from "@/components/json-ld";
-import ReviewCard from "@/components/review-card";
+import { ReviewGrid } from "@/components/review-card";
+import { ParallaxFigure, SectionNav } from "@/components/review-chrome";
+import { themeStyle } from "@/lib/taxonomy/themes";
+import { placeholderPath } from "@/lib/pipeline/images";
 import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -112,123 +115,150 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const page = await loadPage(slug);
   if (!page) notFound();
   const { review, model: m } = page;
-  const [deals, related, brand] = await Promise.all([verifiedDeals(review.id), relatedReviews(review, 4), brandPageEligible(review.brandSlug)]);
+  const [deals, related, brand] = await Promise.all([verifiedDeals(review.id), relatedReviews(review, 3), brandPageEligible(review.brandSlug)]);
   const crumbs: Crumb[] = [{ name: "Home", href: "/" }];
   if (m.category) crumbs.push({ name: m.category.name, href: `/category/${m.category.slug}` });
   if (m.category && m.subcategory) crumbs.push({ name: m.subcategory.name, href: `/category/${m.category.slug}?sub=${m.subcategory.slug}` });
   crumbs.push({ name: m.productName, href: m.canonicalPath });
   const best = deals.find((d) => d.isBest) ?? deals[0];
   const alternates = deals.filter((d) => d !== best);
+  const published = m.publishedAt ? new Date(m.publishedAt) : null;
+  const sections = [
+    { id: "review", label: "Review" },
+    { id: "deal", label: best ? "Verified offer" : "Offer" },
+    ...(m.keyEntities.length ? [{ id: "facts", label: "Key facts" }] : []),
+    ...(related.length ? [{ id: "related", label: "Related" }] : []),
+  ];
 
   return (
-    <main className="section">
+    <main style={themeStyle(m.category?.slug) as React.CSSProperties}>
       {structuredData(m, deals, crumbs).map((d, i) => (
         <JsonLd key={i} data={d} />
       ))}
+      <header className="review-hero">
+        <div className="container review-hero-inner">
+          <div>
+            <Breadcrumbs items={crumbs} />
+            <div className="meta-row">
+              {m.category && <span className="pill">{m.category.name}</span>}
+              {m.subcategory && <span className="pill plain">{m.subcategory.name}</span>}
+              {best && <span className="pill verified">Verified offer</span>}
+            </div>
+            <h1>{m.title}</h1>
+            <p className="lede">{m.summary}</p>
+            <p className="small muted">
+              {m.brand ? `${m.brand} ` : ""}
+              {m.productName}
+              {published && (
+                <>
+                  {" "}
+                  — reviewed <time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
+                </>
+              )}
+            </p>
+            <div className="btnrow">
+              {best ? (
+                <a className="btn primary" href="#deal">
+                  See the verified offer
+                </a>
+              ) : null}
+              <Link className="btn" href={`/compare?ids=${review.id}`}>
+                Compare with others
+              </Link>
+            </div>
+          </div>
+          <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} />
+        </div>
+      </header>
+      <SectionNav items={sections} />
       <div className="container review-layout">
         <article className="review-article">
-          <Breadcrumbs items={crumbs} />
-          <div className="meta">
-            {m.category?.name ?? "Technology"}
-            {m.subcategory ? ` · ${m.subcategory.name}` : ""}
-            {m.brand ? ` · ${m.brand}` : ""}
-          </div>
-          <h1>{m.title}</h1>
-          <p className="lede">{m.summary}</p>
-          <figure style={{ margin: 0 }}>
-            <div className="review-hero">
-              <img src={m.image.url} alt={m.image.alt} width={m.image.width} height={m.image.height} fetchPriority="high" decoding="async" />
+          <section id="review" aria-labelledby="review-heading">
+            <h2 id="review-heading" className="visually-hidden">
+              Review
+            </h2>
+            <div className="review-body">
+              {m.bodyParagraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
             </div>
-            {m.image.attribution && <figcaption className="figcaption">Image: {m.image.attribution}</figcaption>}
-          </figure>
-          <div className="review-body">
-            {m.bodyParagraphs.map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-          <p className="small muted">
-            Source: {m.source.url ? <a href={m.source.url} rel="nofollow noopener" target="_blank">{m.source.name}</a> : m.source.name}
-            {m.source.author ? ` · ${m.source.author}` : ""}
-            {m.source.publishedAt ? ` · originally published ${new Date(m.source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}
-          </p>
-          <nav className="btnrow" aria-label="Related pages">
-            {m.category && (
-              <Link className="btn" href={`/category/${m.category.slug}`}>
-                All {m.category.name.toLowerCase()} reviews
-              </Link>
-            )}
-            {brand.eligible && m.brand && m.brandSlug && (
-              <Link className="btn" href={`/brand/${m.brandSlug}`}>
-                More from {m.brand}
-              </Link>
-            )}
-            <Link className="btn" href={`/compare?ids=${review.id}`}>
-              Compare with others
-            </Link>
-          </nav>
+            <p className="small muted">
+              Source: {m.source.url ? <a href={m.source.url} rel="nofollow noopener" target="_blank">{m.source.name}</a> : m.source.name}
+              {m.source.author ? `, by ${m.source.author}` : ""}
+              {m.source.publishedAt ? `, originally published ${new Date(m.source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.
+            </p>
+            <nav className="btnrow" aria-label="Related pages">
+              {m.category && (
+                <Link className="btn" href={`/category/${m.category.slug}`}>
+                  All {m.category.name.toLowerCase()} reviews
+                </Link>
+              )}
+              {brand.eligible && m.brand && m.brandSlug && (
+                <Link className="btn" href={`/brand/${m.brandSlug}`}>
+                  More from {m.brand}
+                </Link>
+              )}
+            </nav>
+          </section>
           {related.length > 0 && (
-            <section aria-labelledby="related-heading">
+            <section id="related" aria-labelledby="related-heading" style={{ marginTop: 32 }}>
               <h2 id="related-heading">Related reviews</h2>
-              <div className="grid">
-                {related.map((r) => (
-                  <ReviewCard key={r.id} review={r} />
-                ))}
-              </div>
+              <ReviewGrid reviews={related} />
             </section>
           )}
         </article>
 
-        <aside className="aside-stack" aria-label="Deal and product details">
-          <section className="card card-body deal-box" aria-labelledby="deal-heading">
-            <h2 id="deal-heading" style={{ marginTop: 0, fontSize: 20 }}>
-              Current deal
+        <aside className="aside-stack" aria-label="Offer and product details">
+          <section id="deal" className={`panel ${best ? "deal-panel" : ""}`} aria-labelledby="deal-heading">
+            <h2 id="deal-heading" className={best ? "visually-hidden" : undefined}>
+              {best ? "Verified offer" : "Offer"}
             </h2>
             {best ? (
               <>
                 <DealImpression linkId={best.linkId} reviewId={review.id} categorySlug={m.category?.slug}>
-                  <div className="deal">
-                    <div>
-                      <div className="small muted">{best.merchant ?? "Retailer"}</div>
-                      {money(best.price, best.currency) ? <div className="deal-price">{money(best.price, best.currency)}</div> : <div className="small">Price shown at retailer</div>}
-                      <div className="small muted">{AVAILABILITY[best.availability ?? "unknown"] ?? best.availability}</div>
-                    </div>
-                    <a className="btn primary" href={`/go/${best.linkId}`} rel="sponsored nofollow noopener" target="_blank">
-                      View deal<span className="visually-hidden"> for {m.productName} at {best.merchant ?? "retailer"} (opens in a new tab)</span>
-                    </a>
-                  </div>
+                  <div className="verified-head">Verified offer</div>
+                  {money(best.price, best.currency) ? <div className="price">{money(best.price, best.currency)}</div> : <div className="small" style={{ marginTop: 8 }}>Price shown at the retailer</div>}
+                  <div className="merchant">{best.merchant ?? "Retailer"}</div>
+                  <div className="small muted">{AVAILABILITY[best.availability ?? "unknown"] ?? best.availability}</div>
+                  <a className="btn primary large" href={`/go/${best.linkId}`} rel="sponsored nofollow noopener" target="_blank">
+                    View deal<span className="visually-hidden"> for {m.productName} at {best.merchant ?? "the retailer"} (opens in a new tab)</span>
+                  </a>
                 </DealImpression>
-                <p className="small muted">Offer link checked {new Date(best.verifiedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}. Prices and availability can change at the retailer.</p>
+                <p className="small muted" style={{ marginBottom: 0 }}>
+                  Link checked <time dateTime={best.verifiedAt}>{new Date(best.verifiedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}</time>. Prices and availability can change at the retailer.
+                </p>
                 {alternates.length > 0 && (
-                  <>
-                    <h3>Other verified offers</h3>
+                  <div style={{ marginTop: 12 }}>
+                    <h3 style={{ fontSize: 16 }}>Other verified offers</h3>
                     {alternates.map((d) => (
                       <DealImpression key={d.linkId} linkId={d.linkId} reviewId={review.id} categorySlug={m.category?.slug}>
-                        <div className="deal">
+                        <div className="deal-alt">
                           <div>
-                            <div className="small">{d.merchant ?? "Retailer"}</div>
+                            <div className="small" style={{ fontWeight: 700 }}>{d.merchant ?? "Retailer"}</div>
                             <div className="small muted">{money(d.price, d.currency) ?? "Price at retailer"}</div>
                           </div>
                           <a className="btn small" href={`/go/${d.linkId}`} rel="sponsored nofollow noopener" target="_blank">
-                            View<span className="visually-hidden"> offer at {d.merchant ?? "retailer"} (opens in a new tab)</span>
+                            View<span className="visually-hidden"> offer at {d.merchant ?? "the retailer"} (opens in a new tab)</span>
                           </a>
                         </div>
                       </DealImpression>
                     ))}
-                  </>
+                  </div>
                 )}
               </>
             ) : (
-              <p className="muted">We don’t have a verified offer for this product right now. We only show deals after confirming the link works.</p>
+              <div className="no-deal" role="status">
+                <strong>No verified offer available right now.</strong>
+                <p className="small">We only show a deal after confirming its link reaches the retailer.</p>
+              </div>
             )}
             <p className="disclosure">
               Made4Buyers may earn a commission from qualifying purchases made through offer links. <Link href="/disclosure">Affiliate disclosure</Link>
             </p>
           </section>
           {m.keyEntities.length > 0 && (
-            <section className="card card-body" aria-labelledby="facts-heading">
-              <h2 id="facts-heading" style={{ marginTop: 0, fontSize: 18 }}>
-                Key facts
-              </h2>
+            <section id="facts" className="panel" aria-labelledby="facts-heading">
+              <h2 id="facts-heading">Key facts</h2>
               <dl className="entity-list">
                 {m.keyEntities.map((e) => (
                   <div key={e.label} style={{ display: "contents" }}>
@@ -244,7 +274,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 )}
               </dl>
               {(m.intents.length > 0 || m.platforms.length > 0) && m.category && (
-                <ul className="chips" aria-label="Filters">
+                <ul className="chips" aria-label="Find similar">
                   {m.intents.map((t) => (
                     <li key={t.slug}>
                       <Link className="chip neutral" href={`/category/${m.category!.slug}?intent=${t.slug}`}>
@@ -266,6 +296,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
           <SponsoredSlot position="REVIEW_SIDEBAR" categorySlug={m.category?.slug} />
         </aside>
       </div>
+      {best && (
+        <aside className="sticky-cta" aria-label="Verified offer shortcut">
+          <div>
+            <div style={{ fontWeight: 800 }}>{money(best.price, best.currency) ?? "Verified offer"}</div>
+            <div className="small">{best.merchant ?? "Retailer"}</div>
+          </div>
+          <a className="btn primary" href={`/go/${best.linkId}`} rel="sponsored nofollow noopener" target="_blank">
+            View deal<span className="visually-hidden"> (opens in a new tab)</span>
+          </a>
+        </aside>
+      )}
     </main>
   );
 }
