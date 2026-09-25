@@ -493,3 +493,8 @@ details summary { cursor: pointer; font-weight: 700; }
   .btn.primary, .chip[aria-current="true"] { forced-color-adjust: none; }
   .hero h1 .l2, .hero h1 .l3 { color: CanvasText; background: none; }
 }
+
+@media print {
+  .reveal-ready .reveal { opacity: 1; transform: none; filter: none; }
+  .hero-canvas, .sticky-cta, .site-header { display: none; }
+}

@@ -10,3 +10,4 @@ coverage/
 /.tmp/
 /reports/generated/
 lib/reports/release-notes.json
+.vercel
