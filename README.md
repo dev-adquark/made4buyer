@@ -59,12 +59,21 @@ pages. Sample fixtures are fictional and are labelled `SAMPLE` wherever they app
 | `npm run legacy:import` | Import data from the pre-engine `db push` schema |
 | `npm run audit` | Live site audit (only when `AUDIT_BASE_URL` is set) |
 
+## Public experience
+
+- **Routes:** `/` (3D hero, categories, latest, trending by real page views, verified deals), `/reviews`, `/deals`, `/category/{slug}` (per-category colour theme, filters), `/review/{slug}` (parallax hero, sticky section nav, verified-offer panel, mobile sticky CTA), `/brand/{slug}`, `/search` (instant suggestions, keyboard navigable), `/compare` (animated columns, differences highlighted, missing facts shown as "Not available"), `/about`, `/disclosure`, `/privacy`, `/terms`, `/contact`.
+- **Design system:** tokens in `app/globals.css`, category themes in `lib/taxonomy/themes.ts`, Bricolage Grotesque + Figtree via `next/font`.
+- **3D:** `components/hero3d/*` is a procedural scene in React Three Fiber (laptop, phone, headphones, interface card, particles), with no downloaded models. It is lazy-loaded and decorative (`aria-hidden`). A GPU tier (0–3) is detected from WebGL support, the renderer, device memory, cores, pointer type, save-data and reduced motion. Tier 0 shows static gradient art, and phones get tier ≤ 1. `?tier=N` forces a tier for QA.
+- **Motion:** framer-motion for the menus, suggestions and compare columns; CSS for card tilt, reveals and hero drift. Everything is disabled under `prefers-reduced-motion`.
+- **Honesty rules:** cards show "Verified offer" only for a `VERIFIED_OK` link on a matched offer. Prices appear only when the provider supplied them. Every empty state says what's missing.
+
 ## Admin
 
 `/admin` (session login) has these pages:
 
 - **Overview:** counts, deal coverage, link health, image coverage, success metrics, integration states
 - **QA queue:** publish, bulk publish, reject, restore, unpublish
+- **All reviews** and **Entities** (low-confidence and overridden entities)
 - **Review detail:** edit, entity/category/deal overrides, accept/reject classification, re-run pipeline, revalidate links, full history
 - **Ingestion runs & items**
 - **Categorization queue** (low confidence, missing category)
