@@ -32,6 +32,8 @@ export type ValidatedContent = {
   publisher?: string;
   rating?: number;
   ratingScale?: number;
+  contentKind: "REVIEW" | "AI_GUIDE";
+  generation?: Record<string, unknown>;
 };
 
 export type ValidationResult = { ok: true; value: ValidatedContent } | { ok: false; issues: string[]; sourceId?: string };
@@ -124,6 +126,8 @@ const schema = z.object({
   publisher: z.string().max(160).optional(),
   rating: z.number().min(0).max(100).optional(),
   ratingScale: z.number().positive().max(100).optional(),
+  contentKind: z.enum(["REVIEW", "AI_GUIDE"]),
+  generation: z.record(z.unknown()).optional(),
 });
 
 export function validateContentItem(input: unknown): ValidationResult {
@@ -158,12 +162,19 @@ export function validateContentItem(input: unknown): ValidationResult {
     author: asString(pick(raw, ["author", "author.name", "byline"])),
     publisher: asString(pick(raw, ["publisher", "publisher.name", "source", "site"])),
     rating: typeof ratingRaw === "number" ? ratingRaw : typeof ratingRaw === "string" && ratingRaw.trim() !== "" ? Number(ratingRaw) : undefined,
+    contentKind: pick(raw, ["contentKind", "kind"]) === "AI_GUIDE" ? ("AI_GUIDE" as const) : ("REVIEW" as const),
+    generation: raw.generation && typeof raw.generation === "object" && !Array.isArray(raw.generation) ? (raw.generation as Record<string, unknown>) : undefined,
     ratingScale: (() => {
       const v = pick(raw, ["ratingScale", "rating_scale", "bestRating"]);
       return typeof v === "number" ? v : typeof v === "string" ? Number(v) : undefined;
     })(),
   };
 
+  // Generated guides never carry a rating: nobody tested the product.
+  if (candidate.contentKind === "AI_GUIDE") {
+    candidate.rating = undefined;
+    candidate.ratingScale = undefined;
+  }
   const parsed = schema.safeParse(candidate);
   if (!parsed.success) {
     return {

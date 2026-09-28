@@ -49,6 +49,13 @@ enum ReviewStatus {
   @@map("review_status")
 }
 
+enum ContentKind {
+  REVIEW
+  AI_GUIDE
+
+  @@map("content_kind")
+}
+
 enum TagType {
   CATEGORY
   SUBCATEGORY
@@ -300,6 +307,10 @@ model NormalizedReview {
   canonicalUrl             String?
   dedupeKey                String                     @unique
   canonicalTitle           String
+  kind                     ContentKind                @default(REVIEW)
+  generationMeta           Json?
+  editorApprovedAt         DateTime?
+  editorApprovedBy         String?
   slug                     String                     @unique
   productName              String
   brand                    String?
@@ -340,6 +351,7 @@ model NormalizedReview {
 
   @@unique([source, sourceId])
   @@index([status, publishedAt])
+  @@index([kind, status])
   @@index([categorySlug, status, publishedAt])
   @@index([brandSlug, status])
   @@index([confidence])

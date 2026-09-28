@@ -54,6 +54,21 @@ export const POST = adminAction("/admin/qa", async ({ form, ctx }) => {
       await afterChange(id);
       return { ok: "Review saved" };
     }
+    case "approve-guide": {
+      if (review.kind !== "AI_GUIDE") return { error: "Only AI-assisted guides need editor approval" };
+      await db.normalizedReview.update({ where: { id }, data: { editorApprovedAt: new Date(), editorApprovedBy: ctx.actor } });
+      await audit(ctx, { action: "guide.approve", entityType: "normalized_review", entityId: id, before: { editorApprovedAt: review.editorApprovedAt }, after: { editorApprovedBy: ctx.actor } });
+      await refreshQueueStatus(id);
+      return { ok: "Guide approved by editor. It can now be published once other QA checks pass." };
+    }
+    case "revoke-guide-approval": {
+      if (review.kind !== "AI_GUIDE") return { error: "Not an AI-assisted guide" };
+      await db.normalizedReview.update({ where: { id }, data: { editorApprovedAt: null, editorApprovedBy: null } });
+      await audit(ctx, { action: "guide.revoke_approval", entityType: "normalized_review", entityId: id });
+      if (review.status === "PUBLISHED") await unpublishReview(id, ctx, "editor approval revoked");
+      await refreshQueueStatus(id);
+      return { ok: "Approval revoked" };
+    }
     case "publish": {
       const res = await publishReview(id, ctx, "admin");
       return res.ok ? { ok: "Review published" } : { error: `QA gate failed: ${res.failures.map((f) => f.message).join("; ")}` };

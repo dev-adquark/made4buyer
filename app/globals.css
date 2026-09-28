@@ -310,7 +310,7 @@ fieldset { border: 1px solid var(--color-border); border-radius: var(--radius); 
 .review-article section, .aside-stack section { scroll-margin-top: 130px; }
 .review-article h2 { margin-top: 0; }
 .review-body p { font-size: 18px; line-height: 1.8; margin: 0 0 20px; max-width: 70ch; }
-.review-body p:first-child::first-letter { font-family: var(--font-display); font-size: 3.3em; float: left; line-height: 0.85; margin: 6px 6px 0 0; color: var(--cat-ink); font-weight: 800; }
+.review-body > p:first-child::first-letter { font-family: var(--font-display); font-size: 3.3em; float: left; line-height: 0.85; margin: 6px 6px 0 0; color: var(--cat-ink); font-weight: 800; }
 .aside-stack { display: grid; gap: 16px; position: sticky; top: 130px; }
 .panel { background: #fff; border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; }
 .panel h2 { margin: 0 0 10px; font-size: 20px; }

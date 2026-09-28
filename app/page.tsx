@@ -110,7 +110,7 @@ export default async function Home() {
       <section className="section band" aria-labelledby="latest-title">
         <div className="container">
           <div className="section-head reveal">
-            <h2 id="latest-title">Latest reviews</h2>
+            <h2 id="latest-title">{latest.some((r) => r.kind === "AI_GUIDE") ? "Latest reviews and guides" : "Latest reviews"}</h2>
             {latest.length > 0 && (
               <Link className="btn" href="/reviews">
                 All reviews

@@ -86,7 +86,7 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
       datePublished: m.publishedAt ?? undefined,
       dateModified: m.updatedAt,
-      ...(m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
+      ...(m.kind === "AI_GUIDE" ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
       publisher,
       about: { "@type": "Thing", name: m.productName },
     });
@@ -123,8 +123,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const best = deals.find((d) => d.isBest) ?? deals[0];
   const alternates = deals.filter((d) => d !== best);
   const published = m.publishedAt ? new Date(m.publishedAt) : null;
+  const isGuide = m.kind === "AI_GUIDE";
   const sections = [
-    { id: "review", label: "Review" },
+    { id: "review", label: isGuide ? "Guide" : "Review" },
     { id: "deal", label: best ? "Verified offer" : "Offer" },
     ...(m.keyEntities.length ? [{ id: "facts", label: "Key facts" }] : []),
     ...(related.length ? [{ id: "related", label: "Related" }] : []),
@@ -142,6 +143,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <div className="meta-row">
               {m.category && <span className="pill">{m.category.name}</span>}
               {m.subcategory && <span className="pill plain">{m.subcategory.name}</span>}
+              {isGuide && <span className="pill plain">AI-assisted buying guide</span>}
               {best && <span className="pill verified">Verified offer</span>}
             </div>
             <h1>{m.title}</h1>
@@ -152,7 +154,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               {published && (
                 <>
                   {" "}
-                  — reviewed <time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
+                  {isGuide ? " — published " : " — reviewed "}<time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
                 </>
               )}
             </p>
@@ -175,18 +177,33 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
         <article className="review-article">
           <section id="review" aria-labelledby="review-heading">
             <h2 id="review-heading" className="visually-hidden">
-              Review
+              {isGuide ? "Guide" : "Review"}
             </h2>
+            {isGuide && (
+              <aside className="notice" aria-label="How this guide was written">
+                <strong>AI-assisted buying guide.</strong> This guide was drafted with an AI writing tool and read and approved by a Made4Buyers editor before publishing. It is not a hands-on review: we haven’t tested this product. Offers, when shown, come only from links we’ve verified.
+              </aside>
+            )}
             <div className="review-body">
-              {m.bodyParagraphs.map((p, i) => (
-                <p key={i}>{p}</p>
-              ))}
+              {m.bodyParagraphs.map((p, i) =>
+                p.startsWith("## ") ? (
+                  <h2 key={i} style={{ fontSize: 24, margin: "28px 0 10px" }}>
+                    {p.slice(3)}
+                  </h2>
+                ) : (
+                  <p key={i}>{p}</p>
+                ),
+              )}
             </div>
+            {isGuide ? (
+              <p className="small muted">Drafted with an AI writing tool and edited by Made4Buyers.</p>
+            ) : (
             <p className="small muted">
               Source: {m.source.url ? <a href={m.source.url} rel="nofollow noopener" target="_blank">{m.source.name}</a> : m.source.name}
               {m.source.author ? `, by ${m.source.author}` : ""}
               {m.source.publishedAt ? `, originally published ${new Date(m.source.publishedAt).toLocaleDateString("en-US", { dateStyle: "medium" })}` : ""}.
             </p>
+            )}
             <nav className="btnrow" aria-label="Related pages">
               {m.category && (
                 <Link className="btn" href={`/category/${m.category.slug}`}>

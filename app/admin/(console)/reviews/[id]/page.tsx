@@ -63,6 +63,28 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
         <ActionForm action="/api/admin/reviews" fields={{ id, action: "verify-links" }} label="Revalidate links now" returnTo={self} disabledReason={r.affiliateLinks.some((l) => l.isActive) ? undefined : "No active affiliate links"} />
       </div>
 
+      {r.kind === "AI_GUIDE" && (
+        <section className={`notice ${r.editorApprovedAt ? "ok" : "warn"}`} aria-label="AI-assisted guide">
+          <strong>AI-assisted guide.</strong> Drafted by Keyword-to-Blog
+          {(() => {
+            const g = (r.generationMeta ?? {}) as { model?: string; qualityStatus?: string; qualityScore?: number; requestId?: string };
+            return ` (${[g.model, g.qualityStatus && `quality ${g.qualityStatus}${g.qualityScore != null ? ` ${g.qualityScore}` : ""}`, g.requestId].filter(Boolean).join(", ")})`;
+          })()}
+          . Check every factual claim (specs, prices, availability, comparisons) before approving; the site labels it as AI-assisted and never as a hands-on review.
+          <div className="btnrow">
+            {r.editorApprovedAt ? (
+              <>
+                <span>
+                  Approved by {r.editorApprovedBy} on {when(r.editorApprovedAt)}
+                </span>
+                <ActionForm action="/api/admin/reviews" fields={{ id, action: "revoke-guide-approval" }} label="Revoke approval" returnTo={self} confirm="Revoke editor approval? A published guide will be unpublished." className="btn small danger" />
+              </>
+            ) : (
+              <ActionForm action="/api/admin/reviews" fields={{ id, action: "approve-guide" }} label="I’ve checked this guide — approve" returnTo={self} className="btn small primary" />
+            )}
+          </div>
+        </section>
+      )}
       <section aria-labelledby="qa-h">
         <h2 id="qa-h">Publish QA</h2>
         {qa.length ? (

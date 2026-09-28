@@ -140,6 +140,8 @@ export async function processContentItem(itemId: string, c: IngestCounters, runI
     const slug = own ? own.slug : await uniqueSlug(cand.slugBase, item.source, item.sourceId);
     const textFields = own?.manualEditLocked ? {} : { canonicalTitle: cand.canonicalTitle, summary: cand.summary, body: cand.body };
     const base = {
+      kind: v.value.contentKind,
+      ...(v.value.generation ? { generationMeta: v.value.generation as Prisma.InputJsonValue } : {}),
       sourceUrl: cand.sourceUrl ?? null,
       canonicalUrl: cand.canonicalUrl ?? null,
       // Keep the existing key when a content update would collide with another review.

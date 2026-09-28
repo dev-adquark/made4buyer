@@ -26,6 +26,7 @@ export type PublicDeal = {
 export type PageRenderModel = {
   version: number;
   reviewId: string;
+  kind: "REVIEW" | "AI_GUIDE";
   slug: string;
   canonicalPath: string;
   title: string;
@@ -82,6 +83,7 @@ export type RenderInputs = {
     categorySlug: string | null;
     subcategorySlug: string | null;
     source: string;
+    kind?: "REVIEW" | "AI_GUIDE";
     sourceUrl: string | null;
     author: string | null;
     sourcePublishedAt: Date | null;
@@ -112,6 +114,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
   return {
     version: RENDER_MODEL_VERSION,
     reviewId: review.id,
+    kind: review.kind ?? "REVIEW",
     slug: review.slug,
     canonicalPath: `/review/${review.slug}`,
     title: review.canonicalTitle,
@@ -136,7 +139,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
       isFallback: pub.isFallback,
     },
     keyEntities,
-    rating: e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
+    rating: review.kind !== "AI_GUIDE" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     deals,
     source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,

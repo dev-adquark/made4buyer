@@ -43,6 +43,12 @@ export const config = {
     imagesLicensed: () => bool("CONTENT_API_IMAGES_LICENSED", false),
   },
 
+  aiGuides: {
+    url: () => str("KEYWORD_TO_BLOG_API_URL"),
+    key: () => str("KEYWORD_TO_BLOG_API_KEY"),
+    timeoutMs: () => num("KEYWORD_TO_BLOG_TIMEOUT_MS", 90000, 5000, 280000),
+  },
+
   ingest: {
     maxItemsPerRun: () => num("INGEST_MAX_ITEMS_PER_RUN", 50, 1, 1000),
     autoPublish: () => bool("AUTO_PUBLISH_ENABLED", false),
@@ -131,6 +137,7 @@ export function integrationStatus() {
   return {
     database: state(Boolean(str("DATABASE_URL"))),
     contentApi: state(Boolean(config.contentApi.url())),
+    aiGuides: state(Boolean(config.aiGuides.url() && config.aiGuides.key())),
     sovrn: state(Boolean(config.sovrn.apiUrl() && config.sovrn.apiKey())),
     sovrnLinkWrapper: state(Boolean(config.sovrn.siteKey())),
     imageProvider: state(Boolean(config.images.enrichmentUrl() || config.images.pexelsKey())),

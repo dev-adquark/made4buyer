@@ -48,6 +48,7 @@ export async function loadSourceContent(review: NormalizedReview): Promise<Valid
     tags: [],
     imageLicenseVerified: false,
     author: review.author ?? undefined,
+    contentKind: review.kind,
   };
 }
 

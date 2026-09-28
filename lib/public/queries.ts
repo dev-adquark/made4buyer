@@ -15,6 +15,7 @@ export const cardSelect = {
   id: true,
   slug: true,
   canonicalTitle: true,
+  kind: true,
   productName: true,
   brand: true,
   summary: true,

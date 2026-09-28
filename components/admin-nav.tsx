@@ -8,6 +8,7 @@ const LINKS: Array<[string, string]> = [
   ["/admin/qa", "QA queue"],
   ["/admin/reviews", "All reviews"],
   ["/admin/entities", "Entities"],
+  ["/admin/guides", "AI guides"],
   ["/admin/ingestion", "Ingestion"],
   ["/admin/categorization", "Categorization"],
   ["/admin/deals", "Deals"],

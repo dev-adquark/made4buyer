@@ -341,3 +341,26 @@ test("visual QA screenshots at four viewports", async ({ browser }, info) => {
     await v.close();
   }
 });
+
+test("AI guide: generate, editor approval gate, publish with disclosure", async () => {
+  await page.goto("/admin/guides");
+  await page.getByLabel("Product name").fill("Dell XPS 14");
+  await page.getByLabel("Brand (optional)").fill("Dell");
+  await page.getByLabel("Keywords").fill("dell xps 14, creator laptop");
+  await page.getByRole("button", { name: "Generate draft" }).click();
+  await flash(/Guide drafted/);
+  await expect(page.getByText("AI-assisted guide.", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Publish/ }).first()).toBeDisabled();
+  await page.getByRole("button", { name: /approve/ }).click();
+  await flash(/Guide approved/);
+  await page.getByRole("button", { name: /^Publish$/ }).first().click();
+  await flash("Review published");
+  const link = page.getByRole("link", { name: "View public page" });
+  const href = await link.getAttribute("href");
+  await page.goto(href!);
+  await expect(page.getByText("AI-assisted buying guide").first()).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "How this guide was written" })).toContainText("not a hands-on review");
+  const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).map((t) => JSON.parse(t)["@type"]);
+  expect(ld).not.toContain("Review");
+  expect(ld).toContain("Article");
+});

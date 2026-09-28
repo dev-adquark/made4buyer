@@ -25,6 +25,7 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false }: 
         <div className="card-body">
           <div className="meta-row">
             <span className="pill">{categoryName(review.categorySlug) ?? "Technology"}</span>
+            {review.kind === "AI_GUIDE" && <span className="pill plain">AI guide</span>}
             {hasVerifiedOffer(review) && <span className="pill verified">Verified offer</span>}
           </div>
           <Heading>{review.canonicalTitle}</Heading>

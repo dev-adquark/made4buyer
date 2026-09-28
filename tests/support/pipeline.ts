@@ -10,6 +10,8 @@ export async function sampleEnvironment(extra: Record<string, string | undefined
     CONTENT_API_SOURCE_NAME: "sample-fixture",
     SOVRN_API_URL: `${stub.base}/sovrn`,
     SOVRN_API_KEY: "sovrn-test",
+    KEYWORD_TO_BLOG_API_URL: `${stub.base}/ktb/v1/generate`,
+    KEYWORD_TO_BLOG_API_KEY: "test-ktb-key",
     AUTO_PUBLISH_ENABLED: undefined,
     ...extra,
   });

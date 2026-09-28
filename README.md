@@ -89,6 +89,15 @@ pages. Sample fixtures are fictional and are labelled `SAMPLE` wherever they app
 - **Audit log & live site audit**
 - **Search Console**
 
+## AI-assisted buying guides
+
+**Admin → AI guides** sends a product and keywords to Keyword-to-Blog (`KEYWORD_TO_BLOG_API_URL` / `KEYWORD_TO_BLOG_API_KEY`). The generated draft runs through the normal pipeline (dedupe, entities, taxonomy, Pexels image, Sovrn matching, QA) as kind `AI_GUIDE`:
+
+- It cannot be published, including by auto-publish, until an editor clicks **approve** on the review page. That approval is audited and can be revoked.
+- On the site it's labelled "AI-assisted buying guide", with a disclosure that it isn't a hands-on review. It gets Article schema authored by Made4Buyers, never Review schema or a rating.
+- Prices and deals still come only from verified Sovrn offers.
+- Generation is admin-triggered only, rate-limited to 20 per admin per hour.
+
 ## CSV overrides
 
 Header columns:
