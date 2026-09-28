@@ -1,12 +1,36 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": [
+    "syd1"
+  ],
   "crons": [
-    { "path": "/api/cron/cleanup-cache", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/inspect-index", "schedule": "0 4 * * *" },
-    { "path": "/api/cron/ingest", "schedule": "15 6 * * *" },
-    { "path": "/api/cron/verify-links", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/revalidate-offers", "schedule": "30 7 * * *" },
-    { "path": "/api/cron/retry-failed", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/publish-cycle", "schedule": "30 8 * * *" }
+    {
+      "path": "/api/cron/cleanup-cache",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/inspect-index",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/ingest",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/verify-links",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/revalidate-offers",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/retry-failed",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/publish-cycle",
+      "schedule": "30 8 * * *"
+    }
   ]
 }

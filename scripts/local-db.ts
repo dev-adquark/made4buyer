@@ -11,6 +11,7 @@ async function main() {
   const fresh = process.argv.includes("--fresh");
   const { url, stop } = await startLocalPostgres({ dir: ".tmp/pgdata", port: Number(process.env.LOCAL_PG_PORT ?? 54329), database: "made4buyers", persistent: true, fresh });
   process.env.DATABASE_URL = url;
+  process.env.DIRECT_URL = url;
   const { seedTaxonomy } = await import("../lib/taxonomy/persist");
   await seedTaxonomy();
   console.log(`\nPostgreSQL ready. Migrations applied, taxonomy seeded.\n\n  DATABASE_URL="${url}"\n\nPress Ctrl+C to stop.`);

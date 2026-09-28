@@ -7,9 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// DATABASE_URL: runtime connection (Supabase transaction pooler, port 6543, pgbouncer=true).
+// DIRECT_URL:   migrations (Supabase session pooler, port 5432) — prepared statements and DDL.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────

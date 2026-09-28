@@ -22,6 +22,8 @@ jobs:
     env:
       NEXT_PUBLIC_SITE_URL: http://localhost:3100
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/made4buyers_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/made4buyers_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/made4buyers_test
     steps:
       - uses: actions/checkout@v4
         with:

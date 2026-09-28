@@ -2,13 +2,13 @@
 
 ## 1. Database
 
-Any PostgreSQL 14+ works: Neon, Supabase, RDS, Prisma Postgres and so on.
+Production runs on **Supabase PostgreSQL** (project region ap-southeast-2; Vercel functions are pinned to `syd1` in `vercel.json` so queries stay in-region). Any PostgreSQL 14+ works for local development and CI.
 
 **New database:**
 
 ```bash
-DATABASE_URL="postgresql://…" npm run db:migrate   # prisma migrate deploy
-DATABASE_URL="postgresql://…" npm run db:seed      # taxonomy (also seeded automatically on first classification)
+DATABASE_URL="…" DIRECT_URL="…" npm run db:migrate   # prisma migrate deploy
+DATABASE_URL="…" npm run db:seed                     # taxonomy (also seeded automatically on first classification)
 ```
 
 **Existing database created by the previous `db push` schema** (tables `"Review"`, `"Deal"`, …):
@@ -64,14 +64,38 @@ Every job is also available as **Admin → Jobs & runs → Run now** and as
 `npm run job -- <name>`. Cron routes declare `maxDuration = 300`. Ingestion processes at most
 `INGEST_MAX_ITEMS_PER_RUN` items per invocation, and the rest continues on the next run.
 
-## Neon
+## Supabase
 
-Use the **pooled** host for the app and the **direct** host for migrations:
+The app talks to Supabase only through Prisma on the server. It does not use supabase-js,
+the publishable/anon key or the service-role key, so none of them are required and none are
+exposed to the browser.
+
+| Variable | Supabase connection | Used for |
+|---|---|---|
+| `DATABASE_URL` | Transaction pooler `aws-0-REGION.pooler.supabase.com:6543`, `?pgbouncer=true&connection_limit=1` | App runtime (Vercel functions, IPv4) |
+| `DIRECT_URL` | Session pooler `aws-0-REGION.pooler.supabase.com:5432` | `prisma migrate deploy` (DDL, prepared statements) |
+
+The dedicated host `db.PROJECT_REF.supabase.co` is IPv6-only unless the IPv4 add-on is
+enabled, so use the poolers.
+
+Security: migration `20260928000000_lock_down_public_schema` enables Row Level Security with
+no policies on every table and revokes `anon` / `authenticated` privileges. The Supabase
+REST/GraphQL APIs therefore cannot read or write Made4Buyers data even with the publishable
+key. Prisma connects as the table owner and is unaffected. Any **new** table added in a
+later migration must also `ENABLE ROW LEVEL SECURITY`; `tests/integration/schema-security.test.ts`
+fails if one doesn't.
+
+### Moving data between databases
 
 ```bash
-DATABASE_URL="postgresql://USER:PASS@ep-xxx-pooler.REGION.aws.neon.tech/made4buyers?sslmode=require&pgbouncer=true&connect_timeout=15"   # Vercel
-DATABASE_URL="postgresql://USER:PASS@ep-xxx.REGION.aws.neon.tech/made4buyers?sslmode=require" npm run db:migrate                          # migrations
+DATABASE_URL=$TARGET DIRECT_URL=$TARGET npx prisma migrate deploy        # schema on the empty target
+SOURCE_DATABASE_URL=… TARGET_DATABASE_URL=… npm run db:copy            # dry run: counts
+SOURCE_DATABASE_URL=… TARGET_DATABASE_URL=… npm run db:copy -- --apply  # copy + per-table comparison
 ```
+
+`db:copy` copies tables in foreign-key order inside one transaction, preserves primary keys
+and types exactly, refuses to merge into non-empty tables, and exits non-zero on any count
+mismatch.
 
 ## 4. Google Search Console (optional)
 

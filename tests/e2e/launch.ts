@@ -33,6 +33,7 @@ async function main() {
     NODE_ENV: "production" as const,
     PORT: String(port),
     DATABASE_URL: pg.url,
+    DIRECT_URL: pg.url,
     NEXT_PUBLIC_SITE_URL: `http://localhost:${port}`,
     CONTENT_API_URL: `${stub.base}/content`,
     CONTENT_API_SOURCE_NAME: "sample-fixture",
