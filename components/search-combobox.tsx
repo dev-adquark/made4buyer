@@ -76,8 +76,8 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
 
   const inputId = `${id}-input`;
   return (
-    <div ref={wrap} className={`searchbox ${variant === "header" ? "" : "wide"}`}>
-      <form action="/search" role="search" className={variant === "hero" ? "hero-search" : undefined} onSubmit={() => setOpen(false)}>
+    <div ref={wrap} className={`searchbox is-${variant}`}>
+      <form action="/search" role="search" onSubmit={() => setOpen(false)}>
         <label htmlFor={inputId} className="visually-hidden">
           {label}
         </label>
@@ -98,7 +98,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
           maxLength={100}
-          placeholder={variant === "hero" ? "Search laptops, phones, AI tools…" : "Search reviews"}
+          placeholder={variant === "hero" ? "Try “MacBook Air”, “noise cancelling” or “Pixel”" : "Search products, brands and guides"}
           value={q}
           autoFocus={autoFocus}
           onChange={(e) => {
@@ -109,7 +109,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
           onKeyDown={onKeyDown}
         />
         {variant !== "header" && (
-          <button className={`btn ${variant === "hero" ? "primary large" : "primary"}`} type="submit">
+          <button className={`btn primary${variant === "hero" ? " large" : ""}`} type="submit">
             Search
           </button>
         )}
