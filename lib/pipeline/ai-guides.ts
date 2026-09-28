@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { config } from "@/lib/config";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
@@ -98,17 +99,21 @@ export async function generateGuide(req: GuideRequest) {
     topic,
     language: "en",
     region: "US",
-    tone: "helpful",
+    tone: "professional", // API enum: "professional" | "friendly" | "bold"
     targetAudience: req.audience?.trim() || "technology buyers comparing options before they purchase",
     brandVoice: "clear, practical, honest about trade-offs; no invented specifications, prices or test results",
     industry: "consumer technology",
-    constraints: { minWords: 600, maxWords: 1400, maxSections: 7, includeFAQs: true, includeInternalLinksPlaceholders: false, keywordUsageStrategy: "natural" },
+    // maxWords stays under the smallest plan's 1,500 words/request cap.
+    constraints: { minWords: 600, maxWords: config.aiGuides.maxWords(), maxSections: 7, includeFAQs: true, includeInternalLinksPlaceholders: false, keywordUsageStrategy: "natural" },
     format: { responseTypes: ["json"] },
+    // Source-grounded factuality checks: prefer omission over unverifiable claims.
+    factualityMode: "verified",
     clientProvidedRequestId: `m4b_${Date.now()}`,
   };
   const res = await safeFetch(endpoint, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json" },
+    // Idempotency-Key: a retried request can never generate (or bill) twice.
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": crypto.randomUUID() },
     body: JSON.stringify(body),
     timeoutMs: config.aiGuides.timeoutMs(),
     maxRedirects: 0,

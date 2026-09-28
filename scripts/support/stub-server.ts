@@ -49,7 +49,11 @@ export async function startStubServer(opts: StubOptions = {}) {
       let raw = "";
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
-        const body = JSON.parse(raw || "{}") as { keywords?: string[]; topic?: string };
+        const body = JSON.parse(raw || "{}") as { keywords?: string[]; topic?: string; tone?: string; factualityMode?: string; constraints?: { maxWords?: number } };
+        // Mirror the real API's validation of enums and plan caps.
+        if (!["professional", "friendly", "bold"].includes(body.tone ?? "") || (body.factualityMode && !["standard", "verified"].includes(body.factualityMode)) || (body.constraints?.maxWords ?? 0) > 1500 || !req.headers["idempotency-key"]) {
+          return send(400, { error: { code: "VALIDATION_ERROR", message: "Invalid request body." } });
+        }
         send(200, {
           requestId: `req_stub_${(body.keywords ?? []).join("_").replace(/\W+/g, "").slice(0, 20)}`,
           post: {

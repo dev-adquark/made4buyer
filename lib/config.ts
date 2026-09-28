@@ -47,6 +47,7 @@ export const config = {
     url: () => str("KEYWORD_TO_BLOG_API_URL"),
     key: () => str("KEYWORD_TO_BLOG_API_KEY"),
     timeoutMs: () => num("KEYWORD_TO_BLOG_TIMEOUT_MS", 90000, 5000, 280000),
+    maxWords: () => num("KEYWORD_TO_BLOG_MAX_WORDS", 1200, 300, 4000),
   },
 
   ingest: {
