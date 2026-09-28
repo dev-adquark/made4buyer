@@ -72,7 +72,7 @@ exposed to the browser.
 
 | Variable | Supabase connection | Used for |
 |---|---|---|
-| `DATABASE_URL` | Transaction pooler `aws-0-REGION.pooler.supabase.com:6543`, `?pgbouncer=true&connection_limit=1` | App runtime (Vercel functions, IPv4) |
+| `DATABASE_URL` | Transaction pooler `aws-0-REGION.pooler.supabase.com:6543`, `?pgbouncer=true&connection_limit=5&pool_timeout=20` | App runtime (Vercel functions, IPv4) |
 | `DIRECT_URL` | Session pooler `aws-0-REGION.pooler.supabase.com:5432` | `prisma migrate deploy` (DDL, prepared statements) |
 
 The dedicated host `db.PROJECT_REF.supabase.co` is IPv6-only unless the IPv4 add-on is
