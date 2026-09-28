@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Breadcrumbs, { breadcrumbJsonLd } from "@/components/breadcrumbs";
 import JsonLd from "@/components/json-ld";
-import ReviewCard from "@/components/review-card";
+import { ReviewGrid } from "@/components/review-card";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { brandPageEligible, cardSelect } from "@/lib/public/queries";
@@ -31,18 +31,20 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
   if (!data) notFound();
   const crumbs = [{ name: "Home", href: "/" }, { name: data.brand, href: `/brand/${slug}` }];
   return (
-    <main className="section">
+    <main>
       <JsonLd data={breadcrumbJsonLd(crumbs, config.siteUrl())} />
-      <div className="container">
-        <Breadcrumbs items={crumbs} />
-        <div className="eyebrow">Brand</div>
-        <h1>{data.brand} reviews</h1>
-        <div className="grid">
-          {data.reviews.map((r) => (
-            <ReviewCard key={r.id} review={r} />
-          ))}
+      <section className="page-hero on-ink">
+        <div className="container">
+          <Breadcrumbs items={crumbs} />
+          <h1>{data.brand} reviews</h1>
+          <p className="lede">{data.reviews.length === 1 ? "1 published review" : `${data.reviews.length} published reviews and guides`} of {data.brand} products.</p>
         </div>
-      </div>
+      </section>
+      <section className="section">
+        <div className="container">
+          <ReviewGrid reviews={data.reviews} eagerCount={3} headingLevel={2} />
+        </div>
+      </section>
     </main>
   );
 }

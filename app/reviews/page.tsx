@@ -19,16 +19,16 @@ export default async function ReviewsIndex({ searchParams }: { searchParams: Pro
   const [{ rows, total, pages }, categories] = await Promise.all([publishedReviews(page), categoryCounts()]);
   return (
     <main>
-      <section className="cat-hero">
+      <section className="page-hero on-ink">
         <div className="container">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Reviews", href: "/reviews" }]} />
-          <h1>All reviews</h1>
-          <p className="lede">{total ? `${total} published ${total === 1 ? "review" : "reviews"}, newest first.` : "No reviews have been published yet."}</p>
+          <h1>Reviews</h1>
+          <p className="lede">{total ? `${total} published ${total === 1 ? "review and guide" : "reviews and guides"}, newest first. Buying guides are AI-assisted and labelled.` : "No reviews have been published yet."}</p>
           <nav aria-label="Categories">
             <ul className="chips">
               {categories.filter((c) => c.count > 0).map((c) => (
                 <li key={c.slug} style={themeStyle(c.slug) as React.CSSProperties}>
-                  <Link className="chip neutral" href={`/category/${c.slug}`}>
+                  <Link className="chip" href={`/category/${c.slug}`}>
                     {c.name} ({c.count})
                   </Link>
                 </li>

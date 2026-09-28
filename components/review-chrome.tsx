@@ -19,7 +19,7 @@ export function SectionNav({ items }: { items: Array<{ id: string; label: string
     return () => io.disconnect();
   }, [items]);
   return (
-    <nav className="subnav" aria-label="On this page">
+    <nav className="doc-subnav" aria-label="On this page">
       <ul className="container">
         {items.map((i) => (
           <li key={i.id}>
@@ -67,7 +67,7 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption, cap
     };
   }, []);
   return (
-    <figure className="hero-figure">
+    <figure className="doc-figure">
       <div className="frame" ref={frame}>
         <SafeImg src={src} fallback={fallback} alt={alt} width={width} height={height} fetchPriority="high" decoding="async" />
       </div>
