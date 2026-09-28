@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guideToContentItem, markdownToPlain } from "@/lib/pipeline/ai-guides";
+import { guideToContentItem, idempotencyKeyFor, markdownToPlain } from "@/lib/pipeline/ai-guides";
 import { validateContentItem } from "@/lib/pipeline/validate";
 
 const res = {
@@ -36,6 +36,13 @@ describe("Keyword-to-Blog mapping", () => {
       expect(v.value.rating).toBeUndefined(); // generated guides never carry ratings
       expect(v.value.generation).toMatchObject({ model: "model-x", qualityScore: 91 });
     }
+  });
+
+  it("derives a stable UUID idempotency key per body and day", () => {
+    const a = idempotencyKeyFor({ keywords: ["x"], topic: "t" }, "2026-09-29");
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(idempotencyKeyFor({ topic: "t", keywords: ["x"] }, "2026-09-29")).toBe(a);
+    expect(idempotencyKeyFor({ keywords: ["x"], topic: "t" }, "2026-09-30")).not.toBe(a);
   });
 
   it("rejects responses without a post", () => {

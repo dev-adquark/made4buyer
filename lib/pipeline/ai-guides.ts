@@ -3,7 +3,7 @@ import { config } from "@/lib/config";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
-import { cleanText } from "@/lib/util/text";
+import { cleanText, sha256, stableStringify } from "@/lib/util/text";
 
 /**
  * AI-assisted buying guides via the Keyword-to-Blog API (POST /v1/generate).
@@ -88,6 +88,16 @@ export function guideToContentItem(res: KtbResponse, req: GuideRequest, now = ne
   };
 }
 
+/**
+ * Deterministic UUID for the Idempotency-Key header: same request body on the same UTC day →
+ * same key, so resubmitting (e.g. after a timeout) returns the original generation instead of
+ * generating and billing again.
+ */
+export function idempotencyKeyFor(body: unknown, day = new Date().toISOString().slice(0, 10)): string {
+  const h = sha256(`${day}|${stableStringify(body)}`);
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16], 16) & 0x3) | 0x8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 export async function generateGuide(req: GuideRequest) {
   const url = config.aiGuides.url();
   const key = config.aiGuides.key();
@@ -108,12 +118,12 @@ export async function generateGuide(req: GuideRequest) {
     format: { responseTypes: ["json"] },
     // Source-grounded factuality checks: prefer omission over unverifiable claims.
     factualityMode: "verified",
-    clientProvidedRequestId: `m4b_${Date.now()}`,
   };
+  const idempotencyKey = idempotencyKeyFor(body);
   const res = await safeFetch(endpoint, {
     method: "POST",
     // Idempotency-Key: a retried request can never generate (or bill) twice.
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": crypto.randomUUID() },
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": idempotencyKey, "X-Request-ID": crypto.randomUUID() },
     body: JSON.stringify(body),
     timeoutMs: config.aiGuides.timeoutMs(),
     maxRedirects: 0,
@@ -129,7 +139,13 @@ export async function generateGuide(req: GuideRequest) {
       /* non-JSON error body */
     }
     log.warn("guide generation failed", { stage: "CONTENT_FETCH", status: res.status, detail });
-    throw new PipelineError(res.error?.kind === "TIMEOUT" ? "CONTENT_API_TIMEOUT" : "CONTENT_API_HTTP_ERROR", `Keyword-to-Blog: ${detail}`, { status: res.status }, res.status === 429 || res.status >= 500);
+    const timedOut = res.error?.kind === "TIMEOUT";
+    throw new PipelineError(
+      timedOut ? "CONTENT_API_TIMEOUT" : "CONTENT_API_HTTP_ERROR",
+      timedOut ? "Keyword-to-Blog is still generating. Submit the same request again: it returns the finished guide without generating (or billing) twice." : `Keyword-to-Blog: ${detail}`,
+      { status: res.status },
+      res.status === 429 || res.status >= 500,
+    );
   }
   let json: KtbResponse;
   try {
