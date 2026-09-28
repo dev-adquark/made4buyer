@@ -114,7 +114,7 @@ test("9. public review page", async () => {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MacBook Air");
   await expect(page.locator("#deal .verified-head")).toHaveText("Verified offer");
   await expect(page.getByRole("link", { name: /View deal/ })).toBeVisible();
-  await expect(page.getByText(/may earn a commission/)).toBeVisible();
+  await expect(page.locator("#deal").getByText(/may earn a commission/)).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Laptops");
   const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
   const types = ld.map((t) => JSON.parse(t)["@type"]);
@@ -126,25 +126,32 @@ test("9. public review page", async () => {
   // A review without a verified offer shows the honest unavailable state.
   await page.goto("/category/ai-tools");
   await page.getByRole("link", { name: /ChatGPT Plus/ }).first().click();
-  await expect(page.getByText("No verified offer available right now.")).toBeVisible();
+  await expect(page.getByText("No verified offer currently available.")).toBeVisible();
   await expect(page.locator("#deal .price")).toHaveCount(0);
 });
 
 test("10. category page with filters", async () => {
   await page.goto("/category/laptops");
   await expect(page.getByRole("heading", { level: 1, name: "Laptops" })).toBeVisible();
-  expect(await page.locator(".review-card").count()).toBeGreaterThanOrEqual(3);
+  expect(await page.locator("#results .review-card").count()).toBeGreaterThanOrEqual(3);
   await page.getByRole("navigation", { name: "Filter by type" }).getByRole("link", { name: "MacBooks" }).click();
   await expect(page).toHaveURL(/sub=macbooks/);
-  await expect(page.locator(".review-card")).toHaveCount(1);
+  await expect(page.locator("#results .review-card")).toHaveCount(1);
+  // Brand facet comes from real published data.
+  await page.goto("/category/laptops");
+  await page.getByRole("navigation", { name: "Filter by brand" }).getByRole("link", { name: /Apple/ }).click();
+  await expect(page).toHaveURL(/brand=apple/);
+  await expect(page.locator("#results .review-card")).toHaveCount(1);
 });
 
 test("11. search", async () => {
   await page.goto("/");
-  const box = page.locator("header").getByRole("combobox", { name: "Search reviews" });
+  await page.getByRole("button", { name: "Search the site" }).click();
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const box = palette.getByRole("combobox", { name: "Search reviews" });
   await box.fill("pixel");
-  await expect(page.locator("header").getByRole("option").first()).toContainText("Pixel 10");
-  await box.press("Enter");
+  await expect(palette.getByRole("option").first()).toContainText("Pixel 10");
+  await palette.getByRole("link", { name: /See all results for “pixel”/ }).click();
   await expect(page).toHaveURL(/\/search\?q=pixel/);
   await expect(page.getByText(/1 result for “pixel”/)).toBeVisible();
   await page.getByRole("link", { name: /Pixel 10/ }).first().click();
@@ -220,7 +227,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
 });
 
 test("no dead links and no dead buttons", async () => {
-  const pages = ["/", "/reviews", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc"];
+  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc"];
   const hrefs = new Set<string>();
   for (const p of pages) {
     const res = await page.goto(p);
@@ -250,7 +257,7 @@ test("no dead links and no dead buttons", async () => {
 
 test("mobile layout has no horizontal overflow", async ({ browser }) => {
   const mobile = await browser.newPage({ viewport: { width: 375, height: 800 } });
-  for (const p of ["/", "/reviews", "/deals", "/category/laptops", "/compare", "/about"]) {
+  for (const p of ["/", "/reviews", "/guides", "/match?category=laptops", "/deals", "/category/laptops", "/compare", "/about"]) {
     await mobile.goto(p);
     const overflow = await mobile.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, p).toBeLessThanOrEqual(1);
@@ -268,7 +275,7 @@ test("mobile layout has no horizontal overflow", async ({ browser }) => {
 
 test("accessibility: no serious or critical axe violations", async () => {
   const review = await page.request.get("/sitemap.xml").then((r) => r.text()).then((x) => x.match(/<loc>[^<]*(\/review\/[^<]+)<\/loc>/)?.[1]);
-  const targets = ["/", "/reviews", "/deals", "/terms", "/contact", "/category/laptops", review ?? "/", "/search?q=laptop", "/compare", "/admin", "/admin/qa", "/admin/csv", "/admin/links", `/admin/reviews/${state.gearId}`, "/admin/sponsored"];
+  const targets = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", review ?? "/", "/search?q=laptop", "/compare", "/admin", "/admin/qa", "/admin/csv", "/admin/links", `/admin/reviews/${state.gearId}`, "/admin/sponsored"];
   for (const p of targets) {
     await page.goto(p);
     // Audit the settled state a reader sees: finish scroll reveals before scanning.
@@ -282,19 +289,29 @@ test("accessibility: no serious or critical axe violations", async () => {
 
 test("search suggestions support keyboard navigation", async () => {
   await page.goto("/reviews");
-  const box = page.locator("header").getByRole("combobox", { name: "Search reviews" });
+  // ⌘K / Ctrl+K opens the site-wide search palette.
+  await page.keyboard.press("ControlOrMeta+k");
+  const palette = page.getByRole("dialog", { name: "Search" });
+  const box = palette.getByRole("combobox", { name: "Search reviews" });
+  await expect(box).toBeFocused();
   await box.fill("sony");
-  const option = page.locator("header").getByRole("option", { name: /Sony WH-1000XM6/ });
+  const option = palette.getByRole("option", { name: /Sony WH-1000XM6/ }).first();
   await expect(option).toBeVisible();
   await box.press("ArrowDown");
+  await box.press("ArrowUp");
   await expect(option).toHaveAttribute("aria-selected", "true");
   await expect(box).toHaveAttribute("aria-activedescendant", /.+/);
   await box.press("Enter");
   await page.waitForURL(/\/review\/sony/);
+  await page.getByRole("button", { name: "Search the site" }).click();
   await box.fill("zzzz-nothing");
-  await expect(page.locator("header").getByText(/No reviews match/)).toBeVisible();
+  await expect(palette.getByText(/No reviews match/)).toBeVisible();
   await box.press("Escape");
-  await expect(box).toHaveAttribute("aria-expanded", "false");
+  await expect(palette).toBeHidden();
+  // Recent searches are remembered in this browser.
+  await page.getByRole("button", { name: "Search the site" }).click();
+  await expect(palette.getByText("Recent searches")).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("mobile drawer is an accessible dialog", async ({ browser }) => {
@@ -313,12 +330,35 @@ test("mobile drawer is an accessible dialog", async ({ browser }) => {
   await m.close();
 });
 
+test("mega menu shows real category data", async () => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Categories" }).click();
+  const mega = page.locator("#mega-categories");
+  await expect(mega.getByRole("heading", { name: "Laptops" })).toBeVisible();
+  await expect(mega.locator(".mega-feature a").first()).toBeVisible();
+  await mega.getByRole("button", { name: "AI Tools" }).hover();
+  await expect(mega.getByRole("heading", { name: "AI Tools" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(mega).toBeHidden();
+});
+
+test("find my match walks the real taxonomy", async () => {
+  await page.goto("/match");
+  await page.locator(".option-grid").getByRole("link", { name: /^Laptops/ }).click();
+  await expect(page.getByRole("heading", { name: "What will you mostly use it for?" })).toBeVisible();
+  await page.getByRole("link", { name: /No preference/ }).click();
+  await page.locator(".option-grid").getByRole("link", { name: /^Windows/ }).click();
+  await page.getByRole("link", { name: /No preference/ }).click();
+  await expect(page.getByRole("heading", { name: /Your matches in laptops/ })).toBeVisible();
+  expect(await page.locator(".review-card").count()).toBeGreaterThanOrEqual(1);
+});
+
 test("3D hero: loads when allowed, stays off for reduced motion", async ({ browser }) => {
   const full = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await full.goto("/?tier=2");
   await expect(full.locator(".hero-canvas canvas")).toHaveCount(1, { timeout: 20_000 });
   await expect(full.locator(".hero-canvas")).toHaveAttribute("aria-hidden", "true");
-  await expect(full.getByRole("heading", { level: 1 })).toContainText("Find the right tech.");
+  await expect(full.getByRole("heading", { level: 1 })).toContainText("We help you find the right technology to buy.");
   await full.close();
   const reduced = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
   await reduced.goto("/");
@@ -327,9 +367,9 @@ test("3D hero: loads when allowed, stays off for reduced motion", async ({ brows
   await reduced.close();
 });
 
-test("visual QA screenshots at four viewports", async ({ browser }, info) => {
+test("visual QA screenshots at seven viewports", async ({ browser }, info) => {
   const review = await page.request.get("/sitemap.xml").then((r) => r.text()).then((x) => x.match(/<loc>[^<]*(\/review\/[^<]+)<\/loc>/)?.[1] ?? "/");
-  const sizes: Array<[string, number, number]> = [["desktop", 1440, 900], ["laptop", 1280, 800], ["mobile", 390, 844], ["small", 320, 700]];
+  const sizes: Array<[string, number, number]> = [["xl", 1440, 900], ["desktop", 1280, 800], ["laptop", 1024, 768], ["tablet", 768, 1024], ["mobile", 390, 844], ["phone", 375, 812], ["small", 320, 700]];
   for (const [name, width, height] of sizes) {
     const v = await browser.newPage({ viewport: { width, height } });
     for (const [label, path] of [["home", "/"], ["review", review], ["category", "/category/laptops"], ["compare", "/compare"], ["deals", "/deals"]] as const) {
