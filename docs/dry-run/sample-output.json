@@ -1,0 +1,3563 @@
+{
+  "generatedFrom": "fixtures/sample-content.json",
+  "note": "Dry-run over SAMPLE data. No database, no network, no real offers.",
+  "stagesInOrder": [
+    "CONTENT_FETCH",
+    "VALIDATION",
+    "NORMALIZATION",
+    "DEDUPE",
+    "ENTITY_EXTRACTION",
+    "TAXONOMY",
+    "IMAGE_ENRICHMENT",
+    "OFFER_MATCHING",
+    "AFFILIATE_LINK",
+    "LINK_VERIFICATION",
+    "PAGE_RENDER",
+    "PUBLISH"
+  ],
+  "summary": [
+    {
+      "item": "s-001",
+      "status": "QUEUED",
+      "category": "laptops (0.99)",
+      "deal": "sv-mba-2"
+    },
+    {
+      "item": "s-002",
+      "status": "QUEUED",
+      "category": "laptops (0.99)",
+      "deal": "sv-xps-1"
+    },
+    {
+      "item": "s-003",
+      "status": "QUEUED",
+      "category": "laptops (0.97)",
+      "deal": "sv-x1-1"
+    },
+    {
+      "item": "s-004",
+      "status": "QUEUED",
+      "category": "phones (0.99)",
+      "deal": "sv-px-1"
+    },
+    {
+      "item": "s-005",
+      "status": "QUEUED",
+      "category": "phones (0.99)",
+      "deal": "sv-s26-1"
+    },
+    {
+      "item": "s-006",
+      "status": "QUEUED",
+      "category": "ai-tools (0.99)",
+      "deal": "NO_MATCH"
+    },
+    {
+      "item": "s-007",
+      "status": "QUEUED",
+      "category": "ai-tools (0.99)",
+      "deal": "NO_MATCH"
+    },
+    {
+      "item": "s-008",
+      "status": "QUEUED",
+      "category": "developer-software (0.99)",
+      "deal": "NO_MATCH"
+    },
+    {
+      "item": "s-009",
+      "status": "QUEUED",
+      "category": "developer-software (0.92)",
+      "deal": "NO_MATCH"
+    },
+    {
+      "item": "s-010",
+      "status": "QUEUED",
+      "category": "accessories (0.99)",
+      "deal": "sv-mx4-1"
+    },
+    {
+      "item": "s-011",
+      "status": "QUEUED",
+      "category": "accessories (0.94)",
+      "deal": "sv-ank-1"
+    },
+    {
+      "item": "s-012",
+      "status": "QUEUED",
+      "category": "audio (0.99)",
+      "deal": "sv-sony-1"
+    },
+    {
+      "item": "s-013-dup",
+      "status": "DUPLICATE",
+      "reason": "duplicate of s-004"
+    },
+    {
+      "item": "s-014",
+      "status": "NEEDS_REVIEW",
+      "category": "accessories (0.82)",
+      "deal": "NO_MATCH"
+    },
+    {
+      "item": "#14",
+      "status": "FAILED",
+      "reason": "CONTENT_SCHEMA_INVALID"
+    }
+  ],
+  "results": [
+    {
+      "input": {
+        "id": "s-001",
+        "title": "Apple MacBook Air 13 (M4) review: the thin-and-light laptop to beat",
+        "productName": "MacBook Air 13 (M4)",
+        "brand": "Apple",
+        "category": "Laptops",
+        "price": 999,
+        "currency": "USD",
+        "publishedAt": "2026-09-02T09:00:00Z",
+        "summary": "A fanless ultrabook with long battery life and a sharp display, aimed at students and everyday productivity.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-001",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author",
+        "imageUrl": "{BASE}/image/s-001.png",
+        "imageLicense": "Sample press image licence (fixture)",
+        "imageAttribution": "Sample Publisher"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 0
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-001",
+            "title": "Apple MacBook Air 13 (M4) review: the thin-and-light laptop to beat",
+            "body": "The MacBook Air 13 is a thin and light laptop built around Apple's M4 chip. It r…",
+            "summary": "A fanless ultrabook with long battery life and a sharp display, aimed at students and everyday productivity.",
+            "url": "https://reviews.example.com/s-001",
+            "publishedAt": "2026-09-02T09:00:00.000Z",
+            "productName": "MacBook Air 13 (M4)",
+            "brand": "Apple",
+            "category": "Laptops",
+            "tags": [],
+            "price": 999,
+            "currency": "USD",
+            "imageUrl": "https://images.sample.example/image/s-001.png",
+            "imageLicense": "Sample press image licence (fixture)",
+            "imageAttribution": "Sample Publisher",
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Apple MacBook Air 13 (M4) review: the thin-and-light laptop to beat",
+          "slug": "apple-macbook-air-13-m4-review-the-thin-and-light-laptop-to-beat",
+          "productIdentity": "MacBook Air 13 (M4)",
+          "contentHash": "81ceec142fd0a184b585d7a81715301092e58e07b2981b91df8534c4b8add42d",
+          "summary": "A fanless ultrabook with long battery life and a sharp display, aimed at students and everyday productivity."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "macbook-air-13-m4|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "MacBook Air 13 (M4)",
+            "brand": "Apple",
+            "deviceType": "laptop",
+            "useCase": "Productivity",
+            "platform": "macOS",
+            "price": 999,
+            "currency": "USD",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-02T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.7,
+              "platform": 0.8,
+              "price": 0.95,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "productivity",
+                "confidence": 0.63,
+                "reason": "summary:\"productivity\"(+6), body:\"productivity\"(+2), body:\"office\"(+1)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [
+              {
+                "slug": "macos",
+                "confidence": 0.95,
+                "reason": "productName:\"macbook\"(+16), title:\"macbook\"(+12), body:\"macos\"(+2.5)",
+                "source": "RULES"
+              }
+            ],
+            "scores": {
+              "laptops": 81,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 2.5,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "laptops",
+              "confidence": 0.99,
+              "reason": "score 81 vs accessories 2.5; source category \"laptops\"; productName:\"macbook\"(+16), title:\"macbook\"(+12), title:\"laptop\"(+9), deviceType:\"laptop\"(+9)",
+              "source": "SOURCE_FIELD",
+              "runnerUp": {
+                "slug": "accessories",
+                "score": 2.5
+              }
+            },
+            "subcategory": {
+              "slug": "macbooks",
+              "confidence": 0.9,
+              "reason": "score 37.5; productName:\"macbook\"(+20), title:\"macbook\"(+15), body:\"macbook\"(+2.5)",
+              "source": "RULES"
+            },
+            "priceTier": {
+              "slug": "mid-range",
+              "confidence": 0.9,
+              "reason": "extracted price 999 vs laptops bands ≤700 / ≤1500",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "wouldTry": [
+            "CONTENT_API",
+            "ENRICHMENT_SERVICE",
+            "PLACEHOLDER"
+          ],
+          "contentApiImage": "https://images.sample.example/image/s-001.png",
+          "licenseEvidence": "Sample press image licence (fixture)"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Apple MacBook Air 13 (M4)",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-mba-2",
+              "title": "Apple MacBook Air 13 M4 Laptop - Midnight",
+              "merchant": "Amazon",
+              "price": 949,
+              "viable": true,
+              "score": 0.925,
+              "breakdown": {
+                "product": 1,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.925,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            },
+            {
+              "offerId": "sv-mba-1",
+              "title": "Apple MacBook Air 13-inch M4 16GB 256GB Laptop",
+              "merchant": "Best Buy",
+              "price": 999,
+              "viable": true,
+              "score": 0.925,
+              "breakdown": {
+                "product": 1,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.925,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            },
+            {
+              "offerId": "sv-mba-case",
+              "title": "MacBook Air 13 Hard Shell Case",
+              "merchant": "Amazon",
+              "price": 19.99,
+              "viable": false,
+              "score": 0.64,
+              "breakdown": {
+                "product": 0.771,
+                "brand": 0.3,
+                "model": 0.5,
+                "category": 0,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.64,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": [
+                  "offer looks like an accessory/replacement, not the reviewed product"
+                ]
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-mba-2 from Amazon: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; beat sv-mba-1 (0.925)"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-mba-2",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-mba-2",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-mba-2",
+              "method": "PROVIDER_DEEPLINK"
+            },
+            {
+              "offerId": "sv-mba-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-mba-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-mba-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 2
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-001",
+            "slug": "apple-macbook-air-13-m4-review-the-thin-and-light-laptop-to-beat",
+            "canonicalPath": "/review/apple-macbook-air-13-m4-review-the-thin-and-light-laptop-to-beat",
+            "title": "Apple MacBook Air 13 (M4) review: the thin-and-light laptop to beat",
+            "metaDescription": "A fanless ultrabook with long battery life and a sharp display, aimed at students and everyday productivity.",
+            "productName": "MacBook Air 13 (M4)",
+            "brand": "Apple",
+            "brandSlug": "apple",
+            "category": {
+              "slug": "laptops",
+              "name": "Laptops"
+            },
+            "subcategory": {
+              "slug": "macbooks",
+              "name": "MacBooks"
+            },
+            "intents": [
+              {
+                "slug": "productivity",
+                "name": "Productivity"
+              }
+            ],
+            "platforms": [
+              {
+                "slug": "macos",
+                "name": "macOS"
+              }
+            ],
+            "priceTier": {
+              "slug": "mid-range",
+              "name": "Mid-range"
+            },
+            "summary": "A fanless ultrabook with long battery life and a sharp display, aimed at students and everyday productivity.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/laptops.svg",
+              "alt": "Laptops placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Apple"
+              },
+              {
+                "label": "Product",
+                "value": "MacBook Air 13 (M4)"
+              },
+              {
+                "label": "Type",
+                "value": "laptop"
+              },
+              {
+                "label": "Platform",
+                "value": "macOS"
+              },
+              {
+                "label": "Best for",
+                "value": "Productivity"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-001",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-02T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-002",
+        "title": "Dell XPS 14 review — a premium Windows laptop for creators",
+        "productName": "Dell XPS 14",
+        "brand": "Dell",
+        "category": "laptops",
+        "price": 1699,
+        "currency": "USD",
+        "publishedAt": "2026-09-04T09:00:00Z",
+        "modelNumber": "9440",
+        "summary": "Dell's 14-inch XPS pairs an OLED screen with strong performance for video editing and content creation on Windows 11.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-002",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 1
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-002",
+            "title": "Dell XPS 14 review — a premium Windows laptop for creators",
+            "body": "The XPS 14 is a premium Windows 11 laptop with an optional OLED display and a di…",
+            "summary": "Dell's 14-inch XPS pairs an OLED screen with strong performance for video editing and content creation on Windows 11.",
+            "url": "https://reviews.example.com/s-002",
+            "publishedAt": "2026-09-04T09:00:00.000Z",
+            "productName": "Dell XPS 14",
+            "brand": "Dell",
+            "category": "laptops",
+            "tags": [],
+            "price": 1699,
+            "currency": "USD",
+            "modelNumber": "9440",
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Dell XPS 14 review — a premium Windows laptop for creators",
+          "slug": "dell-xps-14-review-a-premium-windows-laptop-for-creators",
+          "productIdentity": "Dell XPS 14",
+          "contentHash": "241b3ae5ef2efebe1fda668f14214409b4ec583ebeeab5b7e3b26968dbf4865b",
+          "summary": "Dell's 14-inch XPS pairs an OLED screen with strong performance for video editing and content creation on Windows 11."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "xps-14|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Dell XPS 14",
+            "brand": "Dell",
+            "deviceType": "laptop",
+            "useCase": "Creator",
+            "platform": "Windows",
+            "price": 1699,
+            "currency": "USD",
+            "modelNumber": "9440",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-04T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.85,
+              "platform": 0.8,
+              "price": 0.95,
+              "modelNumber": 0.95,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "creator",
+                "confidence": 0.85,
+                "reason": "summary:\"content creation\"(+6), summary:\"video editing\"(+6), body:\"content creation\"(+2)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [
+              {
+                "slug": "windows",
+                "confidence": 0.95,
+                "reason": "title:\"windows\"(+9), summary:\"windows 11\"(+7.5), summary:\"windows\"(+4.5)",
+                "source": "RULES"
+              }
+            ],
+            "scores": {
+              "laptops": 73.5,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 3,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "laptops",
+              "confidence": 0.99,
+              "reason": "score 73.5 vs accessories 3; source category \"laptops\"; productName:\"xps\"(+12), title:\"laptop\"(+9), deviceType:\"laptop\"(+9), title:\"xps\"(+9)",
+              "source": "SOURCE_FIELD",
+              "runnerUp": {
+                "slug": "accessories",
+                "score": 3
+              }
+            },
+            "priceTier": {
+              "slug": "premium",
+              "confidence": 0.9,
+              "reason": "extracted price 1699 vs laptops bands ≤700 / ≤1500",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/laptops.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Dell XPS 14 9440",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-xps-1",
+              "title": "Dell XPS 14 9440 Laptop OLED Intel Core Ultra",
+              "merchant": "Dell",
+              "price": 1699,
+              "viable": true,
+              "score": 0.977,
+              "breakdown": {
+                "product": 0.933,
+                "brand": 1,
+                "model": 1,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.977,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-xps-1 from Dell: score 0.977, product 0.933, brand 1, model 1, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-xps-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-xps-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-xps-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-002",
+            "slug": "dell-xps-14-review-a-premium-windows-laptop-for-creators",
+            "canonicalPath": "/review/dell-xps-14-review-a-premium-windows-laptop-for-creators",
+            "title": "Dell XPS 14 review — a premium Windows laptop for creators",
+            "metaDescription": "Dell's 14-inch XPS pairs an OLED screen with strong performance for video editing and content creation on Windows 11.",
+            "productName": "Dell XPS 14",
+            "brand": "Dell",
+            "brandSlug": "dell",
+            "category": {
+              "slug": "laptops",
+              "name": "Laptops"
+            },
+            "subcategory": null,
+            "intents": [
+              {
+                "slug": "creator",
+                "name": "Creator"
+              }
+            ],
+            "platforms": [
+              {
+                "slug": "windows",
+                "name": "Windows"
+              }
+            ],
+            "priceTier": {
+              "slug": "premium",
+              "name": "Premium"
+            },
+            "summary": "Dell's 14-inch XPS pairs an OLED screen with strong performance for video editing and content creation on Windows 11.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/laptops.svg",
+              "alt": "Laptops placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Dell"
+              },
+              {
+                "label": "Product",
+                "value": "Dell XPS 14"
+              },
+              {
+                "label": "Model",
+                "value": "9440"
+              },
+              {
+                "label": "Type",
+                "value": "laptop"
+              },
+              {
+                "label": "Platform",
+                "value": "Windows"
+              },
+              {
+                "label": "Best for",
+                "value": "Creator"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-002",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-04T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-003",
+        "title": "Lenovo ThinkPad X1 Carbon Gen 13 review",
+        "productName": "ThinkPad X1 Carbon Gen 13",
+        "brand": "Lenovo",
+        "category": "Laptops",
+        "publishedAt": "2026-09-05T09:00:00Z",
+        "summary": "The business laptop benchmark returns with a lighter chassis, vPro options and a superb keyboard.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-003",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 2
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-003",
+            "title": "Lenovo ThinkPad X1 Carbon Gen 13 review",
+            "body": "The ThinkPad X1 Carbon remains the reference business laptop. It weighs under a …",
+            "summary": "The business laptop benchmark returns with a lighter chassis, vPro options and a superb keyboard.",
+            "url": "https://reviews.example.com/s-003",
+            "publishedAt": "2026-09-05T09:00:00.000Z",
+            "productName": "ThinkPad X1 Carbon Gen 13",
+            "brand": "Lenovo",
+            "category": "Laptops",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Lenovo ThinkPad X1 Carbon Gen 13 review",
+          "slug": "lenovo-thinkpad-x1-carbon-gen-13-review",
+          "productIdentity": "ThinkPad X1 Carbon Gen 13",
+          "contentHash": "bb4ba2b663abf41e895f5ced06fb5f5eaa8fea064486a254a69a6e06c63fd0ef",
+          "summary": "The business laptop benchmark returns with a lighter chassis, vPro options and a superb keyboard."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "thinkpad-x1-carbon-gen-13|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "ThinkPad X1 Carbon Gen 13",
+            "brand": "Lenovo",
+            "deviceType": "laptop",
+            "useCase": "Business",
+            "platform": "Windows",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-05T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.85,
+              "platform": 0.55,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "business",
+                "confidence": 0.69,
+                "reason": "summary:\"business\"(+4.5), body:\"business\"(+3), body:\"enterprise\"(+2)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [],
+            "scores": {
+              "laptops": 71,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 6,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "laptops",
+              "confidence": 0.97,
+              "reason": "score 71 vs accessories 6; source category \"laptops\"; productName:\"thinkpad\"(+16), title:\"thinkpad\"(+12), deviceType:\"laptop\"(+9), summary:\"laptop\"(+4.5)",
+              "source": "SOURCE_FIELD",
+              "runnerUp": {
+                "slug": "accessories",
+                "score": 6
+              }
+            },
+            "subcategory": {
+              "slug": "business-laptops",
+              "confidence": 0.99,
+              "reason": "score 38; productName:\"thinkpad\"(+12), title:\"thinkpad\"(+9), summary:\"business laptop\"(+7.5), body:\"thinkpad\"(+3)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/laptops.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Lenovo ThinkPad X1 Carbon Gen 13",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-x1-1",
+              "title": "Lenovo ThinkPad X1 Carbon Gen 13 14\" Business Laptop",
+              "merchant": "Lenovo",
+              "price": 1849,
+              "viable": true,
+              "score": 0.925,
+              "breakdown": {
+                "product": 1,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.925,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            },
+            {
+              "offerId": "sv-x1-2",
+              "title": "ThinkPad X1 Carbon Gen 13 Laptop",
+              "merchant": "Newegg",
+              "price": 1799,
+              "viable": true,
+              "score": 0.72,
+              "breakdown": {
+                "product": 1,
+                "brand": 0.3,
+                "model": 0.5,
+                "category": 1,
+                "availability": 0,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.72,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": [
+                  "offer is out of stock"
+                ]
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-x1-1 from Lenovo: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; beat sv-x1-2 (0.72)"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-x1-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-x1-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-x1-1",
+              "method": "PROVIDER_DEEPLINK"
+            },
+            {
+              "offerId": "sv-x1-2",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-x1-2",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-x1-2",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 2
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-003",
+            "slug": "lenovo-thinkpad-x1-carbon-gen-13-review",
+            "canonicalPath": "/review/lenovo-thinkpad-x1-carbon-gen-13-review",
+            "title": "Lenovo ThinkPad X1 Carbon Gen 13 review",
+            "metaDescription": "The business laptop benchmark returns with a lighter chassis, vPro options and a superb keyboard.",
+            "productName": "ThinkPad X1 Carbon Gen 13",
+            "brand": "Lenovo",
+            "brandSlug": "lenovo",
+            "category": {
+              "slug": "laptops",
+              "name": "Laptops"
+            },
+            "subcategory": {
+              "slug": "business-laptops",
+              "name": "Business laptops"
+            },
+            "intents": [
+              {
+                "slug": "business",
+                "name": "Business"
+              }
+            ],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "The business laptop benchmark returns with a lighter chassis, vPro options and a superb keyboard.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/laptops.svg",
+              "alt": "Laptops placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Lenovo"
+              },
+              {
+                "label": "Product",
+                "value": "ThinkPad X1 Carbon Gen 13"
+              },
+              {
+                "label": "Type",
+                "value": "laptop"
+              },
+              {
+                "label": "Platform",
+                "value": "Windows"
+              },
+              {
+                "label": "Best for",
+                "value": "Business"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-003",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-05T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-004",
+        "title": "Google Pixel 10 review: the best Android camera phone",
+        "productName": "Pixel 10",
+        "brand": "Google",
+        "category": "Phones",
+        "price": 799,
+        "currency": "USD",
+        "publishedAt": "2026-09-06T09:00:00Z",
+        "summary": "Google's flagship smartphone focuses on computational photography and seven years of Android updates.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-004",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author",
+        "imageUrl": "{BASE}/image/s-004.png"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 3
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-004",
+            "title": "Google Pixel 10 review: the best Android camera phone",
+            "body": "The Pixel 10 is a flagship Android smartphone with Google's Tensor chip. Its cam…",
+            "summary": "Google's flagship smartphone focuses on computational photography and seven years of Android updates.",
+            "url": "https://reviews.example.com/s-004",
+            "publishedAt": "2026-09-06T09:00:00.000Z",
+            "productName": "Pixel 10",
+            "brand": "Google",
+            "category": "Phones",
+            "tags": [],
+            "price": 799,
+            "currency": "USD",
+            "imageUrl": "https://images.sample.example/image/s-004.png",
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Google Pixel 10 review: the best Android camera phone",
+          "slug": "google-pixel-10-review-the-best-android-camera-phone",
+          "productIdentity": "Pixel 10",
+          "contentHash": "d30a17c1e54c3945b6c4b0041a5bfcc9a7fea0ba35e47d6fb31129f16f706e9f",
+          "summary": "Google's flagship smartphone focuses on computational photography and seven years of Android updates."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "pixel-10|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Pixel 10",
+            "brand": "Google",
+            "deviceType": "smartphone",
+            "platform": "Android",
+            "price": 799,
+            "currency": "USD",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-06T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0,
+              "platform": 0.8,
+              "price": 0.95,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "android",
+                "confidence": 0.95,
+                "reason": "title:\"android\"(+15), productName:\"pixel\"(+8), summary:\"android\"(+7.5)",
+                "source": "RULES"
+              }
+            ],
+            "scores": {
+              "laptops": 0,
+              "phones": 75,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "phones",
+              "confidence": 0.99,
+              "reason": "score 75; source category \"phones\"; productName:\"pixel\"(+12), deviceType:\"smartphone\"(+12), title:\"pixel\"(+9), title:\"phone\"(+6)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "android-phones",
+              "confidence": 0.99,
+              "reason": "score 42; productName:\"pixel\"(+12), title:\"android\"(+9), title:\"pixel\"(+9), summary:\"android\"(+4.5)",
+              "source": "RULES"
+            },
+            "priceTier": {
+              "slug": "mid-range",
+              "confidence": 0.9,
+              "reason": "extracted price 799 vs phones bands ≤400 / ≤900",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "wouldTry": [
+            "CONTENT_API",
+            "ENRICHMENT_SERVICE",
+            "PLACEHOLDER"
+          ],
+          "contentApiImage": "https://images.sample.example/image/s-004.png",
+          "licenseEvidence": "none (would be LICENSE_UNVERIFIED)"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Google Pixel 10",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-px-1",
+              "title": "Google Pixel 10 128GB Unlocked Smartphone",
+              "merchant": "Best Buy",
+              "price": 799,
+              "viable": true,
+              "score": 0.902,
+              "breakdown": {
+                "product": 0.933,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.902,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            },
+            {
+              "offerId": "sv-px-case",
+              "title": "Pixel 10 Clear Phone Case",
+              "merchant": "Amazon",
+              "price": 14.99,
+              "viable": false,
+              "score": 0.706,
+              "breakdown": {
+                "product": 0.96,
+                "brand": 0.3,
+                "model": 0.5,
+                "category": 0,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.706,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": [
+                  "offer looks like an accessory/replacement, not the reviewed product"
+                ]
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-px-1 from Best Buy: score 0.902, product 0.933, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-px-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-px-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-px-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-004",
+            "slug": "google-pixel-10-review-the-best-android-camera-phone",
+            "canonicalPath": "/review/google-pixel-10-review-the-best-android-camera-phone",
+            "title": "Google Pixel 10 review: the best Android camera phone",
+            "metaDescription": "Google's flagship smartphone focuses on computational photography and seven years of Android updates.",
+            "productName": "Pixel 10",
+            "brand": "Google",
+            "brandSlug": "google",
+            "category": {
+              "slug": "phones",
+              "name": "Phones"
+            },
+            "subcategory": {
+              "slug": "android-phones",
+              "name": "Android phones"
+            },
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "android",
+                "name": "Android"
+              }
+            ],
+            "priceTier": {
+              "slug": "mid-range",
+              "name": "Mid-range"
+            },
+            "summary": "Google's flagship smartphone focuses on computational photography and seven years of Android updates.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/phones.svg",
+              "alt": "Phones placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Google"
+              },
+              {
+                "label": "Product",
+                "value": "Pixel 10"
+              },
+              {
+                "label": "Type",
+                "value": "smartphone"
+              },
+              {
+                "label": "Platform",
+                "value": "Android"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-004",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-06T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-005",
+        "title": "Samsung Galaxy S26 Ultra review",
+        "productName": "Galaxy S26 Ultra",
+        "brand": "Samsung",
+        "category": "phones",
+        "publishedAt": "2026-09-07T09:00:00Z",
+        "summary": "Samsung's biggest smartphone keeps the S Pen, adds brighter optics and costs a premium.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-005",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 4
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-005",
+            "title": "Samsung Galaxy S26 Ultra review",
+            "body": "The Galaxy S26 Ultra is Samsung's premium Android phone. It keeps the built-in S…",
+            "summary": "Samsung's biggest smartphone keeps the S Pen, adds brighter optics and costs a premium.",
+            "url": "https://reviews.example.com/s-005",
+            "publishedAt": "2026-09-07T09:00:00.000Z",
+            "productName": "Galaxy S26 Ultra",
+            "brand": "Samsung",
+            "category": "phones",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Samsung Galaxy S26 Ultra review",
+          "slug": "samsung-galaxy-s26-ultra-review",
+          "productIdentity": "Galaxy S26 Ultra",
+          "contentHash": "7c216d719dd65f2b7a1d40e9c8960cc1c4256d312f4fd4ea0df1d576945c39a8",
+          "summary": "Samsung's biggest smartphone keeps the S Pen, adds brighter optics and costs a premium."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "galaxy-s26-ultra|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Galaxy S26 Ultra",
+            "brand": "Samsung",
+            "deviceType": "smartphone",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-07T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.65,
+              "useCase": 0,
+              "platform": 0,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.87
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "android",
+                "confidence": 0.84,
+                "reason": "productName:\"galaxy\"(+8), title:\"galaxy\"(+6), body:\"android\"(+2.5)",
+                "source": "RULES"
+              }
+            ],
+            "scores": {
+              "laptops": 0,
+              "phones": 46,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "phones",
+              "confidence": 0.99,
+              "reason": "score 46; source category \"phones\"; deviceType:\"smartphone\"(+12), summary:\"smartphone\"(+6), body:\"phone\"(+2), body:\"smartphone\"(+2)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "android-phones",
+              "confidence": 0.91,
+              "reason": "score 24; productName:\"galaxy\"(+12), title:\"galaxy\"(+9), body:\"android\"(+1.5), body:\"galaxy\"(+1.5)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/phones.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Samsung Galaxy S26 Ultra",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-s26-1",
+              "title": "Samsung Galaxy S26 Ultra 256GB Unlocked",
+              "merchant": "Samsung",
+              "price": 1299,
+              "viable": true,
+              "score": 0.925,
+              "breakdown": {
+                "product": 1,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.925,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-s26-1 from Samsung: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-s26-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-s26-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-s26-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-005",
+            "slug": "samsung-galaxy-s26-ultra-review",
+            "canonicalPath": "/review/samsung-galaxy-s26-ultra-review",
+            "title": "Samsung Galaxy S26 Ultra review",
+            "metaDescription": "Samsung's biggest smartphone keeps the S Pen, adds brighter optics and costs a premium.",
+            "productName": "Galaxy S26 Ultra",
+            "brand": "Samsung",
+            "brandSlug": "samsung",
+            "category": {
+              "slug": "phones",
+              "name": "Phones"
+            },
+            "subcategory": {
+              "slug": "android-phones",
+              "name": "Android phones"
+            },
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "android",
+                "name": "Android"
+              }
+            ],
+            "priceTier": null,
+            "summary": "Samsung's biggest smartphone keeps the S Pen, adds brighter optics and costs a premium.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/phones.svg",
+              "alt": "Phones placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Samsung"
+              },
+              {
+                "label": "Product",
+                "value": "Galaxy S26 Ultra"
+              },
+              {
+                "label": "Type",
+                "value": "smartphone"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-005",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-07T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-006",
+        "title": "ChatGPT Plus review: is the AI assistant worth paying for?",
+        "productName": "ChatGPT Plus",
+        "brand": "OpenAI",
+        "category": "AI Tools",
+        "publishedAt": "2026-09-08T09:00:00Z",
+        "summary": "OpenAI's paid chatbot tier adds faster models, image generation and file analysis for productivity work.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-006",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 5
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-006",
+            "title": "ChatGPT Plus review: is the AI assistant worth paying for?",
+            "body": "ChatGPT Plus is the subscription tier of OpenAI's AI assistant. It costs $20 per…",
+            "summary": "OpenAI's paid chatbot tier adds faster models, image generation and file analysis for productivity work.",
+            "url": "https://reviews.example.com/s-006",
+            "publishedAt": "2026-09-08T09:00:00.000Z",
+            "productName": "ChatGPT Plus",
+            "brand": "OpenAI",
+            "category": "AI Tools",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "ChatGPT Plus review: is the AI assistant worth paying for?",
+          "slug": "chatgpt-plus-review-is-the-ai-assistant-worth-paying-for",
+          "productIdentity": "ChatGPT Plus",
+          "contentHash": "8e809d3587ddae72afa3ab959c690668914650534af013e462526c459ecad75e",
+          "summary": "OpenAI's paid chatbot tier adds faster models, image generation and file analysis for productivity work."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "chatgpt-plus|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "ChatGPT Plus",
+            "brand": "OpenAI",
+            "deviceType": "ai software",
+            "useCase": "Productivity",
+            "platform": "Web",
+            "price": 20,
+            "currency": "USD",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-08T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.6,
+              "platform": 0.55,
+              "price": 0.55,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "productivity",
+                "confidence": 0.6,
+                "reason": "summary:\"productivity\"(+6), body:\"productivity\"(+2)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [],
+            "scores": {
+              "laptops": 0,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 72.5,
+              "developer-software": 0,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "ai-tools",
+              "confidence": 0.99,
+              "reason": "score 72.5; source category \"ai tools\"; productName:\"chatgpt\"(+16), title:\"ai assistant\"(+12), title:\"chatgpt\"(+12), summary:\"chatbot\"(+4.5)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "ai-assistants",
+              "confidence": 0.99,
+              "reason": "score 46; title:\"ai assistant\"(+15), productName:\"chatgpt\"(+12), title:\"chatgpt\"(+9), summary:\"chatbot\"(+6)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/ai-tools.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "OpenAI ChatGPT Plus",
+          "matchedSovrnOfferSet": [],
+          "bestOffer": null
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SKIPPED (no selected offer)",
+          "record": "affiliate_links",
+          "affiliateLinkSet": []
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 0
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-006",
+            "slug": "chatgpt-plus-review-is-the-ai-assistant-worth-paying-for",
+            "canonicalPath": "/review/chatgpt-plus-review-is-the-ai-assistant-worth-paying-for",
+            "title": "ChatGPT Plus review: is the AI assistant worth paying for?",
+            "metaDescription": "OpenAI's paid chatbot tier adds faster models, image generation and file analysis for productivity work.",
+            "productName": "ChatGPT Plus",
+            "brand": "OpenAI",
+            "brandSlug": "openai",
+            "category": {
+              "slug": "ai-tools",
+              "name": "AI Tools"
+            },
+            "subcategory": {
+              "slug": "ai-assistants",
+              "name": "AI assistants"
+            },
+            "intents": [
+              {
+                "slug": "productivity",
+                "name": "Productivity"
+              }
+            ],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "OpenAI's paid chatbot tier adds faster models, image generation and file analysis for productivity work.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/ai-tools.svg",
+              "alt": "AI Tools placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "OpenAI"
+              },
+              {
+                "label": "Product",
+                "value": "ChatGPT Plus"
+              },
+              {
+                "label": "Type",
+                "value": "ai software"
+              },
+              {
+                "label": "Platform",
+                "value": "Web"
+              },
+              {
+                "label": "Best for",
+                "value": "Productivity"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-006",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-08T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-007",
+        "title": "Claude Pro review — an AI assistant for long documents",
+        "productName": "Claude Pro",
+        "brand": "Anthropic",
+        "category": "ai tools",
+        "publishedAt": "2026-09-09T09:00:00Z",
+        "summary": "Anthropic's paid plan is strong at long-context reading, writing and coding help.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-007",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 6
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-007",
+            "title": "Claude Pro review — an AI assistant for long documents",
+            "body": "Claude Pro is Anthropic's paid AI assistant plan. It handles long documents well…",
+            "summary": "Anthropic's paid plan is strong at long-context reading, writing and coding help.",
+            "url": "https://reviews.example.com/s-007",
+            "publishedAt": "2026-09-09T09:00:00.000Z",
+            "productName": "Claude Pro",
+            "brand": "Anthropic",
+            "category": "ai tools",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Claude Pro review — an AI assistant for long documents",
+          "slug": "claude-pro-review-an-ai-assistant-for-long-documents",
+          "productIdentity": "Claude Pro",
+          "contentHash": "c0b760ee2db9d272047e3f7bf4f544eee5a110522469f2bcc142d224218e8e45",
+          "summary": "Anthropic's paid plan is strong at long-context reading, writing and coding help."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "claude-pro|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Claude Pro",
+            "brand": "Anthropic",
+            "deviceType": "ai software",
+            "useCase": "Productivity",
+            "platform": "Web",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-09T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.75,
+              "platform": 0.55,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "developer",
+                "confidence": 0.55,
+                "reason": "summary:\"coding\"(+4.5), body:\"coding\"(+1.5)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [],
+            "scores": {
+              "laptops": 0,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 66,
+              "developer-software": 0,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "ai-tools",
+              "confidence": 0.99,
+              "reason": "score 66; source category \"ai tools\"; title:\"ai assistant\"(+12), productName:\"claude\"(+12), title:\"claude\"(+9), body:\"ai assistant\"(+2)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "ai-assistants",
+              "confidence": 0.98,
+              "reason": "score 42; title:\"ai assistant\"(+15), productName:\"claude\"(+12), title:\"claude\"(+9), body:\"ai assistant\"(+2.5)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/ai-tools.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Anthropic Claude Pro",
+          "matchedSovrnOfferSet": [],
+          "bestOffer": null
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SKIPPED (no selected offer)",
+          "record": "affiliate_links",
+          "affiliateLinkSet": []
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 0
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-007",
+            "slug": "claude-pro-review-an-ai-assistant-for-long-documents",
+            "canonicalPath": "/review/claude-pro-review-an-ai-assistant-for-long-documents",
+            "title": "Claude Pro review — an AI assistant for long documents",
+            "metaDescription": "Anthropic's paid plan is strong at long-context reading, writing and coding help.",
+            "productName": "Claude Pro",
+            "brand": "Anthropic",
+            "brandSlug": "anthropic",
+            "category": {
+              "slug": "ai-tools",
+              "name": "AI Tools"
+            },
+            "subcategory": {
+              "slug": "ai-assistants",
+              "name": "AI assistants"
+            },
+            "intents": [
+              {
+                "slug": "developer",
+                "name": "Developer"
+              }
+            ],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "Anthropic's paid plan is strong at long-context reading, writing and coding help.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/ai-tools.svg",
+              "alt": "AI Tools placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Anthropic"
+              },
+              {
+                "label": "Product",
+                "value": "Claude Pro"
+              },
+              {
+                "label": "Type",
+                "value": "ai software"
+              },
+              {
+                "label": "Platform",
+                "value": "Web"
+              },
+              {
+                "label": "Best for",
+                "value": "Productivity"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-007",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-09T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-008",
+        "title": "Visual Studio Code review: the default code editor for developers",
+        "productName": "Visual Studio Code",
+        "brand": "Microsoft",
+        "category": "Developer Tools",
+        "publishedAt": "2026-09-10T09:00:00Z",
+        "summary": "A free, extensible code editor that runs on Windows, macOS and Linux.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-008",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 7
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-008",
+            "title": "Visual Studio Code review: the default code editor for developers",
+            "body": "Visual Studio Code is a free code editor from Microsoft. It runs on Windows, mac…",
+            "summary": "A free, extensible code editor that runs on Windows, macOS and Linux.",
+            "url": "https://reviews.example.com/s-008",
+            "publishedAt": "2026-09-10T09:00:00.000Z",
+            "productName": "Visual Studio Code",
+            "brand": "Microsoft",
+            "category": "Developer Tools",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Visual Studio Code review: the default code editor for developers",
+          "slug": "visual-studio-code-review-the-default-code-editor-for-developers",
+          "productIdentity": "Visual Studio Code",
+          "contentHash": "bc6297bdc923ac107ee7cc3152e54477d4674f1754d57d4434cdd020860b0c8c",
+          "summary": "A free, extensible code editor that runs on Windows, macOS and Linux."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "visual-studio-code|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Visual Studio Code",
+            "brand": "Microsoft",
+            "deviceType": "developer software",
+            "useCase": "Developer",
+            "platform": "macOS",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-10T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.85,
+              "platform": 0.55,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "linux",
+                "confidence": 0.65,
+                "reason": "summary:\"linux\"(+7.5), body:\"linux\"(+2.5)",
+                "source": "RULES"
+              },
+              {
+                "slug": "macos",
+                "confidence": 0.65,
+                "reason": "summary:\"macos\"(+7.5), body:\"macos\"(+2.5)",
+                "source": "RULES"
+              },
+              {
+                "slug": "windows",
+                "confidence": 0.55,
+                "reason": "summary:\"windows\"(+4.5), body:\"windows\"(+1.5)",
+                "source": "RULES"
+              }
+            ],
+            "scores": {
+              "laptops": 0,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 79.5,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "developer-software",
+              "confidence": 0.99,
+              "reason": "score 79.5; source category \"developer tools\"; productName:\"visual studio\"(+16), title:\"code editor\"(+12), title:\"visual studio\"(+12), summary:\"code editor\"(+6)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "ides-editors",
+              "confidence": 0.96,
+              "reason": "score 27; title:\"code editor\"(+15), summary:\"code editor\"(+7.5), body:\"code editor\"(+2.5), body:\"ide\"(+2)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/developer-software.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Microsoft Visual Studio Code",
+          "matchedSovrnOfferSet": [],
+          "bestOffer": null
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SKIPPED (no selected offer)",
+          "record": "affiliate_links",
+          "affiliateLinkSet": []
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 0
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-008",
+            "slug": "visual-studio-code-review-the-default-code-editor-for-developers",
+            "canonicalPath": "/review/visual-studio-code-review-the-default-code-editor-for-developers",
+            "title": "Visual Studio Code review: the default code editor for developers",
+            "metaDescription": "A free, extensible code editor that runs on Windows, macOS and Linux.",
+            "productName": "Visual Studio Code",
+            "brand": "Microsoft",
+            "brandSlug": "microsoft",
+            "category": {
+              "slug": "developer-software",
+              "name": "Developer Software"
+            },
+            "subcategory": {
+              "slug": "ides-editors",
+              "name": "IDEs & code editors"
+            },
+            "intents": [],
+            "platforms": [
+              {
+                "slug": "linux",
+                "name": "Linux"
+              },
+              {
+                "slug": "macos",
+                "name": "macOS"
+              },
+              {
+                "slug": "windows",
+                "name": "Windows"
+              }
+            ],
+            "priceTier": null,
+            "summary": "A free, extensible code editor that runs on Windows, macOS and Linux.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/developer-software.svg",
+              "alt": "Developer Software placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Microsoft"
+              },
+              {
+                "label": "Product",
+                "value": "Visual Studio Code"
+              },
+              {
+                "label": "Type",
+                "value": "developer software"
+              },
+              {
+                "label": "Platform",
+                "value": "macOS"
+              },
+              {
+                "label": "Best for",
+                "value": "Developer"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-008",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-10T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-009",
+        "title": "Docker Desktop review: containers on your laptop",
+        "productName": "Docker Desktop",
+        "brand": "Docker",
+        "category": "Developer Software",
+        "publishedAt": "2026-09-11T09:00:00Z",
+        "summary": "Docker Desktop packages the container runtime, Kubernetes and a GUI for local development.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-009",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 8
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-009",
+            "title": "Docker Desktop review: containers on your laptop",
+            "body": "Docker Desktop is the easiest way to run Docker containers on macOS and Windows.…",
+            "summary": "Docker Desktop packages the container runtime, Kubernetes and a GUI for local development.",
+            "url": "https://reviews.example.com/s-009",
+            "publishedAt": "2026-09-11T09:00:00.000Z",
+            "productName": "Docker Desktop",
+            "brand": "Docker",
+            "category": "Developer Software",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Docker Desktop review: containers on your laptop",
+          "slug": "docker-desktop-review-containers-on-your-laptop",
+          "productIdentity": "Docker Desktop",
+          "contentHash": "55a113cfa16662669f436d9bb5f37d8a38e36a4b8b375063068d60090dc66687",
+          "summary": "Docker Desktop packages the container runtime, Kubernetes and a GUI for local development."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "desktop|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Docker Desktop",
+            "brand": "Docker",
+            "deviceType": "laptop",
+            "useCase": "Developer",
+            "platform": "macOS",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-11T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.6,
+              "platform": 0.55,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [],
+            "scores": {
+              "laptops": 18,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 76,
+              "accessories": 0,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "developer-software",
+              "confidence": 0.92,
+              "reason": "score 76 vs laptops 18; source category \"developer software\"; productName:\"docker\"(+16), title:\"docker\"(+12), summary:\"docker\"(+6), summary:\"kubernetes\"(+6)",
+              "source": "SOURCE_FIELD",
+              "runnerUp": {
+                "slug": "laptops",
+                "score": 18
+              }
+            },
+            "subcategory": {
+              "slug": "devops-ci",
+              "confidence": 0.99,
+              "reason": "score 51; productName:\"docker\"(+16), title:\"docker\"(+12), summary:\"docker\"(+6), summary:\"kubernetes\"(+6)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/developer-software.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Docker Desktop",
+          "matchedSovrnOfferSet": [],
+          "bestOffer": null
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SKIPPED (no selected offer)",
+          "record": "affiliate_links",
+          "affiliateLinkSet": []
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 0
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-009",
+            "slug": "docker-desktop-review-containers-on-your-laptop",
+            "canonicalPath": "/review/docker-desktop-review-containers-on-your-laptop",
+            "title": "Docker Desktop review: containers on your laptop",
+            "metaDescription": "Docker Desktop packages the container runtime, Kubernetes and a GUI for local development.",
+            "productName": "Docker Desktop",
+            "brand": "Docker",
+            "brandSlug": "docker",
+            "category": {
+              "slug": "developer-software",
+              "name": "Developer Software"
+            },
+            "subcategory": {
+              "slug": "devops-ci",
+              "name": "DevOps & CI/CD"
+            },
+            "intents": [],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "Docker Desktop packages the container runtime, Kubernetes and a GUI for local development.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/developer-software.svg",
+              "alt": "Developer Software placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Docker"
+              },
+              {
+                "label": "Product",
+                "value": "Docker Desktop"
+              },
+              {
+                "label": "Type",
+                "value": "laptop"
+              },
+              {
+                "label": "Platform",
+                "value": "macOS"
+              },
+              {
+                "label": "Best for",
+                "value": "Developer"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-009",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-11T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-010",
+        "title": "Logitech MX Master 4 review: the productivity mouse",
+        "productName": "MX Master 4",
+        "brand": "Logitech",
+        "category": "Accessories",
+        "price": 119,
+        "currency": "USD",
+        "publishedAt": "2026-09-12T09:00:00Z",
+        "summary": "Logitech's flagship wireless mouse adds haptics and keeps the excellent scroll wheel.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-010",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 9
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-010",
+            "title": "Logitech MX Master 4 review: the productivity mouse",
+            "body": "The MX Master 4 is a wireless mouse designed for productivity. It connects over …",
+            "summary": "Logitech's flagship wireless mouse adds haptics and keeps the excellent scroll wheel.",
+            "url": "https://reviews.example.com/s-010",
+            "publishedAt": "2026-09-12T09:00:00.000Z",
+            "productName": "MX Master 4",
+            "brand": "Logitech",
+            "category": "Accessories",
+            "tags": [],
+            "price": 119,
+            "currency": "USD",
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Logitech MX Master 4 review: the productivity mouse",
+          "slug": "logitech-mx-master-4-review-the-productivity-mouse",
+          "productIdentity": "MX Master 4",
+          "contentHash": "ca851084fc154182e764e9bec5b0a107290b842a1d2f8ade913b63c3a532c1fc",
+          "summary": "Logitech's flagship wireless mouse adds haptics and keeps the excellent scroll wheel."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "mx-master-4|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "MX Master 4",
+            "brand": "Logitech",
+            "deviceType": "accessory",
+            "useCase": "Productivity",
+            "platform": "macOS",
+            "price": 119,
+            "currency": "USD",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-12T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0.7,
+              "platform": 0.55,
+              "price": 0.95,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [
+              {
+                "slug": "productivity",
+                "confidence": 0.78,
+                "reason": "title:\"productivity\"(+12), body:\"productivity\"(+2), body:\"office\"(+1)",
+                "source": "RULES"
+              }
+            ],
+            "platforms": [],
+            "scores": {
+              "laptops": 0,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 40.5,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "accessories",
+              "confidence": 0.99,
+              "reason": "score 40.5; source category \"accessories\"; title:\"mouse\"(+9), summary:\"mouse\"(+4.5), body:\"mouse\"(+3)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "mice",
+              "confidence": 0.96,
+              "reason": "score 27.5; title:\"mouse\"(+15), summary:\"mouse\"(+7.5), body:\"mouse\"(+5)",
+              "source": "RULES"
+            },
+            "priceTier": {
+              "slug": "mid-range",
+              "confidence": 0.9,
+              "reason": "extracted price 119 vs accessories bands ≤50 / ≤150",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/accessories.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Logitech MX Master 4",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-mx4-1",
+              "title": "Logitech MX Master 4 Wireless Mouse",
+              "merchant": "Amazon",
+              "price": 119.99,
+              "viable": true,
+              "score": 0.925,
+              "breakdown": {
+                "product": 1,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.925,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-mx4-1 from Amazon: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-mx4-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-mx4-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-mx4-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-010",
+            "slug": "logitech-mx-master-4-review-the-productivity-mouse",
+            "canonicalPath": "/review/logitech-mx-master-4-review-the-productivity-mouse",
+            "title": "Logitech MX Master 4 review: the productivity mouse",
+            "metaDescription": "Logitech's flagship wireless mouse adds haptics and keeps the excellent scroll wheel.",
+            "productName": "MX Master 4",
+            "brand": "Logitech",
+            "brandSlug": "logitech",
+            "category": {
+              "slug": "accessories",
+              "name": "Accessories"
+            },
+            "subcategory": {
+              "slug": "mice",
+              "name": "Mice & trackpads"
+            },
+            "intents": [
+              {
+                "slug": "productivity",
+                "name": "Productivity"
+              }
+            ],
+            "platforms": [],
+            "priceTier": {
+              "slug": "mid-range",
+              "name": "Mid-range"
+            },
+            "summary": "Logitech's flagship wireless mouse adds haptics and keeps the excellent scroll wheel.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/accessories.svg",
+              "alt": "Accessories placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Logitech"
+              },
+              {
+                "label": "Product",
+                "value": "MX Master 4"
+              },
+              {
+                "label": "Type",
+                "value": "accessory"
+              },
+              {
+                "label": "Platform",
+                "value": "macOS"
+              },
+              {
+                "label": "Best for",
+                "value": "Productivity"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-010",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-12T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-011",
+        "title": "Anker Prime 100W USB-C charger review",
+        "productName": "Anker Prime 100W Charger",
+        "brand": "Anker",
+        "category": "accessories",
+        "price": 85,
+        "currency": "USD",
+        "publishedAt": "2026-09-13T09:00:00Z",
+        "summary": "A compact GaN charger with three ports that can power a laptop and phone together.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-011",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 10
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-011",
+            "title": "Anker Prime 100W USB-C charger review",
+            "body": "The Anker Prime 100W is a GaN charger with two USB-C ports and one USB-A port. I…",
+            "summary": "A compact GaN charger with three ports that can power a laptop and phone together.",
+            "url": "https://reviews.example.com/s-011",
+            "publishedAt": "2026-09-13T09:00:00.000Z",
+            "productName": "Anker Prime 100W Charger",
+            "brand": "Anker",
+            "category": "accessories",
+            "tags": [],
+            "price": 85,
+            "currency": "USD",
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Anker Prime 100W Charger: Anker Prime 100W USB-C charger review",
+          "slug": "anker-prime-100w-charger-anker-prime-100w-usb-c-charger-review",
+          "productIdentity": "Anker Prime 100W Charger",
+          "contentHash": "1c4087396cf06daf4e96f2eeca23369a1e3fb9096c0a28be598ec7649e13dd88",
+          "summary": "A compact GaN charger with three ports that can power a laptop and phone together."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "prime-100w-charger|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Anker Prime 100W Charger",
+            "brand": "Anker",
+            "deviceType": "accessory",
+            "price": 85,
+            "currency": "USD",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-13T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0,
+              "platform": 0,
+              "price": 0.95,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [],
+            "scores": {
+              "laptops": 9,
+              "phones": 4,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 52.5,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "accessories",
+              "confidence": 0.94,
+              "reason": "score 52.5 vs laptops 9; source category \"accessories\"; productName:\"charger\"(+12), title:\"charger\"(+9), summary:\"charger\"(+4.5), body:\"charger\"(+3)",
+              "source": "SOURCE_FIELD",
+              "runnerUp": {
+                "slug": "laptops",
+                "score": 9
+              }
+            },
+            "subcategory": {
+              "slug": "chargers-power",
+              "confidence": 0.99,
+              "reason": "score 51.5; productName:\"charger\"(+20), title:\"charger\"(+15), summary:\"charger\"(+7.5), body:\"charger\"(+5)",
+              "source": "RULES"
+            },
+            "priceTier": {
+              "slug": "mid-range",
+              "confidence": 0.9,
+              "reason": "extracted price 85 vs accessories bands ≤50 / ≤150",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/accessories.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Anker Prime 100W Charger",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-ank-1",
+              "title": "Anker Prime 100W GaN USB-C Charger 3-Port",
+              "merchant": "Amazon",
+              "price": 84.99,
+              "viable": true,
+              "score": 0.917,
+              "breakdown": {
+                "product": 0.978,
+                "brand": 1,
+                "model": 0.5,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.917,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-ank-1 from Amazon: score 0.917, product 0.978, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-ank-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-ank-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-ank-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-011",
+            "slug": "anker-prime-100w-charger-anker-prime-100w-usb-c-charger-review",
+            "canonicalPath": "/review/anker-prime-100w-charger-anker-prime-100w-usb-c-charger-review",
+            "title": "Anker Prime 100W Charger: Anker Prime 100W USB-C charger review",
+            "metaDescription": "A compact GaN charger with three ports that can power a laptop and phone together.",
+            "productName": "Anker Prime 100W Charger",
+            "brand": "Anker",
+            "brandSlug": "anker",
+            "category": {
+              "slug": "accessories",
+              "name": "Accessories"
+            },
+            "subcategory": {
+              "slug": "chargers-power",
+              "name": "Chargers & power"
+            },
+            "intents": [],
+            "platforms": [],
+            "priceTier": {
+              "slug": "mid-range",
+              "name": "Mid-range"
+            },
+            "summary": "A compact GaN charger with three ports that can power a laptop and phone together.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/accessories.svg",
+              "alt": "Accessories placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Anker"
+              },
+              {
+                "label": "Product",
+                "value": "Anker Prime 100W Charger"
+              },
+              {
+                "label": "Type",
+                "value": "accessory"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-011",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-13T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-012",
+        "title": "Sony WH-1000XM6 review: noise cancelling headphones",
+        "productName": "Sony WH-1000XM6",
+        "brand": "Sony",
+        "category": "Audio",
+        "publishedAt": "2026-09-14T09:00:00Z",
+        "summary": "Sony's over-ear headphones deliver class-leading noise cancelling and long battery life.",
+        "body": "…",
+        "url": "https://reviews.example.com/s-012",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 11
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-012",
+            "title": "Sony WH-1000XM6 review: noise cancelling headphones",
+            "body": "The WH-1000XM6 are over-ear wireless headphones with excellent active noise canc…",
+            "summary": "Sony's over-ear headphones deliver class-leading noise cancelling and long battery life.",
+            "url": "https://reviews.example.com/s-012",
+            "publishedAt": "2026-09-14T09:00:00.000Z",
+            "productName": "Sony WH-1000XM6",
+            "brand": "Sony",
+            "category": "Audio",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Sony WH-1000XM6 review: noise cancelling headphones",
+          "slug": "sony-wh-1000xm6-review-noise-cancelling-headphones",
+          "productIdentity": "Sony WH-1000XM6",
+          "contentHash": "b69f65155f2db4d94dc31e024dcf4ed7458ae6517427b90e9a05b1253a23b228",
+          "summary": "Sony's over-ear headphones deliver class-leading noise cancelling and long battery life."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "wh-1000xm6|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Sony WH-1000XM6",
+            "brand": "Sony",
+            "deviceType": "audio device",
+            "modelNumber": "WH-1000XM6",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-14T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.95,
+              "brand": 0.95,
+              "deviceType": 0.9,
+              "useCase": 0,
+              "platform": 0,
+              "price": 0,
+              "modelNumber": 0.5,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [],
+            "overallConfidence": 0.94
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [],
+            "scores": {
+              "laptops": 0,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 0,
+              "audio": 62.5,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "audio",
+              "confidence": 0.99,
+              "reason": "score 62.5; source category \"audio\"; title:\"headphones\"(+12), title:\"noise cancelling\"(+9), summary:\"headphones\"(+6), summary:\"noise cancelling\"(+4.5)",
+              "source": "SOURCE_FIELD"
+            },
+            "subcategory": {
+              "slug": "headphones",
+              "confidence": 0.99,
+              "reason": "score 35.5; title:\"headphones\"(+15), summary:\"headphones\"(+7.5), summary:\"over-ear\"(+6), body:\"headphones\"(+5)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/audio.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "MATCHED",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Sony WH-1000XM6",
+          "matchedSovrnOfferSet": [
+            {
+              "offerId": "sv-sony-1",
+              "title": "Sony WH-1000XM6 Wireless Noise Canceling Headphones",
+              "merchant": "Best Buy",
+              "price": 449.99,
+              "viable": true,
+              "score": 0.99,
+              "breakdown": {
+                "product": 0.971,
+                "brand": 1,
+                "model": 1,
+                "category": 1,
+                "availability": 1,
+                "price": 1,
+                "merchant": 1,
+                "total": 0.99,
+                "weights": {
+                  "product": 0.35,
+                  "brand": 0.15,
+                  "model": 0.15,
+                  "category": 0.1,
+                  "availability": 0.1,
+                  "price": 0.1,
+                  "merchant": 0.05
+                },
+                "notes": []
+              }
+            }
+          ],
+          "bestOffer": "Selected sv-sony-1 from Best Buy: score 0.99, product 0.971, brand 1, model 1, category 1, availability 1, price 1, merchant 1; only viable offer"
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SUCCESS",
+          "record": "affiliate_links",
+          "affiliateLinkSet": [
+            {
+              "offerId": "sv-sony-1",
+              "ok": true,
+              "affiliateUrl": "https://sample-offers.example/aff/sv-sony-1",
+              "destinationUrl": "https://sample-offers.example/merchant/sv-sony-1",
+              "method": "PROVIDER_DEEPLINK"
+            }
+          ]
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 1
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-012",
+            "slug": "sony-wh-1000xm6-review-noise-cancelling-headphones",
+            "canonicalPath": "/review/sony-wh-1000xm6-review-noise-cancelling-headphones",
+            "title": "Sony WH-1000XM6 review: noise cancelling headphones",
+            "metaDescription": "Sony's over-ear headphones deliver class-leading noise cancelling and long battery life.",
+            "productName": "Sony WH-1000XM6",
+            "brand": "Sony",
+            "brandSlug": "sony",
+            "category": {
+              "slug": "audio",
+              "name": "Audio"
+            },
+            "subcategory": {
+              "slug": "headphones",
+              "name": "Headphones"
+            },
+            "intents": [],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "Sony's over-ear headphones deliver class-leading noise cancelling and long battery life.",
+            "bodyParagraphs": [
+              "3 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/audio.svg",
+              "alt": "Audio placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Brand",
+                "value": "Sony"
+              },
+              {
+                "label": "Product",
+                "value": "Sony WH-1000XM6"
+              },
+              {
+                "label": "Model",
+                "value": "WH-1000XM6"
+              },
+              {
+                "label": "Type",
+                "value": "audio device"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-012",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-14T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "READY (review status QUEUED)",
+          "record": "publish_jobs",
+          "qaFailures": []
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-013-dup",
+        "title": "Pixel 10 review — Google's best camera phone yet",
+        "productName": "Google Pixel 10",
+        "brand": "Google",
+        "category": "Phones",
+        "publishedAt": "2026-09-20T09:00:00Z",
+        "summary": "A second write-up of the Pixel 10 from the same publisher in the same month.",
+        "body": "This is a second article about the Pixel 10 from the same publisher. It covers the camera, battery life and Android update policy.\n\nBecause it reviews the same product from the same source in the same month, the pipeline treats it as a duplicate and links it to the original review.",
+        "url": "https://reviews.example.com/s-013-dup",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 12
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-013-dup",
+            "title": "Pixel 10 review — Google's best camera phone yet",
+            "body": "This is a second article about the Pixel 10 from the same publisher. It covers t…",
+            "summary": "A second write-up of the Pixel 10 from the same publisher in the same month.",
+            "url": "https://reviews.example.com/s-013-dup",
+            "publishedAt": "2026-09-20T09:00:00.000Z",
+            "productName": "Google Pixel 10",
+            "brand": "Google",
+            "category": "Phones",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Google Pixel 10: Pixel 10 review — Google's best camera phone yet",
+          "slug": "google-pixel-10-pixel-10-review-google-s-best-camera-phone-yet",
+          "productIdentity": "Google Pixel 10",
+          "contentHash": "384c06a55b3dac5159027f91d014ee4ff867bda945d0b32256957b5e80246131",
+          "summary": "A second write-up of the Pixel 10 from the same publisher in the same month."
+        },
+        "DEDUPE": {
+          "outcome": "DUPLICATE",
+          "errorCode": "DUPLICATE_REVIEW",
+          "dedupeKey": "pixel-10|reviews-example-com|2026-09",
+          "duplicateOf": "s-004",
+          "contentItemStatus": "DUPLICATE"
+        }
+      }
+    },
+    {
+      "input": {
+        "id": "s-014",
+        "title": "Our favourite gear for working from home this autumn",
+        "summary": "A round-up of desk gear: a monitor, a keyboard, a laptop stand and a webcam we liked this season.",
+        "body": "…",
+        "publishedAt": "2026-09-15T09:00:00Z",
+        "url": "https://reviews.example.com/s-014",
+        "publisher": "Sample Publisher",
+        "author": "Sample Author"
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 13
+        },
+        "VALIDATION": {
+          "outcome": "SUCCESS",
+          "validated": {
+            "sourceId": "s-014",
+            "title": "Our favourite gear for working from home this autumn",
+            "body": "Working from home is easier with the right desk setup. This round-up covers a 27…",
+            "summary": "A round-up of desk gear: a monitor, a keyboard, a laptop stand and a webcam we liked this season.",
+            "url": "https://reviews.example.com/s-014",
+            "publishedAt": "2026-09-15T09:00:00.000Z",
+            "tags": [],
+            "imageLicenseVerified": false,
+            "author": "Sample Author",
+            "publisher": "Sample Publisher"
+          }
+        },
+        "NORMALIZATION": {
+          "outcome": "SUCCESS",
+          "record": "normalized_reviews",
+          "canonicalTitle": "Our favourite gear for working from home this autumn",
+          "slug": "our-favourite-gear-for-working-from-home-this-autumn",
+          "productIdentity": "Our favourite gear for working from home this autumn",
+          "contentHash": "a0bbdced48824714589046e144bc17b3f87f259132a94633762c6980e43697dc",
+          "summary": "A round-up of desk gear: a monitor, a keyboard, a laptop stand and a webcam we liked this season."
+        },
+        "DEDUPE": {
+          "outcome": "SUCCESS",
+          "dedupeKey": "our-favourite-gear-for-working-from-home-this-autumn|reviews-example-com|2026-09"
+        },
+        "ENTITY_EXTRACTION": {
+          "outcome": "SUCCESS (low confidence → QA)",
+          "record": "extracted_entities",
+          "entities": {
+            "productName": "Our favourite gear for working from home this autumn",
+            "deviceType": "accessory",
+            "source": "Sample Publisher",
+            "publishDate": "2026-09-15T09:00:00.000Z",
+            "confidences": {
+              "productName": 0.35,
+              "brand": 0,
+              "deviceType": 0.65,
+              "useCase": 0,
+              "platform": 0,
+              "price": 0,
+              "modelNumber": 0,
+              "source": 1,
+              "publishDate": 0.95
+            },
+            "lowConfidenceFields": [
+              "productName",
+              "brand"
+            ],
+            "overallConfidence": 0.32
+          }
+        },
+        "TAXONOMY": {
+          "outcome": "SUCCESS (auto-accepted)",
+          "record": "review_category_assignments",
+          "categoryTagSet": {
+            "intents": [],
+            "platforms": [],
+            "scores": {
+              "laptops": 6,
+              "phones": 0,
+              "tablets": 0,
+              "ai-tools": 0,
+              "developer-software": 0,
+              "accessories": 30,
+              "audio": 0,
+              "wearables": 0,
+              "networking": 0
+            },
+            "category": {
+              "slug": "accessories",
+              "confidence": 0.82,
+              "reason": "score 30 vs laptops 6; summary:\"laptop stand\"(+6), summary:\"webcam\"(+6), summary:\"keyboard\"(+4.5), summary:\"monitor\"(+4.5)",
+              "source": "RULES",
+              "runnerUp": {
+                "slug": "laptops",
+                "score": 6
+              }
+            },
+            "subcategory": {
+              "slug": "keyboards",
+              "confidence": 0.46,
+              "reason": "score 12.5; summary:\"keyboard\"(+7.5), body:\"keyboard\"(+2.5), body:\"mechanical keyboard\"(+2.5)",
+              "source": "RULES"
+            }
+          }
+        },
+        "IMAGE_ENRICHMENT": {
+          "outcome": "FALLBACK",
+          "record": "image_assets",
+          "sourceType": "PLACEHOLDER",
+          "sourceUrl": "/placeholders/accessories.svg",
+          "licenseState": "OWNED_PLACEHOLDER"
+        },
+        "OFFER_MATCHING": {
+          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
+          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
+          "record": "sovrn_offer_matches",
+          "queryKey": "Our favourite gear for working from home this autumn",
+          "matchedSovrnOfferSet": [],
+          "bestOffer": null
+        },
+        "AFFILIATE_LINK": {
+          "outcome": "SKIPPED (no selected offer)",
+          "record": "affiliate_links",
+          "affiliateLinkSet": []
+        },
+        "LINK_VERIFICATION": {
+          "outcome": "SKIPPED_DRY_RUN",
+          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
+          "wouldVerify": 0
+        },
+        "PAGE_RENDER": {
+          "outcome": "SUCCESS",
+          "record": "page_render_models",
+          "pageRenderModel": {
+            "version": 1,
+            "reviewId": "dry-s-014",
+            "slug": "our-favourite-gear-for-working-from-home-this-autumn",
+            "canonicalPath": "/review/our-favourite-gear-for-working-from-home-this-autumn",
+            "title": "Our favourite gear for working from home this autumn",
+            "metaDescription": "A round-up of desk gear: a monitor, a keyboard, a laptop stand and a webcam we liked this season.",
+            "productName": "Our favourite gear for working from home this autumn",
+            "brand": null,
+            "brandSlug": null,
+            "category": {
+              "slug": "accessories",
+              "name": "Accessories"
+            },
+            "subcategory": {
+              "slug": "keyboards",
+              "name": "Keyboards"
+            },
+            "intents": [],
+            "platforms": [],
+            "priceTier": null,
+            "summary": "A round-up of desk gear: a monitor, a keyboard, a laptop stand and a webcam we liked this season.",
+            "bodyParagraphs": [
+              "2 paragraph(s)"
+            ],
+            "image": {
+              "url": "/placeholders/accessories.svg",
+              "alt": "Accessories placeholder illustration",
+              "width": 1200,
+              "height": 675,
+              "attribution": null,
+              "isFallback": true
+            },
+            "keyEntities": [
+              {
+                "label": "Product",
+                "value": "Our favourite gear for working from home this autumn"
+              },
+              {
+                "label": "Type",
+                "value": "accessory"
+              }
+            ],
+            "rating": null,
+            "deals": [],
+            "source": {
+              "name": "Sample Publisher",
+              "url": "https://reviews.example.com/s-014",
+              "author": "Sample Author",
+              "publishedAt": "2026-09-15T09:00:00.000Z"
+            },
+            "publishedAt": null,
+            "updatedAt": "2026-09-25T00:00:00.000Z"
+          },
+          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+        },
+        "PUBLISH": {
+          "outcome": "BLOCKED_BY_QA (review status NEEDS_REVIEW)",
+          "record": "publish_jobs",
+          "qaFailures": [
+            "ENTITIES_NEED_REVIEW"
+          ]
+        }
+      }
+    },
+    {
+      "input": {
+        "title": "Broken item",
+        "body": "Too short."
+      },
+      "stages": {
+        "CONTENT_FETCH": {
+          "source": "sample-fixture",
+          "index": 14
+        },
+        "VALIDATION": {
+          "outcome": "PERMANENT_FAILURE",
+          "errorCode": "CONTENT_SCHEMA_INVALID",
+          "issues": [
+            "sourceId: Required",
+            "body: body must be at least 120 characters of text"
+          ],
+          "contentItemStatus": "FAILED"
+        }
+      }
+    }
+  ]
+}

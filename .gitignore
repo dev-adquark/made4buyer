@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env*.local
+*.tsbuildinfo
+/test-results/
+/playwright-report/
+/.tmp/
+/reports/generated/
+lib/reports/release-notes.json
+.vercel

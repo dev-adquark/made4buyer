@@ -1,0 +1,72 @@
+{
+  "name": "made4buyers",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "node scripts/generate-release-notes.mjs && prisma generate && next build",
+    "start": "next start",
+    "postinstall": "node scripts/generate-release-notes.mjs && prisma generate",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --project unit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:all": "vitest run",
+    "test:e2e": "playwright test",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx scripts/seed-taxonomy.ts",
+    "db:local": "tsx scripts/local-db.ts",
+    "pipeline:dry-run": "tsx scripts/dry-run.ts",
+    "pipeline:ingest": "tsx scripts/run-job.ts ingest",
+    "job": "tsx scripts/run-job.ts",
+    "mvp:verify": "tsx scripts/mvp-verify.ts",
+    "report:day30": "tsx scripts/day30-report.ts",
+    "legacy:import": "tsx scripts/import-legacy.ts",
+    "audit": "node scripts/audit-site.mjs",
+    "dev:stubs": "tsx scripts/dev-stubs.ts",
+    "db:copy": "tsx scripts/copy-database.ts",
+    "live:check": "tsx scripts/live-check.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "@react-three/fiber": "^9.8.1",
+    "framer-motion": "^13.4.2",
+    "motion-dom": "^13.4.2",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.186.1",
+    "undici": "^7.29.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.18.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/three": "^0.186.0",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.6",
+    "pg": "^8.23.0",
+    "prisma": "^6.16.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.2",
+    "vitest": "^5.0.1"
+  },
+  "allowScripts": {
+    "@embedded-postgres/darwin-arm64@18.4.0-beta.17": true,
+    "@prisma/client@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true,
+    "prisma@6.19.3": true
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
