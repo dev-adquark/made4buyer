@@ -217,11 +217,11 @@ export async function runOfferStage(reviewId: string, opts: { bypassCache?: bool
     if (hadMatches) await db.sovrnOfferMatch.updateMany({ where: { normalizedReviewId: reviewId, matchStatus: "MATCHED" }, data: { matchStatus: "STALE" } });
     const status = hadMatches ? "STALE" : "FAILED";
     await setDeal(status, outcome.message);
-    const code = outcome.status === "TIMEOUT" ? "SOVRN_TIMEOUT" : outcome.status === "INVALID_RESPONSE" ? "SOVRN_RESPONSE_INVALID" : "SOVRN_PROVIDER_ERROR";
+    const code = outcome.status === "TIMEOUT" ? "SOVRN_TIMEOUT" : outcome.status === "INVALID_RESPONSE" ? "SOVRN_RESPONSE_INVALID" : outcome.status === "AUTH_FAILED" ? "SOVRN_AUTH_FAILED" : "SOVRN_PROVIDER_ERROR";
     await recordFailure({ stage: "OFFER_MATCHING", code, message: outcome.message, entityType: REVIEW, entityId: reviewId, normalizedReviewId: reviewId });
     return { status, reason: outcome.message, selected: [] };
   }
-  await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId, codes: ["SOVRN_NOT_CONFIGURED", "SOVRN_TIMEOUT", "SOVRN_PROVIDER_ERROR", "SOVRN_RESPONSE_INVALID"] });
+  await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId, codes: ["SOVRN_NOT_CONFIGURED", "SOVRN_TIMEOUT", "SOVRN_PROVIDER_ERROR", "SOVRN_AUTH_FAILED", "SOVRN_RESPONSE_INVALID"] });
 
   const ranked = rankOffers(query, outcome.offers, { minScore: config.sovrn.minScore(), trustedMerchants: config.sovrn.trustedMerchants() });
   let viable = ranked.filter((r) => r.viable);

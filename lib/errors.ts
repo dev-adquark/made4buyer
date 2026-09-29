@@ -17,6 +17,7 @@ export const ERROR_CODES = {
   SOVRN_NO_MATCH: { retryable: false, message: "No Sovrn offer matched the product" },
   SOVRN_TIMEOUT: { retryable: true, message: "Sovrn request timed out" },
   SOVRN_PROVIDER_ERROR: { retryable: true, message: "Sovrn returned an error" },
+  SOVRN_AUTH_FAILED: { retryable: false, message: "Sovrn rejected the API credentials (check the secret key)" },
   SOVRN_RESPONSE_INVALID: { retryable: false, message: "Sovrn response shape is invalid" },
   SOVRN_DEAL_ID_NOT_FOUND: { retryable: false, message: "Overridden Sovrn deal ID not present in provider results" },
   AFFILIATE_URL_INVALID: { retryable: false, message: "Affiliate URL could not be generated or is invalid" },

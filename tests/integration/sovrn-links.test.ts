@@ -40,7 +40,9 @@ describe("Sovrn adapter", () => {
     const r = withEnv({ SOVRN_API_KEY: "wrong" });
     const denied = await fetchSovrnOffers({ productName: "Galaxy S26 Ultra", brand: "Samsung" });
     r();
-    expect(denied.status).toBe("PROVIDER_ERROR");
+    // A rejected credential is its own state, not a temporary provider failure.
+    expect(denied).toMatchObject({ status: "AUTH_FAILED", httpStatus: 401 });
+    expect((denied as { message: string }).message).toMatch(/secret API key/);
     const again = await fetchSovrnOffers({ productName: "Galaxy S26 Ultra", brand: "Samsung" });
     expect(again.status).toBe("OK");
   });

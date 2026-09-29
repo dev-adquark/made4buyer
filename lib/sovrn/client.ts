@@ -18,7 +18,7 @@ export type SovrnFetchOutcome =
   | { status: "OK"; offers: NormalizedOffer[]; cacheId: string; fromCache: boolean; queryKey: string }
   | { status: "EMPTY"; offers: NormalizedOffer[]; cacheId: string; fromCache: boolean; queryKey: string }
   | { status: "UNAVAILABLE"; reason: string; queryKey: string }
-  | { status: "TIMEOUT" | "PROVIDER_ERROR" | "INVALID_RESPONSE"; message: string; httpStatus?: number; cacheId?: string; queryKey: string };
+  | { status: "TIMEOUT" | "PROVIDER_ERROR" | "AUTH_FAILED" | "INVALID_RESPONSE"; message: string; httpStatus?: number; cacheId?: string; queryKey: string };
 
 export function sovrnConfigured(): boolean {
   return Boolean(config.sovrn.apiUrl() && config.sovrn.apiKey());
@@ -83,10 +83,16 @@ export async function fetchSovrnOffers(query: OfferQuery, opts: { bypassCache?: 
 
   if (!result.ok) {
     const timeout = result.error?.kind === "TIMEOUT";
-    const message = result.error?.message ?? `Sovrn HTTP ${result.status}`;
-    const cacheId = await record({ providerStatus: timeout ? "TIMEOUT" : "ERROR", httpStatus: result.status || undefined, errorMessage: message, expiresAt: new Date(now.getTime() + 5 * 60_000) });
+    // 401/403 means the credential itself is wrong (e.g. the public site key used as the secret):
+    // not a temporary provider problem, so it is reported separately and not retried.
+    const auth = result.status === 401 || result.status === 403;
+    const message = auth
+      ? `Sovrn rejected the credentials (HTTP ${result.status}). Check SOVRN_API_KEY is the secret API key, not the public site key.`
+      : result.error?.message ?? `Sovrn HTTP ${result.status}${isRetryableStatus(result.status) ? " (temporary)" : ""}`;
+    const providerStatus = timeout ? "TIMEOUT" : auth ? "AUTH_FAILED" : "ERROR";
+    const cacheId = await record({ providerStatus, httpStatus: result.status || undefined, errorMessage: message, expiresAt: new Date(now.getTime() + 5 * 60_000) });
     log.warn("sovrn request failed", { stage: "OFFER_MATCHING", queryKey, status: result.status, attempts, error: message });
-    return { status: timeout ? "TIMEOUT" : "PROVIDER_ERROR", message, httpStatus: result.status || undefined, cacheId, queryKey };
+    return { status: timeout ? "TIMEOUT" : auth ? "AUTH_FAILED" : "PROVIDER_ERROR", message, httpStatus: result.status || undefined, cacheId, queryKey };
   }
 
   let payload: unknown;
