@@ -22,6 +22,7 @@ const LINKS: Array<[string, string]> = [
   ["/admin/failures", "Failures"],
   ["/admin/audit", "Audit log"],
   ["/admin/gsc", "Search Console"],
+  ["/admin/go-live", "Go-live checks"],
 ];
 
 export default function AdminNav({ email }: { email: string }) {

@@ -106,6 +106,8 @@ mismatch.
 
 ## 5. After deploying
 
+For the first real-data run, follow [GO_LIVE.md](GO_LIVE.md) (Admin → Go-live checks first).
+
 ```bash
 curl https://<site>/api/health                 # {"status":"ok","database":"ok",…}
 AUDIT_BASE_URL=https://<site> npm run audit     # core routes, sitemap, robots, health, internal links

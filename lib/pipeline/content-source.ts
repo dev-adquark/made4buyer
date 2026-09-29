@@ -50,6 +50,19 @@ function nextPage(payload: unknown, current: URL): URL | undefined {
   }
 }
 
+/** Request headers for the Content API (auth header/scheme are configurable). Server-side only. */
+export function contentApiHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const key = config.contentApi.key();
+  if (key) {
+    const header = config.contentApi.authHeader();
+    headers[header] = header.toLowerCase() === "authorization" ? `${config.contentApi.authScheme()} ${key}`.trim() : key;
+  }
+  return headers;
+}
+
+export { extractItems as extractContentItems, nextPage as nextContentPage };
+
 export async function fetchContentBatch(): Promise<FetchedBatch> {
   const url = config.contentApi.url();
   if (!url) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "CONTENT_API_URL is not configured (BLOCKED_BY_ENVIRONMENT)");
@@ -59,12 +72,7 @@ export async function fetchContentBatch(): Promise<FetchedBatch> {
   } catch {
     throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "CONTENT_API_URL is not a valid URL");
   }
-  const headers: Record<string, string> = { Accept: "application/json" };
-  const key = config.contentApi.key();
-  if (key) {
-    const header = config.contentApi.authHeader();
-    headers[header] = header.toLowerCase() === "authorization" ? `${config.contentApi.authScheme()} ${key}`.trim() : key;
-  }
+  const headers = contentApiHeaders();
 
   const items: unknown[] = [];
   let pages = 0;

@@ -227,7 +227,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
 });
 
 test("no dead links and no dead buttons", async () => {
-  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc"];
+  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc", "/admin/go-live"];
   const hrefs = new Set<string>();
   for (const p of pages) {
     const res = await page.goto(p);
@@ -380,6 +380,21 @@ test("visual QA screenshots at seven viewports", async ({ browser }, info) => {
     }
     await v.close();
   }
+});
+
+test("go-live checks run read-only probes and report honestly", async () => {
+  await page.goto("/admin/go-live");
+  await page.getByLabel("Product to test offers and images with").fill("Pixel 10");
+  await page.getByRole("button", { name: "Run checks" }).click();
+  await expect(page.getByRole("heading", { name: /Last run/ })).toBeVisible();
+  const row = (name: string) => page.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
+  await expect(row("contentApi")).toContainText("OK");
+  await expect(row("sovrn")).toContainText("OK");
+  await expect(row("database")).toContainText("OK");
+  // The test-only loopback flag is flagged, and unconfigured GSC is blocked, not "failed".
+  await expect(row("environment")).toContainText("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS");
+  await expect(row("gsc")).toContainText("BLOCKED_BY_ENVIRONMENT");
+  await expect(page.locator("body")).not.toContainText(/e2e-sovrn|test-ktb-key|e2e-cron-secret/);
 });
 
 test("AI guide: generate, editor approval gate, publish with disclosure", async () => {

@@ -27,7 +27,8 @@
     "legacy:import": "tsx scripts/import-legacy.ts",
     "audit": "node scripts/audit-site.mjs",
     "dev:stubs": "tsx scripts/dev-stubs.ts",
-    "db:copy": "tsx scripts/copy-database.ts"
+    "db:copy": "tsx scripts/copy-database.ts",
+    "live:check": "tsx scripts/live-check.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
