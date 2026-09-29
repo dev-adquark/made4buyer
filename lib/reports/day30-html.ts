@@ -38,6 +38,7 @@ table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px
 .muted{color:#68737e}.flag{font-weight:700}
 </style></head><body><main>
 <h1>Day-30 Success Report</h1>
+<p class="flag" style="padding:8px 12px;border-radius:8px;background:${r.dataClassification?.label === "PRODUCTION" ? "#dff5ea;color:#086b43" : "#fff0d4;color:#8f4e00"}">Data: ${esc(r.dataClassification?.label ?? "UNLABELLED (report generated before data labelling)")}${r.dataClassification?.reasons.length ? ` (${esc(r.dataClassification.reasons.join("; "))})` : ""}</p>
 <p class="muted">Period ${esc(r.period.start)} → ${esc(r.period.end)} · generated ${esc(r.generatedAt)} · commit ${esc(r.environment.commit ?? "unknown")} · ${esc(r.environment.environment)}</p>
 <p class="muted">All values are computed from persisted records. Integrations without credentials are reported as BLOCKED_BY_ENVIRONMENT / NOT_AVAILABLE_IN_ENVIRONMENT, not as zero.</p>
 ${grid("Integration status", ["Integration", "State"], integrations, "")}

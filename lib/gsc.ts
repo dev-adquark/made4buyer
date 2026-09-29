@@ -92,3 +92,26 @@ export async function inspectUrl(url: string): Promise<InspectionResult> {
   const verdict = status?.verdict === "PASS" ? "INDEXED" : status?.verdict === "FAIL" || status?.verdict === "NEUTRAL" ? "NOT_INDEXED" : "UNKNOWN";
   return { verdict, coverageState: status?.coverageState, lastCrawlTime: status?.lastCrawlTime ? new Date(status.lastCrawlTime) : undefined };
 }
+
+export type GscAccess = { ok: true; siteUrl: string; permissionLevel: string } | { ok: false; reason: string; httpStatus?: number };
+
+/**
+ * Confirms the service account can read the configured property (sites.get). 403 means the
+ * service account has not been added to the property; 404 means GSC_SITE_URL doesn't match.
+ */
+export async function checkGscAccess(): Promise<GscAccess> {
+  const site = config.gsc.siteUrl();
+  if (!site || !config.gsc.serviceAccountJson()) return { ok: false, reason: "GSC_SITE_URL / GSC_SERVICE_ACCOUNT_JSON not configured (NOT_AVAILABLE_IN_ENVIRONMENT)" };
+  let token: string;
+  try {
+    token = await accessToken();
+  } catch (error) {
+    return { ok: false, reason: `authentication failed: ${(error as Error).message}` };
+  }
+  const res = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(site)}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15000) });
+  if (res.status === 403) return { ok: false, httpStatus: 403, reason: "the service account has no access to this property: add its client_email as a user in Search Console" };
+  if (res.status === 404) return { ok: false, httpStatus: 404, reason: `property ${site} not found: GSC_SITE_URL must match the property exactly (e.g. sc-domain:example.com)` };
+  if (!res.ok) return { ok: false, httpStatus: res.status, reason: `Search Console returned HTTP ${res.status}` };
+  const data = (await res.json()) as { siteUrl?: string; permissionLevel?: string };
+  return { ok: true, siteUrl: data.siteUrl ?? site, permissionLevel: data.permissionLevel ?? "unknown" };
+}

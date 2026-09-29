@@ -60,8 +60,10 @@ export async function buildDay30Report(window: Window = defaultWindow(30)) {
   } else {
     const checks = await db.searchIndexCheck.findMany({ where: { checkedAt: w, verdict: { in: ["INDEXED", "NOT_INDEXED"] } }, orderBy: { checkedAt: "desc" }, distinct: ["url"], select: { verdict: true } });
     const indexed = checks.filter((c) => c.verdict === "INDEXED").length;
+    // UNKNOWN verdicts and failed inspections are "unavailable", never counted as not indexed.
+    const unavailable = await db.searchIndexCheck.count({ where: { checkedAt: w, verdict: { in: ["UNKNOWN", "ERROR"] } } });
     seo = checks.length
-      ? { status: "OK", inspectedUrls: checks.length, publishedReviews: published, indexed, notIndexed: checks.length - indexed, indexingPercentage: pct(indexed, checks.length) }
+      ? { status: "OK", inspectedUrls: checks.length, publishedReviews: published, indexed, notIndexed: checks.length - indexed, unavailable, indexingPercentage: pct(indexed, checks.length) }
       : { status: INSUFFICIENT_DATA, inspectedUrls: 0, note: "Search Console is configured but no URL inspections ran in this window (see /api/cron/inspect-index)." };
   }
 
@@ -71,11 +73,14 @@ export async function buildDay30Report(window: Window = defaultWindow(30)) {
 
   const integrations = integrationStatus();
   const release = releaseInfo();
+  const sources = await db.ingestionRun.groupBy({ by: ["source"], where: { startedAt: w }, _count: { _all: true } });
+  const dataClassification = classifyData(sources.map((x) => x.source));
 
   return {
     reportType: "DAY_30_SUCCESS_REPORT",
     generatedAt: new Date().toISOString(),
     period: { start: window.start.toISOString(), end: window.end.toISOString() },
+    dataClassification,
     environment: { ...release, integrations },
     ingestion: {
       runs: runs._count._all,
@@ -154,4 +159,19 @@ export async function generateDay30Report(opts: { actor: string; window?: Window
     data: { periodStart: new Date(report.period.start), periodEnd: new Date(report.period.end), generatedBy: opts.actor, json: report as unknown as Prisma.InputJsonValue, html },
   });
   return { id: row.id, report, html };
+}
+
+const TEST_SOURCE = /sample|fixture|stub|e2e|test|localhost|127\.0\.0\.1/i;
+
+/**
+ * Labels the report's data honestly: PRODUCTION only when it ran in the production deployment
+ * and every content source in the window is a real feed; anything else is SAMPLE_OR_TEST.
+ */
+export function classifyData(sources: string[], env = process.env.VERCEL_ENV) {
+  const testSources = sources.filter((x) => TEST_SOURCE.test(x));
+  const reasons: string[] = [];
+  if (env !== "production") reasons.push(`generated outside the production deployment (VERCEL_ENV=${env ?? "unset"})`);
+  if (testSources.length) reasons.push(`sample/test content sources: ${testSources.join(", ")}`);
+  if (!sources.length) reasons.push("no ingestion runs in this window");
+  return { label: reasons.length ? ("SAMPLE_OR_TEST" as const) : ("PRODUCTION" as const), sources, reasons };
 }
