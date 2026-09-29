@@ -28,7 +28,7 @@ Either an array of items, or an object containing one of `items`, `results`, `da
 | `summary` (`excerpt`, `description`, `dek`, `subtitle`) | no | Derived from the first sentences of the body when missing |
 | `url` (`sourceUrl`, `source_url`, `link`, `permalink`) | no | Absolute http(s) URL |
 | `canonicalUrl` (`canonical_url`, `canonical`) | no | Used for dedupe; defaults to `url` |
-| `publishedAt` (`published_at`, `datePublished`, `pubDate`, `date`, `published`) | no | ISO-8601 or epoch; drives the dedupe date bucket |
+| `publishedAt` (`published_at`, `datePublished`, `pubDate`, `date`, `published`) | required to publish a review | ISO-8601 or epoch; drives the dedupe date bucket, "latest" ordering and the date shown on pages. A value that can't be parsed, is more than 24 h in the future, or is before 1990 isolates the item as `CONTENT_SCHEMA_INVALID`. A review without it is held in QA (`PUBLICATION_DATE_MISSING`); we never guess a date. |
 | `productName` (`product_name`, `product.name`, `product`) | recommended | Raises entity confidence to 0.95 |
 | `brand` (`product.brand`, `manufacturer`) | recommended | |
 | `category` (`section`, `product.category`) | recommended | Matched against the taxonomy aliases |

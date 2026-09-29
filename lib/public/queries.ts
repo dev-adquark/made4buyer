@@ -9,6 +9,12 @@ import { CATEGORIES } from "@/lib/taxonomy/definitions";
 export const BRAND_PAGE_MIN_REVIEWS = 2;
 export const TRENDING_MIN_VIEWS = 5;
 
+/**
+ * "Latest" means latest from the source: order by the source's publication date, then by when
+ * we published. Old reviews ingested today never jump ahead of genuinely new ones.
+ */
+export const LATEST_FIRST = [{ sourcePublishedAt: { sort: "desc", nulls: "last" } }, { publishedAt: "desc" }, { id: "asc" }] satisfies Prisma.NormalizedReviewOrderByWithRelationInput[];
+
 export const VERIFIED_LINK = { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } satisfies Prisma.AffiliateLinkWhereInput;
 
 export const cardSelect = {
@@ -23,6 +29,7 @@ export const cardSelect = {
   categorySlug: true,
   subcategorySlug: true,
   publishedAt: true,
+  sourcePublishedAt: true,
   images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true } },
   // Only a VERIFIED_OK link on a matched offer counts as a verified offer.
   affiliateLinks: { where: VERIFIED_LINK, take: 1, select: { id: true } },
@@ -41,7 +48,7 @@ export const categoryCounts = cache(async () => {
 });
 
 export async function latestReviews(take = 9) {
-  return db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: { publishedAt: "desc" }, take, select: cardSelect });
+  return db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, take, select: cardSelect });
 }
 
 /** Related reviews: same subcategory first, then same category, then same brand. Deterministic order. */
@@ -54,7 +61,7 @@ export async function relatedReviews(review: { id: string; categorySlug: string 
   if (review.brandSlug) tiers.push({ brandSlug: review.brandSlug });
   for (const where of tiers) {
     if (out.length >= take) break;
-    const rows = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", id: { notIn: [...seen] }, ...where }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take: take - out.length, select: cardSelect });
+    const rows = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", id: { notIn: [...seen] }, ...where }, orderBy: LATEST_FIRST, take: take - out.length, select: cardSelect });
     for (const r of rows) {
       seen.add(r.id);
       out.push(r);
@@ -91,7 +98,7 @@ export async function searchReviews(q: string, take = 30) {
         ],
       })),
     },
-    orderBy: { publishedAt: "desc" },
+    orderBy: LATEST_FIRST,
     take: 100,
     select: cardSelect,
   });
@@ -109,7 +116,7 @@ export function hasVerifiedOffer(r: ReviewCard): boolean {
 export async function publishedReviews(page: number, pageSize = 24) {
   const [total, rows] = await Promise.all([
     db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
-    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
+    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
   ]);
   return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
 }
@@ -118,7 +125,7 @@ export async function publishedReviews(page: number, pageSize = 24) {
 export async function reviewsWithDeals(take = 24, categorySlug?: string) {
   return db.normalizedReview.findMany({
     where: { status: "PUBLISHED", ...(categorySlug ? { categorySlug } : {}), affiliateLinks: { some: VERIFIED_LINK } },
-    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+    orderBy: LATEST_FIRST,
     take,
     select: cardSelect,
   });
@@ -156,13 +163,13 @@ export const publishedGuides = cache(async (page = 1, pageSize = 24) => {
   const where = { status: "PUBLISHED", kind: "AI_GUIDE" } satisfies Prisma.NormalizedReviewWhereInput;
   const [total, rows] = await Promise.all([
     db.normalizedReview.count({ where }),
-    db.normalizedReview.findMany({ where, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
+    db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
   ]);
   return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
 });
 
 export async function latestByKind(kind: "REVIEW" | "AI_GUIDE", take = 6, categorySlug?: string) {
-  return db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind, ...(categorySlug ? { categorySlug } : {}) }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take, select: cardSelect });
+  return db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind, ...(categorySlug ? { categorySlug } : {}) }, orderBy: LATEST_FIRST, take, select: cardSelect });
 }
 
 /** One row per verified offer (VERIFIED_OK link on a matched offer) of a published review. */
@@ -324,7 +331,7 @@ export async function searchGroups(q: string): Promise<SearchGroups> {
 
 /** Two recent published products from the same category, with the facts we actually store. */
 export async function comparePair() {
-  const recent = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind: "REVIEW", categorySlug: { not: null } }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take: 24, select: { id: true, categorySlug: true } });
+  const recent = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind: "REVIEW", categorySlug: { not: null } }, orderBy: LATEST_FIRST, take: 24, select: { id: true, categorySlug: true } });
   const seen = new Map<string, string>();
   let pair: [string, string] | null = null;
   for (const r of recent) {

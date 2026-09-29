@@ -18,7 +18,9 @@ export function KindPill({ kind }: { kind: string }) {
 export default function ReviewCard({ review, headingLevel = 3, eager = false, variant }: { review: Card; headingLevel?: 2 | 3; eager?: boolean; variant?: "feature" | "compact" }) {
   const img = cardImage(review);
   const Heading = headingLevel === 2 ? "h2" : "h3";
-  const published = date(review.publishedAt);
+  // Show when the source published it, not when we did: old reviews never look new.
+  const shown = review.sourcePublishedAt ?? review.publishedAt;
+  const published = date(shown);
   return (
     <Tilt className={`review-card${variant ? ` ${variant}` : ""}`} max={4} style={themeStyle(review.categorySlug) as React.CSSProperties}>
       <Link href={`/review/${review.slug}`}>
@@ -37,7 +39,7 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
           <p className="summary">{review.summary}</p>
           <div className="foot">
             <span>{review.brand ?? review.productName}</span>
-            {published && <time dateTime={review.publishedAt!.toISOString()}>{published}</time>}
+            {published && <time dateTime={shown!.toISOString()}>{published}</time>}
           </div>
         </div>
       </Link>

@@ -130,6 +130,22 @@ const schema = z.object({
   generation: z.record(z.unknown()).optional(),
 });
 
+/** Publication dates may run ahead of our clock by this much (time zones, scheduled posts). */
+export const FUTURE_DATE_TOLERANCE_MS = 24 * 3_600_000;
+const EARLIEST_PLAUSIBLE = Date.UTC(1990, 0, 1);
+
+/**
+ * A supplied but unparseable, future or implausibly old publication date isolates the item:
+ * we never guess a date, and never let a bad one make old content look new.
+ */
+export function publicationDateIssues(parsed: Date | undefined, raw: unknown, now = Date.now()): string[] {
+  if (raw === undefined) return [];
+  if (!parsed) return [`publishedAt: could not be parsed (${String(raw).slice(0, 40)})`];
+  if (parsed.getTime() > now + FUTURE_DATE_TOLERANCE_MS) return [`publishedAt: ${parsed.toISOString()} is in the future`];
+  if (parsed.getTime() < EARLIEST_PLAUSIBLE) return [`publishedAt: ${parsed.toISOString()} is implausibly old`];
+  return [];
+}
+
 export function validateContentItem(input: unknown): ValidationResult {
   if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, issues: ["item must be a JSON object"] };
   const raw = input as Raw;
@@ -176,11 +192,12 @@ export function validateContentItem(input: unknown): ValidationResult {
     candidate.ratingScale = undefined;
   }
   const parsed = schema.safeParse(candidate);
-  if (!parsed.success) {
+  const dateIssues = publicationDateIssues(candidate.publishedAt, pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"]));
+  if (!parsed.success || dateIssues.length) {
     return {
       ok: false,
       sourceId: sourceIdRaw,
-      issues: parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`),
+      issues: [...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`)), ...dateIssues],
     };
   }
   return { ok: true, value: parsed.data };

@@ -5,7 +5,7 @@ import JsonLd from "@/components/json-ld";
 import { ReviewGrid } from "@/components/review-card";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { brandPageEligible, cardSelect } from "@/lib/public/queries";
+import { brandPageEligible, cardSelect, LATEST_FIRST } from "@/lib/public/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ async function load(slug: string) {
   if (!/^[a-z0-9-]{1,60}$/.test(slug)) return null;
   const { eligible } = await brandPageEligible(slug);
   if (!eligible) return null;
-  const reviews = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", brandSlug: slug }, orderBy: { publishedAt: "desc" }, take: 60, select: cardSelect });
+  const reviews = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", brandSlug: slug }, orderBy: LATEST_FIRST, take: 60, select: cardSelect });
   return { brand: reviews[0]?.brand ?? slug, reviews };
 }
 

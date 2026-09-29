@@ -4,6 +4,7 @@ import CompareSelector from "@/components/compare-selector";
 import CompareTable, { type CompareColumn, type CompareSection } from "@/components/compare-table";
 import TrackOnce from "@/components/track-once";
 import { db } from "@/lib/db";
+import { LATEST_FIRST } from "@/lib/public/queries";
 import { placeholderPath, publicImageUrl } from "@/lib/pipeline/images";
 import { verifiedDeals } from "@/lib/pipeline/render-model";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
@@ -32,7 +33,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
           },
         })
       : Promise.resolve([]),
-    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: { publishedAt: "desc" }, take: 60, select: { id: true, slug: true, canonicalTitle: true, productName: true, brand: true, categorySlug: true } }),
+    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, take: 60, select: { id: true, slug: true, canonicalTitle: true, productName: true, brand: true, categorySlug: true } }),
   ]);
   const selected = ids.map((id) => selectedRaw.find((r) => r.id === id)).filter((r): r is (typeof selectedRaw)[number] => Boolean(r));
   const deals = await Promise.all(selected.map((r) => verifiedDeals(r.id)));

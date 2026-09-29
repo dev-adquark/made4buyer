@@ -27,6 +27,9 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   if (review.kind === "AI_GUIDE" && !review.editorApprovedAt) {
     failures.push({ code: "AI_GUIDE_NEEDS_EDITOR_APPROVAL", message: "AI-assisted guide must be read and approved by an editor before publishing" });
   }
+  if (review.kind === "REVIEW" && !review.sourcePublishedAt) {
+    failures.push({ code: "PUBLICATION_DATE_MISSING", message: "The source did not supply a publication date. Fix it in the Content API: we never guess a date" });
+  }
   if (review.status === "REJECTED") failures.push({ code: "REVIEW_REJECTED", message: "Review is rejected; restore it first" });
   if (review.canonicalTitle.length < 8) failures.push({ code: "TITLE_TOO_SHORT", message: "Title must be at least 8 characters" });
   if (review.summary.length < 20) failures.push({ code: "SUMMARY_TOO_SHORT", message: "Summary must be at least 20 characters" });

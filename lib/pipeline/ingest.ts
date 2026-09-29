@@ -212,7 +212,10 @@ export type IngestSummary = {
 
 /** Processes items still INGESTED (from this or previous runs), bounded by INGEST_MAX_ITEMS_PER_RUN. */
 export async function processPendingItems(c: IngestCounters, runId?: string, limit = config.ingest.maxItemsPerRun()) {
-  const pending = await db.contentItem.findMany({ where: { processingStatus: "INGESTED" }, orderBy: { fetchedAt: "asc" }, take: limit, select: { id: true } });
+  // Pick the most recently published backlog first (latest content wins a limited run), then
+  // process that batch oldest-first so the original publication, not a later copy, is canonical.
+  const picked = await db.contentItem.findMany({ where: { processingStatus: "INGESTED" }, orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { fetchedAt: "asc" }, { id: "asc" }], take: limit, select: { id: true, publishedAt: true } });
+  const pending = [...picked].sort((a, b) => (a.publishedAt?.getTime() ?? Infinity) - (b.publishedAt?.getTime() ?? Infinity));
   await mapLimit(pending, Number(process.env.INGEST_CONCURRENCY ?? 4) || 4, (p) => processContentItem(p.id, c, runId));
   return db.contentItem.count({ where: { processingStatus: "INGESTED" } });
 }

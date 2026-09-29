@@ -6,7 +6,7 @@ import CategoryIcon from "@/components/category-icon";
 import EmptyState from "@/components/empty-state";
 import { ReviewGrid } from "@/components/review-card";
 import { db } from "@/lib/db";
-import { cardSelect, categoryCounts, facetCounts } from "@/lib/public/queries";
+import { cardSelect, categoryCounts, facetCounts, LATEST_FIRST } from "@/lib/public/queries";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
@@ -66,7 +66,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
   let relaxed: Step[] = [];
   if (!current && category) {
     for (const drop of [[], ["tier"], ["tier", "platform"], ["tier", "platform", "intent"]] as Step[][]) {
-      results = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", ...whereFor(category.slug, picks, drop) }, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take: 12, select: cardSelect });
+      results = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", ...whereFor(category.slug, picks, drop) }, orderBy: LATEST_FIRST, take: 12, select: cardSelect });
       if (results.length) {
         relaxed = drop.filter((d) => picks[d] && picks[d] !== "any");
         break;

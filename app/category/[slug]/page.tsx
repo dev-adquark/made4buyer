@@ -13,7 +13,7 @@ import SponsoredSlot from "@/components/sponsored-slot";
 import TrackOnce from "@/components/track-once";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { cardSelect, categoryCounts, facetCounts, latestByKind, trendingReviews, verifiedDealRows } from "@/lib/public/queries";
+import { cardSelect, categoryCounts, facetCounts, latestByKind, trendingReviews, verifiedDealRows, LATEST_FIRST } from "@/lib/public/queries";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
@@ -75,7 +75,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
   const [total, reviews, facets, counts, guides, deals, trending] = await Promise.all([
     db.normalizedReview.count({ where }),
-    db.normalizedReview.findMany({ where, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, select: cardSelect }),
+    db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, select: cardSelect }),
     facetCounts({ categorySlug: slug }),
     categoryCounts(),
     anyFilter ? Promise.resolve([]) : latestByKind("AI_GUIDE", 3, slug),

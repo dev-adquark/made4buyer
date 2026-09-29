@@ -42,7 +42,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: m.title,
     description: m.metaDescription,
     alternates: { canonical: m.canonicalPath },
-    openGraph: { type: "article", title: m.title, description: m.metaDescription, url: m.canonicalPath, images, publishedTime: m.publishedAt ?? undefined, modifiedTime: m.updatedAt },
+    openGraph: { type: "article", title: m.title, description: m.metaDescription, url: m.canonicalPath, images, publishedTime: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined, modifiedTime: m.updatedAt },
     twitter: { card: images.length ? "summary_large_image" : "summary", title: m.title, description: m.metaDescription, images: images.map((i) => i.url) },
   };
 }
@@ -63,7 +63,7 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       reviewRating: { "@type": "Rating", ratingValue: m.rating.value, bestRating: m.rating.scale, worstRating: 0 },
       author: m.source.author ? { "@type": "Person", name: m.source.author } : { "@type": "Organization", name: m.source.name },
       publisher,
-      datePublished: m.publishedAt ?? undefined,
+      datePublished: m.source.publishedAt ?? m.publishedAt ?? undefined,
     });
   } else {
     out.push({
@@ -74,7 +74,7 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       url,
       mainEntityOfPage: url,
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
-      datePublished: m.publishedAt ?? undefined,
+      datePublished: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
       dateModified: m.updatedAt,
       ...(m.kind === "AI_GUIDE" ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
       publisher,
@@ -115,6 +115,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const best = deals.find((d) => d.isBest) ?? deals[0];
   const alternates = deals.filter((d) => d !== best);
   const published = m.publishedAt ? new Date(m.publishedAt) : null;
+  const sourceDate = m.source.publishedAt ? new Date(m.source.publishedAt) : null;
   const fact = (label: string) => m.keyEntities.find((e) => e.label === label)?.value ?? null;
   const specs: Array<[string, string | null]> = [
     ["Brand", m.brand ?? fact("Brand")],
@@ -155,12 +156,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <p className="small muted">
               {m.brand ? `${m.brand} ` : ""}
               {m.productName}
-              {published && (
-                <>
-                  {isGuide ? ", published " : ", reviewed "}
-                  <time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
-                </>
-              )}
+              {isGuide
+                ? published && (
+                    <>
+                      , published <time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
+                    </>
+                  )
+                : sourceDate && (
+                    <>
+                      , reviewed by {m.source.name} on <time dateTime={sourceDate.toISOString()}>{sourceDate.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
+                    </>
+                  )}
               {m.rating && `. Rated ${m.rating.value} out of ${m.rating.scale} by ${m.source.name}`}
             </p>
             <div className="btnrow">
@@ -215,7 +221,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   m.source.name
                 )}
                 {m.source.author ? `, by ${m.source.author}` : ""}
-                {m.source.publishedAt ? `, originally published ${shortDate(m.source.publishedAt)}` : ""}.
+                {m.source.publishedAt ? `, originally published ${shortDate(m.source.publishedAt)}` : ""}
+                {published ? `; added to Made4Buyers ${shortDate(published)}` : ""}.
               </p>
             )}
           </section>
