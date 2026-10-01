@@ -48,3 +48,16 @@ describe("log redaction", () => {
     expect(JSON.stringify(out)).not.toContain("u:pw");
   });
 });
+
+describe("Sovrn key safety", () => {
+  it("never exposes a site key that equals the secret API key", async () => {
+    const { config } = await import("@/lib/config");
+    const r = withEnv({ SOVRN_SITE_KEY: "secret-value-123456", SOVRN_API_KEY: "secret-value-123456" });
+    expect(config.sovrn.siteKey()).toBeUndefined();
+    expect(config.sovrn.siteKeyIsSecret()).toBe(true);
+    r();
+    const ok = withEnv({ SOVRN_SITE_KEY: "public-site-key", SOVRN_API_KEY: "different-secret" });
+    expect(config.sovrn.siteKey()).toBe("public-site-key");
+    ok();
+  });
+});

@@ -33,7 +33,7 @@ function environment() {
   const set = Object.fromEntries(names.map((n) => [n, Boolean(process.env[n])]));
   const problems: string[] = [];
   const secret = process.env.SOVRN_API_KEY;
-  if (secret && secret === process.env.SOVRN_SITE_KEY) problems.push("SOVRN_API_KEY equals SOVRN_SITE_KEY: the secret API key and the public site key are different credentials");
+  if (secret && secret === process.env.SOVRN_SITE_KEY) problems.push("SOVRN_SITE_KEY holds the SECRET key. It must be the public site key; the site key is disabled until fixed, and the secret should be regenerated in Sovrn");
   for (const n of Object.keys(process.env)) if (n.startsWith("NEXT_PUBLIC_") && /KEY|SECRET|TOKEN|PASSWORD/i.test(n)) problems.push(`${n} would be exposed to the browser`);
   if (process.env.UNSAFE_ALLOW_LOOPBACK_FOR_TESTS === "true") problems.push("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS is on (tests only)");
   add("environment", problems.length ? "FAIL" : "OK", { set, problems });

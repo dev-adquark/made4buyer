@@ -75,7 +75,16 @@ export const config = {
       const v = (str("SOVRN_SITE_STATUS") ?? "").toUpperCase();
       return v === "PENDING" || v === "APPROVED" || v === "DENIED" ? v : "UNKNOWN";
     },
-    siteKey: () => str("SOVRN_SITE_KEY"),
+    /**
+     * PUBLIC site key (goes into browser script and redirect links). Returns nothing if it is
+     * the same value as the secret API key: a mixed-up variable must never leak the secret.
+     */
+    siteKey: () => {
+      const site = str("SOVRN_SITE_KEY");
+      return site && site === str("SOVRN_API_KEY") ? undefined : site;
+    },
+    /** True when SOVRN_SITE_KEY holds the secret key (reported by go-live checks and health). */
+    siteKeyIsSecret: () => Boolean(str("SOVRN_SITE_KEY") && str("SOVRN_SITE_KEY") === str("SOVRN_API_KEY")),
     linkWrapperUrl: () => str("SOVRN_LINK_WRAPPER_URL") ?? "https://redirect.viglink.com",
     timeoutMs: () => num("SOVRN_TIMEOUT_MS", 12000, 1000, 60000),
     cacheTtlMinutes: () => num("SOVRN_CACHE_TTL_MINUTES", 360, 5, 7 * 24 * 60),
