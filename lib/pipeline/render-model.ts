@@ -41,6 +41,8 @@ export type PageRenderModel = {
   priceTier: { slug: string; name: string } | null;
   summary: string;
   bodyParagraphs: string[];
+  /** Older persisted models have no value: treat as FULL (licensed feed or our own guide). */
+  textRights?: "FULL" | "EXCERPT";
   image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean };
   keyEntities: Array<{ label: string; value: string }>;
   rating: { value: number; scale: number } | null;
@@ -94,10 +96,12 @@ export type RenderInputs = {
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
   image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null } | null | undefined;
   deals: PublicDeal[];
+  /** EXCERPT for scraped third-party sources we may not republish in full. */
+  textRights?: "FULL" | "EXCERPT";
 };
 
 /** Pure composition of the PageRenderModel (shared by the DB builder and the dry-run). */
-export function composeRenderModel({ review, entities: e, assignments, image, deals }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, deals, textRights = "FULL" }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   const pub = publicImageUrl(image, review.categorySlug);
@@ -128,7 +132,9 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     platforms: byType("PLATFORM").map((a) => tag(a)!).slice(0, 4),
     priceTier: tag(byType("PRICE_TIER")[0]),
     summary: review.summary,
-    bodyParagraphs: paragraphs(review.body),
+    // Excerpt-only sources: the full text stays private (used for extraction); the page links out.
+    bodyParagraphs: textRights === "EXCERPT" ? [] : paragraphs(review.body),
+    textRights,
     image: {
       url: pub.url,
       alt: pub.isFallback ? `${categoryName(categorySlug) ?? "Technology"} placeholder illustration` : `${review.productName}${review.brand && !review.productName.startsWith(review.brand) ? ` by ${review.brand}` : ""}`,
@@ -156,7 +162,14 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
       images: { where: { isPrimary: true }, take: 1 },
     },
   });
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id) });
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), textRights: await textRightsFor(review.source) });
+}
+
+/** Scraped sources (apify:<slug>) are excerpt-only unless the source is marked LICENSED. */
+export async function textRightsFor(source: string): Promise<"FULL" | "EXCERPT"> {
+  if (!source.startsWith("apify:")) return "FULL";
+  const row = await db.reviewSource.findUnique({ where: { slug: source.slice("apify:".length) }, select: { rights: true } });
+  return row?.rights === "LICENSED" ? "FULL" : "EXCERPT";
 }
 
 export async function persistPageRenderModel(reviewId: string): Promise<PageRenderModel> {

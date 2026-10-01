@@ -54,7 +54,10 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
   const publisher = { "@type": "Organization", name: "Made4Buyers", url: site };
   const out: unknown[] = [breadcrumbJsonLd(crumbs, site)];
   const product = { "@type": "Product", name: m.productName, ...(m.brand ? { brand: { "@type": "Brand", name: m.brand } } : {}) };
-  if (m.rating) {
+  // Review markup only for text we publish in full; an excerpt page is an article about the
+  // product that cites the original review, never a review of our own.
+  const excerpt = m.textRights === "EXCERPT";
+  if (m.rating && !excerpt) {
     out.push({
       "@context": "https://schema.org",
       "@type": "Review",
@@ -80,6 +83,7 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       ...(m.kind === "AI_GUIDE" ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
       publisher,
       about: { "@type": "Thing", name: m.productName },
+      ...(excerpt && m.source.url ? { isBasedOn: m.source.url, citation: { "@type": "CreativeWork", url: m.source.url, ...(m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}), publisher: { "@type": "Organization", name: m.source.name } } } : {}),
     });
   }
   // Product + Offer only when a verified offer with a real price exists.
@@ -237,6 +241,29 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   {m.source.author ? `Written by ${m.source.author}. ` : ""}We summarise and file it for buyers, and add offers only after checking their links.
                 </div>
               </aside>
+            )}
+            {m.textRights === "EXCERPT" && (
+              <div className="callout" style={{ marginBottom: 26 }}>
+                <span className="label muted">Excerpt</span>
+                <p className="prose" style={{ fontFamily: "var(--f-read)", fontSize: 19, margin: "0 0 10px" }}>
+                  {m.summary}
+                </p>
+                <p style={{ margin: 0 }}>
+                  This is a short excerpt. The full review belongs to {m.source.name}
+                  {m.source.url ? (
+                    <>
+                      :{" "}
+                      <a href={m.source.url} rel="noopener" target="_blank" data-cursor="Read">
+                        read it on {m.source.name}
+                        <span className="visually-hidden"> (opens in a new tab)</span>
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    "."
+                  )}
+                </p>
+              </div>
             )}
             <div className="prose">
               {m.bodyParagraphs.map((p, i) => (
