@@ -86,6 +86,14 @@ describe("Apify scrape → collect → ingestion", () => {
     none();
   });
 
+  it("names the one-time actor permission approval instead of a generic auth failure", async () => {
+    await addSource();
+    const r = withEnv({ APIFY_MEMORY_MB: "999" });
+    const res = await runScrapeSources("test");
+    r();
+    expect(res.results?.[0]).toMatchObject({ status: "APIFY_ACTOR_NOT_APPROVED", reason: expect.stringContaining("approvePermissions=true") });
+  });
+
   it("only crawls enabled sources", async () => {
     await addSource({ enabled: false });
     expect(await runScrapeSources("test")).toMatchObject({ started: 0 });

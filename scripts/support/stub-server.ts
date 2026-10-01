@@ -56,6 +56,9 @@ export async function startStubServer(opts: StubOptions = {}) {
         const properties = Object.fromEntries(["startUrls", "linkSelector", "globs", "maxCrawlingDepth", "maxPagesPerCrawl", "maxConcurrency", "respectRobotsTxtFile", "injectJQuery", "proxyConfiguration", "pageFunction", "customData"].map((k) => [k, {}]));
         return send(200, { data: { inputSchema: JSON.stringify({ properties }) } });
       }
+      if (/^\/acts\/[^/]+\/runs$/.test(p) && req.method === "POST" && url.searchParams.get("memory") === "999") {
+        return send(403, { error: { type: "full-permission-actor-not-approved", message: "This Actor requires full access to your account.", data: { approvalUrl: "https://console.apify.com/actors/stub?approvePermissions=true" } } });
+      }
       if (/^\/acts\/[^/]+\/runs$/.test(p) && req.method === "POST") {
         let raw = "";
         req.on("data", (c) => (raw += c));

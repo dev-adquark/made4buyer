@@ -16,6 +16,7 @@ export const ERROR_CODES = {
   SOURCE_NOT_ALLOWED: { retryable: false, message: "Page is not on an allowed domain for its source" },
   ROBOTS_DISALLOWED: { retryable: false, message: "robots.txt disallows crawling this start URL" },
   APIFY_NOT_CONFIGURED: { retryable: false, message: "APIFY_API_TOKEN is not configured (BLOCKED_BY_ENVIRONMENT)" },
+  APIFY_ACTOR_NOT_APPROVED: { retryable: false, message: "The Apify account must approve the actor's permissions once in the Apify console" },
   APIFY_AUTH_FAILED: { retryable: false, message: "Apify rejected the API token" },
   APIFY_RUN_FAILED: { retryable: true, message: "The Apify run failed, aborted or timed out" },
   APIFY_EMPTY_DATASET: { retryable: true, message: "The Apify run produced no review pages" },

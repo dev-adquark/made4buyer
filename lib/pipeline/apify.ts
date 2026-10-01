@@ -251,7 +251,17 @@ async function apifyRequest<T>(path: string, init: { method?: "GET" | "POST"; bo
     maxBytes: 30_000_000,
     standardPortsOnly: !config.allowLoopbackForTests(),
   });
-  if (res.status === 401 || res.status === 403) throw new PipelineError("APIFY_AUTH_FAILED", `Apify rejected the token (HTTP ${res.status})`, { status: res.status }, false);
+  if (res.status === 401 || res.status === 403) {
+    let err: { type?: string; message?: string; data?: { approvalUrl?: string } } = {};
+    try {
+      err = (JSON.parse(res.body ?? "") as { error?: typeof err }).error ?? {};
+    } catch {
+      /* non-JSON error */
+    }
+    // The account owner must approve the actor's permissions once in the Apify console.
+    if (err.type === "full-permission-actor-not-approved") throw new PipelineError("APIFY_ACTOR_NOT_APPROVED", `Approve the actor's permissions in Apify first: ${err.data?.approvalUrl ?? "Apify console → Actors"}`, { status: res.status }, false);
+    throw new PipelineError("APIFY_AUTH_FAILED", `Apify rejected the request (HTTP ${res.status}${err.type ? `, ${err.type}` : ""})`, { status: res.status }, false);
+  }
   if (!res.ok) throw new PipelineError("APIFY_RUN_FAILED", `Apify request failed: ${res.error ? res.error.kind : `HTTP ${res.status}`}`, { status: res.status }, true);
   try {
     return JSON.parse(res.body ?? "") as T;
