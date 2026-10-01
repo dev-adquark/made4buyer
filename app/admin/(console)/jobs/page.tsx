@@ -11,6 +11,7 @@ export const metadata = { title: "Jobs & runs" };
 const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   ingest: "Fetch the legacy Content API (skipped when not configured) and run all review stages.",
   "scrape-sources": "Start Apify Web Scraper runs for enabled review sources whose crawl interval has elapsed (robots.txt checked first).",
+  "generate-guides": "Draft original AI-assisted guides for newly reviewed products (topic only, never source text). Needs GUIDE_AUTOGEN_ENABLED=true; capped by KEYWORD_TO_BLOG_DAILY_LIMIT; drafts still need editor approval.",
   "collect-scrapes": "Poll running Apify runs; fetch finished datasets, reject invalid pages with a reason, and ingest the rest into the QA queue.",
   "verify-links": "Re-verify affiliate links that are due (or pending).",
   "revalidate-offers": "Re-query Sovrn for reviews with stale or failed deal data.",

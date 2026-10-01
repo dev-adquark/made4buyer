@@ -48,6 +48,10 @@ export const config = {
     key: () => str("KEYWORD_TO_BLOG_API_KEY"),
     timeoutMs: () => num("KEYWORD_TO_BLOG_TIMEOUT_MS", 270000, 5000, 280000),
     maxWords: () => num("KEYWORD_TO_BLOG_MAX_WORDS", 1200, 300, 4000),
+    /** Draft original guides for newly reviewed products (never auto-approved). Off by default. */
+    autoGenerate: () => bool("GUIDE_AUTOGEN_ENABLED", false),
+    /** Keyword-to-Blog requests per day the auto job may use (plan quota). */
+    dailyLimit: () => num("KEYWORD_TO_BLOG_DAILY_LIMIT", 3, 0, 500),
   },
 
   ingest: {
