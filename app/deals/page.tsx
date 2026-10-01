@@ -3,10 +3,11 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/breadcrumbs";
 import DealLedger from "@/components/deal-ledger";
 import EmptyState from "@/components/empty-state";
+import SectionHeader from "@/components/section-header";
 import { dealMerchants, lapsedOffers, verifiedDealRows } from "@/lib/public/queries";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
-import { shortDate } from "@/lib/util/format";
+import { dateline, shortDate } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Verified deals", description: "Offers on reviewed products whose links we have checked, with the date of the last check.", alternates: { canonical: "/deals" } };
@@ -33,14 +34,17 @@ export default async function Deals({ searchParams }: { searchParams: Promise<Se
 
   return (
     <main style={themeStyle(category) as React.CSSProperties}>
-      <section className="page-hero on-ink">
-        <div className="container">
-          <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Verified deals", href: "/deals" }]} />
-          <h1>Verified deals</h1>
-          <p className="lede">
-            Only offers whose link we followed to the retailer and confirmed. Prices and availability are the retailer’s and can change.
-            {newest ? ` Most recent check: ${shortDate(newest)}.` : ""}
-          </p>
+      <section className="page-hero">
+        <div className="wrap">
+          <div className="ph-top">
+            <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Verified deals", href: "/deals" }]} />
+            <span className="label muted">{newest ? `Last check ${dateline(newest)}` : "No checks yet"}</span>
+          </div>
+          <h1>
+            Real deals.
+            <span style={{ display: "block", fontSize: "0.4em", lineHeight: 0.95, marginTop: "0.14em", fontVariationSettings: "\"wdth\" 88", letterSpacing: "0.005em" }}>Checked before we show them.</span>
+          </h1>
+          <p className="lede">Only offers whose link we followed to the retailer and confirmed. Prices and availability are the retailer’s and can change; every card says when we last checked.</p>
           <form action="/deals" role="search" className="searchbox wide" style={{ maxWidth: 720, marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {category && <input type="hidden" name="category" value={category} />}
             <label htmlFor="deal-q" className="visually-hidden">
@@ -66,7 +70,7 @@ export default async function Deals({ searchParams }: { searchParams: Promise<Se
                 </select>
               </>
             )}
-            <button className="btn light" type="submit">
+            <button className="btn primary" type="submit">
               Show deals
             </button>
           </form>
@@ -89,9 +93,9 @@ export default async function Deals({ searchParams }: { searchParams: Promise<Se
         </div>
       </section>
       <section className="section" aria-labelledby="deal-results">
-        <div className="container">
+        <div className="wrap">
           <div className="result-bar">
-            <h2 id="deal-results" style={{ font: "600 15px var(--font-body)", margin: 0 }} aria-live="polite">
+            <h2 id="deal-results" className="label" style={{ margin: 0 }} aria-live="polite">
               {rows.length === 1 ? "1 verified offer" : `${rows.length} verified offers`}
               {q ? ` matching “${q}”` : ""}
               {merchant ? ` at ${merchant}` : ""}
@@ -105,21 +109,18 @@ export default async function Deals({ searchParams }: { searchParams: Promise<Se
           {rows.length ? (
             <DealLedger rows={rows} />
           ) : (
-            <EmptyState title="No verified offer currently available." action={filtered ? <Link className="btn" href="/deals">Show all deals</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
+            <EmptyState title={filtered ? "No verified offer matches." : "No verified offers yet."} label="Deals" action={filtered ? <Link className="btn" href="/deals">Show all deals</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
               {filtered ? "Nothing matches these filters right now." : "We list an offer only after checking its link. Reviews without a verified offer are still available."}
             </EmptyState>
           )}
         </div>
       </section>
       {lapsed.length > 0 && (
-        <section className="section band" aria-labelledby="lapsed-title">
-          <div className="container">
-            <div className="section-head">
-              <div>
-                <h2 id="lapsed-title">Offers we’ve taken down</h2>
-                <p>These products had an offer that failed its latest check, so we removed it. We’ll show a new one once it’s verified.</p>
-              </div>
-            </div>
+        <section className="section tight" aria-labelledby="lapsed-title">
+          <div className="wrap">
+            <SectionHeader id="lapsed-title" label={`${lapsed.length} removed`} title="Offers we’ve taken down">
+              These products had an offer that failed its latest check, so we removed it. We’ll show a new one once it’s verified.
+            </SectionHeader>
             <ul className="ledger">
               {lapsed.map((r) => (
                 <li key={r.id} style={themeStyle(r.categorySlug) as React.CSSProperties}>

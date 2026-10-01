@@ -24,15 +24,15 @@ export default async function GuidesIndex({ searchParams }: { searchParams: Prom
   const { rows, total, pages } = await publishedGuides(page);
   return (
     <main>
-      <section className="page-hero on-ink">
-        <div className="container">
+      <section className="page-hero">
+        <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Buying guides", href: "/guides" }]} />
           <h1>Buying guides</h1>
           <p className="lede">What to look for before you buy. {total ? `${total === 1 ? "1 guide" : `${total} guides`} published.` : ""}</p>
         </div>
       </section>
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           <aside className="kind-banner ai" aria-label="How guides are written">
             <div>
               <strong>Every guide here is AI-assisted.</strong>

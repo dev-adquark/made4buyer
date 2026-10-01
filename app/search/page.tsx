@@ -22,8 +22,8 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const shortcuts = [...(groups?.categories ?? []).map((c) => ({ key: c.href, href: c.href, label: c.parent ? `${c.name} in ${c.parent}` : c.name, slug: c.slug })), ...(groups?.brands ?? []).map((b) => ({ key: b.href, href: b.href, label: b.name, slug: null as string | null }))];
   return (
     <main>
-      <section className="page-hero on-ink">
-        <div className="container">
+      <section className="page-hero">
+        <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Search", href: "/search" }]} />
           <h1>{q ? `Results for “${q}”` : "Search"}</h1>
           <div style={{ maxWidth: 680 }}>
@@ -40,7 +40,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         </div>
       </section>
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           {shortcuts.length > 0 && (
             <nav aria-labelledby="shortcut-title" style={{ marginBottom: 28 }}>
               <h2 id="shortcut-title" style={{ fontSize: 18 }}>

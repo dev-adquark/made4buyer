@@ -7,8 +7,8 @@ export const metadata: Metadata = { title: "Contact", alternates: { canonical: "
 export default function Contact() {
   const email = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
   return (
-    <main className="section">
-      <div className="container" style={{ maxWidth: 800 }}>
+    <main className="section doc-page">
+      <div className="narrow prose">
         <h1>Contact</h1>
         {email ? (
           <p className="lede">

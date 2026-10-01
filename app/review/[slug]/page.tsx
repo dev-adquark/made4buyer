@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache } from "react";
+import { cache, Fragment } from "react";
 import Breadcrumbs, { breadcrumbJsonLd, type Crumb } from "@/components/breadcrumbs";
 import DealImpression from "@/components/deal-impression";
 import JsonLd from "@/components/json-ld";
 import { KindPill, ReviewGrid } from "@/components/review-card";
+import TrustLabel from "@/components/trust-label";
 import { ParallaxFigure, SectionNav } from "@/components/review-chrome";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { placeholderPath } from "@/lib/pipeline/images";
@@ -14,7 +15,7 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { buildPageRenderModel, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
-import { availabilityLabel, money, shortDate } from "@/lib/util/format";
+import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
 
 export const revalidate = 300;
 
@@ -100,6 +101,16 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
   return out;
 }
 
+/** A verbatim sentence from the text, shown as a pull quote (never written by us). */
+function pullQuote(paragraphs: string[]): { text: string; after: number } | null {
+  if (paragraphs.length < 3) return null;
+  for (let i = 1; i < paragraphs.length - 1; i++) {
+    const sentence = paragraphs[i].match(/[^.!?]+[.!?]/g)?.map((x) => x.trim()).find((x) => x.length >= 60 && x.length <= 180 && !x.startsWith("## "));
+    if (sentence) return { text: sentence, after: Math.min(1, paragraphs.length - 2) };
+  }
+  return null;
+}
+
 export default async function ReviewPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const page = await loadPage(slug);
@@ -126,6 +137,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
     ["Best for", m.intents.map((i) => i.name).join(", ") || fact("Best for")],
     ["Price tier", m.priceTier?.name ?? null],
   ];
+  // Device spec rows we don't extract yet are listed honestly as not available, never guessed.
+  if (m.category && ["laptops", "phones", "tablets"].includes(m.category.slug)) for (const label of ["Processor", "Memory", "Display", "Battery"]) specs.push([label, fact(label)]);
+  const quote = pullQuote(m.bodyParagraphs);
   const considerations = m.category && (m.intents.length > 0 || m.platforms.length > 0 || m.priceTier);
   const sections = [
     { id: "review", label: isGuide ? "Guide" : "Review" },
@@ -141,50 +155,69 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
       {structuredData(m, deals, crumbs).map((d, i) => (
         <JsonLd key={i} data={d} />
       ))}
-      <header className="doc-hero">
-        <div className="container doc-hero-inner">
-          <div>
-            <Breadcrumbs items={crumbs} />
-            <div className="meta-row" style={{ marginBottom: 14 }}>
-              <KindPill kind={m.kind} />
-              {m.category && <span className="pill">{m.category.name}</span>}
-              {m.subcategory && <span className="pill plain">{m.subcategory.name}</span>}
-              {best && <span className="pill verified">Verified offer</span>}
+      <div className="progress-bar" aria-hidden="true" />
+      <header className="article-hero">
+        <div className="wrap">
+          <Breadcrumbs items={crumbs} />
+          <div className="ah-grid">
+            <div>
+              <div className="meta-row">
+                {m.category && <span className="cat-tag">{m.category.name}</span>}
+                <KindPill kind={m.kind} />
+                {best && <TrustLabel kind="verified" />}
+              </div>
+              <h1>{m.title}</h1>
+              <p className="lede">{m.summary}</p>
+              <div className="btnrow">
+                {best ? (
+                  <a className="btn primary" href="#deal" data-cursor="View deal">
+                    {money(best.price, best.currency) ? `See the verified offer, ${money(best.price, best.currency)}` : "See the verified offer"}
+                  </a>
+                ) : null}
+                <Link className="btn" href={`/compare?ids=${review.id}`} data-cursor="Compare">
+                  Compare with others
+                </Link>
+              </div>
             </div>
-            <h1>{m.title}</h1>
-            <p className="lede">{m.summary}</p>
-            <p className="small muted">
-              {m.brand ? `${m.brand} ` : ""}
-              {m.productName}
-              {isGuide
-                ? published && (
-                    <>
-                      , published <time dateTime={published.toISOString()}>{published.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
-                    </>
-                  )
-                : sourceDate && (
-                    <>
-                      , reviewed by {m.source.name} on <time dateTime={sourceDate.toISOString()}>{sourceDate.toLocaleDateString("en-US", { dateStyle: "long" })}</time>
-                    </>
-                  )}
-              {m.rating && `. Rated ${m.rating.value} out of ${m.rating.scale} by ${m.source.name}`}
-            </p>
-            <div className="btnrow">
-              {best ? (
-                <a className="btn primary" href="#deal">
-                  {money(best.price, best.currency) ? `See the verified offer, ${money(best.price, best.currency)}` : "See the verified offer"}
-                </a>
-              ) : null}
-              <Link className="btn" href={`/compare?ids=${review.id}`}>
-                Compare with others
-              </Link>
-            </div>
+            <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} captionUrl={m.image.attributionUrl} />
           </div>
-          <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} captionUrl={m.image.attributionUrl} />
+          <dl className="article-meta">
+            <div>
+              <dt>Product</dt>
+              <dd>
+                {m.brand && !m.productName.startsWith(m.brand) ? `${m.brand} ` : ""}
+                {m.productName}
+              </dd>
+            </div>
+            <div>
+              <dt>{isGuide ? "Written by" : "Source"}</dt>
+              <dd>{isGuide ? "Made4Buyers, AI-assisted" : m.source.author ? `${m.source.name}, ${m.source.author}` : m.source.name}</dd>
+            </div>
+            <div>
+              <dt>{isGuide ? "Published" : "Reviewed"}</dt>
+              <dd>
+                {isGuide ? (
+                  published ? <time dateTime={published.toISOString()}>{dateline(published)}</time> : <span className="na">Not available</span>
+                ) : sourceDate ? (
+                  <time dateTime={sourceDate.toISOString()}>{dateline(sourceDate)}</time>
+                ) : (
+                  <span className="na">Not available</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>Rating</dt>
+              <dd>{m.rating ? `${m.rating.value} / ${m.rating.scale}, by ${m.source.name}` : <span className="na">{isGuide ? "Guides are never rated" : "Not given by the source"}</span>}</dd>
+            </div>
+            <div>
+              <dt>Offer</dt>
+              <dd>{best ? `Verified ${dateline(best.verifiedAt)}` : <span className="na">No verified offer</span>}</dd>
+            </div>
+          </dl>
         </div>
       </header>
       <SectionNav items={sections} />
-      <div className="container doc-layout">
+      <div className="wrap doc-layout">
         <article className="doc-main">
           <section id="review" aria-labelledby="review-heading">
             <h2 id="review-heading" className="visually-hidden">
@@ -206,7 +239,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               </aside>
             )}
             <div className="prose">
-              {m.bodyParagraphs.map((p, i) => (p.startsWith("## ") ? <h2 key={i}>{p.slice(3)}</h2> : <p key={i}>{p}</p>))}
+              {m.bodyParagraphs.map((p, i) => (
+                <Fragment key={i}>
+                  {p.startsWith("## ") ? <h2>{p.slice(3)}</h2> : <p>{p}</p>}
+                  {quote && i === quote.after && (
+                    <blockquote className="pullquote" aria-hidden="true">
+                      <p style={{ margin: 0, fontSize: "inherit", lineHeight: "inherit" }}>{quote.text}</p>
+                      <footer>{isGuide ? "From this guide" : `From the review, ${m.source.name}`}</footer>
+                    </blockquote>
+                  )}
+                </Fragment>
+              ))}
             </div>
             {isGuide ? (
               <p className="small muted">Drafted with an AI writing tool and edited by Made4Buyers.</p>

@@ -68,15 +68,15 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
 
   return (
     <main>
-      <section className="page-hero on-ink">
-        <div className="container">
+      <section className="page-hero">
+        <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Compare", href: "/compare" }]} />
           <h1>Compare products</h1>
           <p className="lede">Side by side, using only stored review data and verified offers. Anything we don’t know is marked as not available.</p>
         </div>
       </section>
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           {columns.length >= 2 && (
             <>
               <TrackOnce event="comparison" metadata={{ ids: columns.map((c) => c.id) }} categorySlug={selected[0].categorySlug} />

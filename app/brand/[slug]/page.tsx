@@ -33,15 +33,15 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
   return (
     <main>
       <JsonLd data={breadcrumbJsonLd(crumbs, config.siteUrl())} />
-      <section className="page-hero on-ink">
-        <div className="container">
+      <section className="page-hero">
+        <div className="wrap">
           <Breadcrumbs items={crumbs} />
           <h1>{data.brand} reviews</h1>
           <p className="lede">{data.reviews.length === 1 ? "1 published review" : `${data.reviews.length} published reviews and guides`} of {data.brand} products.</p>
         </div>
       </section>
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           <ReviewGrid reviews={data.reviews} eagerCount={3} headingLevel={2} />
         </div>
       </section>

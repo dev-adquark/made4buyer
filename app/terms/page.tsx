@@ -4,8 +4,8 @@ export const metadata: Metadata = { title: "Terms of use", alternates: { canonic
 
 export default function Terms() {
   return (
-    <main className="section">
-      <div className="container" style={{ maxWidth: 800 }}>
+    <main className="section doc-page">
+      <div className="narrow prose">
         <h1>Terms of use</h1>
         <p className="lede">Plain-language terms for using Made4Buyers.</p>
         <h2>Information on this site</h2>

@@ -3,18 +3,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Breadcrumbs, { breadcrumbJsonLd, type Crumb } from "@/components/breadcrumbs";
-import CategoryIcon from "@/components/category-icon";
 import DealLedger from "@/components/deal-ledger";
 import EmptyState from "@/components/empty-state";
 import FiltersToggle from "@/components/filters-toggle";
 import JsonLd from "@/components/json-ld";
-import { ReviewGrid } from "@/components/review-card";
+import { FeatureStory, ReviewGrid } from "@/components/review-card";
+import SectionHeader from "@/components/section-header";
 import SponsoredSlot from "@/components/sponsored-slot";
 import TrackOnce from "@/components/track-once";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { cardSelect, categoryCounts, facetCounts, latestByKind, trendingReviews, verifiedDealRows, LATEST_FIRST } from "@/lib/public/queries";
-import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
 export const dynamic = "force-dynamic";
@@ -112,19 +112,22 @@ export default async function CategoryPage({ params, searchParams }: { params: P
     <main style={themeStyle(slug) as React.CSSProperties}>
       <JsonLd data={breadcrumbJsonLd(crumbs, config.siteUrl())} />
       <TrackOnce event="category_view" categorySlug={slug} metadata={{ filters: active }} />
-      <section className="page-hero on-ink">
-        <div className="container">
-          <Breadcrumbs items={crumbs} />
-          <h1>
-            <span className="swatch">
-              <CategoryIcon slug={slug} size={28} />
+      <section className="page-hero has-issue">
+        <div className="wrap">
+          <div className="ph-top">
+            <Breadcrumbs items={crumbs} />
+            <span className="label muted">{categoryTotal === 1 ? "1 published review" : `${categoryTotal} published reviews`}</span>
+          </div>
+          <div className="ph-title">
+            <span className="issue-no" aria-hidden="true">
+              {String(CATEGORIES.findIndex((c) => c.slug === slug) + 1).padStart(2, "0")}
             </span>
-            {def.name}
-          </h1>
-          <p className="lede">
-            {def.description} {categoryTotal ? `${categoryTotal === 1 ? "1 published review" : `${categoryTotal} published reviews`}.` : "No reviews are published here yet."}
+            <h1 style={{ marginBottom: 0 }}>{def.name}</h1>
+          </div>
+          <p className="lede" style={{ marginTop: 18 }}>
+            {def.description} {categoryTotal ? "" : "No reviews are published here yet."}
           </p>
-          <form action={`/category/${slug}`} role="search" className="searchbox wide" style={{ maxWidth: 560, marginTop: 18, display: "flex", gap: 8 }}>
+          <form action={`/category/${slug}`} role="search" className="searchbox wide" style={{ maxWidth: 620, marginTop: 18, display: "flex", gap: 8 }}>
             {FILTERS.filter((f) => active[f.key]).map((f) => (
               <input key={f.key} type="hidden" name={f.key} value={active[f.key]} />
             ))}
@@ -136,7 +139,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
               <path d="M20 20l-3.5-3.5" />
             </svg>
             <input id="cat-q" name="q" type="search" defaultValue={q} maxLength={80} placeholder={`Search within ${def.name.toLowerCase()}`} />
-            <button className="btn light" type="submit">
+            <button className="btn primary" type="submit">
               Search
             </button>
           </form>
@@ -169,8 +172,36 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         </div>
       </section>
 
+      {!anyFilter && page === 1 && reviews[0] && (
+        <section className="section tight" aria-labelledby="lead-title">
+          <div className="wrap">
+            <h2 id="lead-title" className="visually-hidden">
+              Lead story
+            </h2>
+            <div className="lead-grid">
+              <FeatureStory review={reviews[0]} />
+              <div>
+                <span className="label muted">In this issue</span>
+                <ul className="story-list" style={{ marginTop: 10 }}>
+                  {options.sub.map((o) => (
+                    <li key={o.slug}>
+                      <Link className="ledger-row" style={{ gridTemplateColumns: "minmax(0, 1fr) auto", textDecoration: "none" }} href={hrefWith("sub", o.slug)}>
+                        <span className="l-title">{o.name}</span>
+                        <span className="l-meta">
+                          {o.count} {o.count === 1 ? "review" : "reviews"}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="section" id="results" aria-labelledby="results-title">
-        <div className="container with-filters">
+        <div className="wrap with-filters">
           <aside className="filters" id="category-filters" aria-label="Filters">
             <h2>Filter {def.name.toLowerCase()}</h2>
             {FILTERS.map((f) =>
@@ -238,14 +269,11 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       </section>
 
       {popular.length > 0 && (
-        <section className="section band" id="popular" aria-labelledby="popular-title">
-          <div className="container">
-            <div className="section-head">
-              <div>
-                <h2 id="popular-title">Popular in {def.name.toLowerCase()}</h2>
-                <p>Most-read reviews in the last 7 days.</p>
-              </div>
-            </div>
+        <section className="section" id="popular" aria-labelledby="popular-title">
+          <div className="wrap">
+            <SectionHeader id="popular-title" label="Last 7 days" title={`Popular in ${def.name.toLowerCase()}`}>
+              Most-read reviews, by real page views.
+            </SectionHeader>
             <ul className="ledger">
               {popular.map((t) => (
                 <li key={t.review.id}>
@@ -264,15 +292,18 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
       {compareIds.length === 2 && !anyFilter && (
         <section className="section" id="compare" aria-labelledby="cmp-title">
-          <div className="container">
-            <div className="cta-final on-ink" style={themeStyle(slug) as React.CSSProperties}>
-              <h2 id="cmp-title">Deciding between {reviews[0].productName} and {reviews[1].productName}?</h2>
-              <p>Put them side by side. You can add a third product or swap either one.</p>
+          <div className="wrap">
+            <div className="ink-section on-dark" style={{ padding: "clamp(28px, 4vw, 56px)" }}>
+              <span className="label muted">Compare</span>
+              <h2 id="cmp-title" style={{ color: "#fff", textTransform: "uppercase", margin: "10px 0 14px", maxWidth: "18ch" }}>
+                {reviews[0].productName} or {reviews[1].productName}?
+              </h2>
+              <p className="muted" style={{ fontFamily: "var(--f-read)", fontSize: 19 }}>Put them side by side. You can add a third product or swap either one.</p>
               <div className="btnrow">
-                <Link className="btn light large" href={`/compare?ids=${compareIds.join(",")}`}>
+                <Link className="btn primary large" href={`/compare?ids=${compareIds.join(",")}`} data-cursor="Compare">
                   Compare these two
                 </Link>
-                <Link className="btn ghost-ink large" href="/compare">
+                <Link className="btn large" href="/compare">
                   Choose other products
                 </Link>
               </div>
@@ -282,14 +313,11 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       )}
 
       {guides.length > 0 && (
-        <section className="section band" id="guides" aria-labelledby="cg-title">
-          <div className="container">
-            <div className="section-head">
-              <div>
-                <h2 id="cg-title">{def.name} buying guides</h2>
-                <p>AI-assisted and editor-approved. Not hands-on reviews.</p>
-              </div>
-            </div>
+        <section className="section" id="guides" aria-labelledby="cg-title">
+          <div className="wrap">
+            <SectionHeader id="cg-title" label={`${guides.length} published`} title={`${def.name} buying guides`}>
+              AI-assisted and editor-approved. Not hands-on reviews.
+            </SectionHeader>
             <ReviewGrid reviews={guides} />
           </div>
         </section>
@@ -297,13 +325,8 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
       {deals.length > 0 && (
         <section className="section" id="deals" aria-labelledby="cd-title">
-          <div className="container">
-            <div className="section-head">
-              <h2 id="cd-title">Verified {def.name.toLowerCase()} deals</h2>
-              <Link className="btn" href={`/deals?category=${slug}`}>
-                All {def.name.toLowerCase()} deals
-              </Link>
-            </div>
+          <div className="wrap">
+            <SectionHeader id="cd-title" label={`${deals.length} shown`} title={`Verified ${def.name.toLowerCase()} deals`} action={<Link className="arrow-link" href={`/deals?category=${slug}`}>All {def.name.toLowerCase()} deals</Link>} />
             <DealLedger rows={deals} />
           </div>
         </section>
@@ -311,7 +334,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
 
       {others.length > 0 && (
         <section className="section" aria-labelledby="other-cats">
-          <div className="container">
+          <div className="wrap">
             <h2 id="other-cats">Other categories</h2>
             <ul className="chips">
               {others.map((c) => (

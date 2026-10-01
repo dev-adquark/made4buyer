@@ -15,10 +15,10 @@ export const metadata: Metadata = { title: "Find my match", description: "Answer
 
 type Step = "category" | "intent" | "platform" | "tier";
 const STEPS: Array<{ key: Step; label: string; question: string }> = [
-  { key: "category", label: "What you’re buying", question: "What are you shopping for?" },
-  { key: "intent", label: "What it’s for", question: "What will you mostly use it for?" },
-  { key: "platform", label: "Platform", question: "Any platform you need it to work with?" },
-  { key: "tier", label: "Budget", question: "Which price range suits you?" },
+  { key: "category", label: "Buying", question: "What are you buying?" },
+  { key: "intent", label: "Matters most", question: "What matters most?" },
+  { key: "platform", label: "Platform", question: "Which platform?" },
+  { key: "tier", label: "Budget", question: "What’s your budget?" },
 ];
 const TAG: Record<Exclude<Step, "category">, "INTENT" | "PLATFORM" | "PRICE_TIER"> = { intent: "INTENT", platform: "PLATFORM", tier: "PRICE_TIER" };
 
@@ -85,53 +85,44 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
 
   return (
     <main style={themeStyle(category?.slug) as React.CSSProperties}>
-      <section className="page-hero on-ink">
-        <div className="container">
-          <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Find my match", href: "/match" }]} />
-          <h1>Find my match</h1>
-          <p className="lede">Four quick questions. We match your answers against how each reviewed product is filed, and show only what we’ve actually reviewed.</p>
-        </div>
-      </section>
-      <section className="section">
-        <div className="container wizard">
-          <ol className="wizard-steps" aria-label="Progress">
-            {STEPS.map((s, i) => {
-              const done = Boolean(picks[s.key]);
-              return (
-                <li key={s.key} className={done ? "done" : undefined} aria-current={current === s.key ? "step" : undefined}>
-                  <span className="n" aria-hidden="true">
-                    {i + 1}
-                  </span>
-                  <span className="label">
+      <section className="section tight">
+        <div className="wrap match-stage">
+          <div>
+            <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Find my match", href: "/match" }]} />
+            <ol className="match-progress" aria-label="Progress">
+              {STEPS.map((s, i) => {
+                const done = Boolean(picks[s.key]);
+                return (
+                  <li key={s.key} className={done ? "done" : undefined} aria-current={current === s.key ? "step" : undefined}>
                     {done ? (
-                      <Link href={href(Object.fromEntries(STEPS.slice(i).map((x) => [x.key, undefined])))} style={{ color: "inherit" }}>
-                        {s.label}: {labelFor(s.key)}
+                      <Link href={href(Object.fromEntries(STEPS.slice(i).map((x) => [x.key, undefined])))}>
+                        {String(i + 1).padStart(2, "0")} {s.label}
+                        <span className="val">{labelFor(s.key)}</span>
                         <span className="visually-hidden"> (change)</span>
                       </Link>
                     ) : (
-                      s.label
+                      <>
+                        {String(i + 1).padStart(2, "0")} {s.label}
+                      </>
                     )}
-                  </span>
-                </li>
-              );
-            })}
-            <li className={!current ? "done" : undefined} aria-current={!current ? "step" : undefined}>
-              <span className="n" aria-hidden="true">
-                {STEPS.length + 1}
-              </span>
-              <span className="label">Your matches</span>
-            </li>
-          </ol>
+                  </li>
+                );
+              })}
+              <li className={!current ? "done" : undefined} aria-current={!current ? "step" : undefined}>
+                05 Your match
+              </li>
+            </ol>
+          </div>
 
-          <div>
+          <div className="match-enter" key={current ?? "done"}>
             {current === "category" && (
               <>
-                <h2>{STEPS[0].question}</h2>
+                <h1 className="match-q">{STEPS[0].question}</h1>
                 <ul className="option-grid">
                   {counts.map((c) => (
                     <li key={c.slug} style={themeStyle(c.slug) as React.CSSProperties}>
                       {c.count ? (
-                        <Link href={href({ category: c.slug })}>
+                        <Link href={href({ category: c.slug })} data-cursor="Choose">
                           <CategoryIcon slug={c.slug} />
                           <strong>{c.name}</strong>
                           <span>{c.count === 1 ? "1 reviewed product" : `${c.count} reviewed products`}</span>
@@ -151,19 +142,19 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
 
             {current && current !== "category" && (
               <>
-                <h2>{STEPS.find((s) => s.key === current)!.question}</h2>
-                {options.length === 0 && <p className="muted">We don’t have this detail for the {category?.name.toLowerCase()} we’ve reviewed so far, so this question can be skipped.</p>}
+                <h1 className="match-q">{STEPS.find((s) => s.key === current)!.question}</h1>
+                {options.length === 0 && <p className="lede">We don’t have this detail for the {category?.name.toLowerCase()} we’ve reviewed so far, so you can skip it.</p>}
                 <ul className="option-grid">
                   {options.map((o) => (
                     <li key={o.slug}>
-                      <Link href={href({ [current]: o.slug })}>
+                      <Link href={href({ [current]: o.slug })} data-cursor="Choose">
                         <strong>{o.name}</strong>
                         <span>{o.count === 1 ? "1 matching product" : `${o.count} matching products`}</span>
                       </Link>
                     </li>
                   ))}
                   <li>
-                    <Link href={href({ [current]: "any" })}>
+                    <Link href={href({ [current]: "any" })} data-cursor="Skip">
                       <strong>{options.length ? "No preference" : "Skip this question"}</strong>
                       <span>Keep every option open</span>
                     </Link>
@@ -174,7 +165,10 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
 
             {!current && category && (
               <>
-                <h2>{results.length ? `Your matches in ${category.name.toLowerCase()}` : "No matches yet"}</h2>
+                <h1 className="match-q">{results.length ? "Your match." : "No match yet."}</h1>
+                <h2 className="label muted" style={{ fontFamily: "var(--f-mono)" }}>
+                  {results.length ? `Your matches in ${category.name.toLowerCase()}` : `Nothing in ${category.name.toLowerCase()} yet`}
+                </h2>
                 {relaxed.length > 0 && (
                   <p className="notice warn" role="status">
                     Nothing matched every answer, so we’ve ignored your {relaxed.map((r) => STEPS.find((s) => s.key === r)!.label.toLowerCase()).join(" and ")} answer.
@@ -182,10 +176,10 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
                 )}
                 {results.length ? (
                   <>
-                    <ReviewGrid reviews={results} eagerCount={3} />
-                    <div className="btnrow">
+                    <ReviewGrid reviews={results} eagerCount={3} layout="ruled" />
+                    <div className="btnrow" style={{ marginTop: 32 }}>
                       {results.length >= 2 && (
-                        <Link className="btn primary" href={`/compare?ids=${results.slice(0, 3).map((r) => r.id).join(",")}`}>
+                        <Link className="btn primary" href={`/compare?ids=${results.slice(0, 3).map((r) => r.id).join(",")}`} data-cursor="Compare">
                           Compare the top {Math.min(3, results.length)}
                         </Link>
                       )}
@@ -195,7 +189,7 @@ export default async function MatchPage({ searchParams }: { searchParams: Promis
                     </div>
                   </>
                 ) : (
-                  <EmptyState title={`No ${category.name.toLowerCase()} reviews are published yet.`} action={<Link className="btn" href="/match">Start again</Link>} />
+                  <EmptyState title={`No ${category.name.toLowerCase()} reviews yet.`} label="Match" action={<Link className="btn" href="/match">Start again</Link>} />
                 )}
               </>
             )}

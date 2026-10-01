@@ -19,8 +19,8 @@ export default async function ReviewsIndex({ searchParams }: { searchParams: Pro
   const [{ rows, total, pages }, categories] = await Promise.all([publishedReviews(page), categoryCounts()]);
   return (
     <main>
-      <section className="page-hero on-ink">
-        <div className="container">
+      <section className="page-hero">
+        <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Reviews", href: "/reviews" }]} />
           <h1>Reviews</h1>
           <p className="lede">{total ? `${total} published ${total === 1 ? "review and guide" : "reviews and guides"}, newest first. Buying guides are AI-assisted and labelled.` : "No reviews have been published yet."}</p>
@@ -38,7 +38,7 @@ export default async function ReviewsIndex({ searchParams }: { searchParams: Pro
         </div>
       </section>
       <section className="section">
-        <div className="container">
+        <div className="wrap">
           {rows.length ? <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} /> : <EmptyState title="We’re waiting for the next verified review.">Reviews appear here once they pass editorial QA.</EmptyState>}
           {pages > 1 && (
             <nav className="pagination" aria-label="Pagination">

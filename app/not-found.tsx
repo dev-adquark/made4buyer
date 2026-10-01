@@ -2,8 +2,9 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <main className="section">
-      <div className="container">
+    <main className="section doc-page">
+      <div className="narrow">
+        <span className="label muted">Error 404</span>
         <h1>Page not found</h1>
         <p className="muted">This page does not exist or is no longer published.</p>
         <div className="btnrow">

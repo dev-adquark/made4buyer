@@ -4,8 +4,8 @@ export const metadata: Metadata = { title: "About & methodology", alternates: { 
 
 export default function About() {
   return (
-    <main className="section">
-      <div className="container" style={{ maxWidth: 800 }}>
+    <main className="section doc-page">
+      <div className="narrow prose">
         <h1>About Made4Buyers</h1>
         <p className="lede">Made4Buyers organises technology reviews around what buyers need, and shows offers only after they have been verified.</p>
         <h2>How reviews are processed</h2>
