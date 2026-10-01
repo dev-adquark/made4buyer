@@ -30,6 +30,8 @@ export const cardSelect = {
   subcategorySlug: true,
   publishedAt: true,
   sourcePublishedAt: true,
+  author: true,
+  entities: { select: { source: true } },
   images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true } },
   // Only a VERIFIED_OK link on a matched offer counts as a verified offer.
   affiliateLinks: { where: VERIFIED_LINK, take: 1, select: { id: true } },
@@ -345,7 +347,7 @@ export async function comparePair() {
   if (!pair) return null;
   const rows = await db.normalizedReview.findMany({
     where: { id: { in: pair } },
-    select: { ...cardSelect, entities: { select: { platform: true, deviceType: true, useCase: true } }, assignments: { where: { active: true, tagType: "PRICE_TIER", isPrimary: true }, take: 1, select: { categoryTag: { select: { name: true } } } } },
+    select: { ...cardSelect, entities: { select: { source: true, platform: true, deviceType: true, useCase: true, modelNumber: true } }, assignments: { where: { active: true, tagType: "PRICE_TIER", isPrimary: true }, take: 1, select: { categoryTag: { select: { name: true } } } } },
   });
   return pair.map((id) => rows.find((r) => r.id === id)!).filter(Boolean);
 }
@@ -362,3 +364,19 @@ export async function trustStats() {
   ]);
   return { published, guides, verifiedOffers, checkedThisWeek, categoriesCovered: categories.filter((c) => c.count > 0).length };
 }
+
+/** Per-category counts of published reviews, guides and live verified offers (all stored data). */
+export const categoryLedger = cache(async () => {
+  const [byKind, deals] = await Promise.all([
+    db.normalizedReview.groupBy({ by: ["categorySlug", "kind"], where: { status: "PUBLISHED", categorySlug: { not: null } }, _count: { _all: true } }),
+    db.affiliateLink.findMany({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } }, select: { review: { select: { categorySlug: true } } } }),
+  ]);
+  return CATEGORIES.map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    description: c.description,
+    reviews: byKind.find((r) => r.categorySlug === c.slug && r.kind === "REVIEW")?._count._all ?? 0,
+    guides: byKind.find((r) => r.categorySlug === c.slug && r.kind === "AI_GUIDE")?._count._all ?? 0,
+    deals: deals.filter((d) => d.review.categorySlug === c.slug).length,
+  }));
+});

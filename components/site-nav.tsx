@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { BrandMark } from "./brand-mark";
+import { Wordmark } from "./brand-mark";
 import CategoryIcon from "./category-icon";
 import SearchCombobox from "./search-combobox";
 import type { NavFeed } from "@/lib/public/queries";
@@ -13,11 +13,12 @@ import { themeStyle } from "@/lib/taxonomy/themes";
 
 export type NavCategory = { slug: string; name: string; blurb: string; subs: Array<{ slug: string; name: string }> };
 
+// Order: Reviews · Categories (menu) · Deals · Compare · Guides
+const BEFORE: Array<[string, string]> = [["/reviews", "Reviews"]];
 const LINKS: Array<[string, string, boolean?]> = [
-  ["/reviews", "Reviews"],
-  ["/compare", "Comparisons"],
   ["/deals", "Deals"],
-  ["/guides", "Buying guides", true],
+  ["/compare", "Compare"],
+  ["/guides", "Guides"],
 ];
 
 function money(price: number | null, currency: string | null) {
@@ -183,6 +184,11 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
   const selected = categories.find((c) => c.slug === current) ?? categories[0];
   return (
     <nav className="primary-nav" aria-label="Main" ref={wrap} onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}>
+      {BEFORE.map(([href, label]) => (
+        <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>
+          {label}
+        </Link>
+      ))}
       <button
         ref={trigger}
         type="button"
@@ -300,8 +306,7 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
         >
           <div className="sheet-head">
             <span className="brand">
-              <BrandMark />
-              Made4Buyers
+              <Wordmark />
             </span>
             <button type="button" className="btn icon ghost-ink" aria-label="Close menu" onClick={() => setOpen(false)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -313,7 +318,7 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
             <SearchCombobox variant="wide" label="Search" />
             <nav aria-label="Mobile">
               <ul className="sheet-quick">
-                {[...LINKS, ["/match", "Find my match"] as [string, string]].map(([href, label]) => (
+                {[...BEFORE, ...LINKS, ["/match", "Find my match"] as [string, string]].map(([href, label]) => (
                   <li key={href}>
                     <Link href={href}>{label}</Link>
                   </li>

@@ -1,26 +1,38 @@
 import Link from "next/link";
-import { BrandMark } from "./brand-mark";
+import { Wordmark } from "./brand-mark";
 import type { NavCategory } from "./site-nav";
 
 export default function SiteFooter({ categories }: { categories: NavCategory[] }) {
   return (
-    <footer className="site-footer on-ink">
-      <div className="container footer-grid">
+    <footer className="site-footer on-dark">
+      <div className="wrap colophon-statement">
+        <p className="label muted" style={{ marginBottom: 18 }}>
+          Made4Buyers, the buyer’s tear-sheet
+        </p>
+        <p className="big">
+          Make better <span>tech</span> decisions.
+        </p>
+      </div>
+      <div className="wrap footer-grid">
         <div>
           <Link className="brand" href="/">
-            <BrandMark />
-            Made4Buyers
+            <Wordmark />
           </Link>
-          <p style={{ marginTop: 14 }}>We help you find the right technology to buy: reviews sorted by what you need, and offers we check before we show them.</p>
+          <p style={{ marginTop: 14, maxWidth: "40ch" }}>Reviews sorted by what you need, comparisons built only from facts we hold, and offers we check before we show them.</p>
+          <p className="footer-disclosure">
+            <strong>Affiliate disclosure.</strong> Some offer links earn us a commission if you buy. It never decides which offer we show, and every offer link is checked first.{" "}
+            <Link href="/disclosure">Read the disclosure</Link>
+          </p>
         </div>
         <nav aria-labelledby="f-explore">
           <h2 id="f-explore">Explore</h2>
           <ul>
             <li><Link href="/reviews">Reviews</Link></li>
-            <li><Link href="/guides">Buying guides</Link></li>
-            <li><Link href="/compare">Comparisons</Link></li>
-            <li><Link href="/deals">Verified deals</Link></li>
+            <li><Link href="/deals">Deals</Link></li>
+            <li><Link href="/compare">Compare</Link></li>
+            <li><Link href="/guides">Guides</Link></li>
             <li><Link href="/match">Find my match</Link></li>
+            <li><Link href="/search">Search</Link></li>
           </ul>
         </nav>
         <nav aria-labelledby="f-cats">
@@ -33,26 +45,20 @@ export default function SiteFooter({ categories }: { categories: NavCategory[] }
             ))}
           </ul>
         </nav>
-        <nav aria-labelledby="f-trust">
-          <h2 id="f-trust">Trust</h2>
+        <nav aria-labelledby="f-company">
+          <h2 id="f-company">Company</h2>
           <ul>
-            <li><Link href="/about">How we review</Link></li>
-            <li><Link href="/disclosure">Affiliate disclosure</Link></li>
-            <li><Link href="/search">Search</Link></li>
-          </ul>
-        </nav>
-        <nav aria-labelledby="f-about">
-          <h2 id="f-about">Company</h2>
-          <ul>
+            <li><Link href="/about">About &amp; method</Link></li>
             <li><Link href="/contact">Contact</Link></li>
             <li><Link href="/privacy">Privacy</Link></li>
             <li><Link href="/terms">Terms</Link></li>
+            <li><Link href="/disclosure">Affiliate disclosure</Link></li>
           </ul>
         </nav>
       </div>
-      <div className="container footer-bottom">
+      <div className="wrap footer-bottom">
         <span>© {new Date().getFullYear()} Made4Buyers</span>
-        <span>Offer links may earn us a commission. It never changes which offers we show.</span>
+        <span>No invented reviews, prices or ratings</span>
       </div>
     </footer>
   );

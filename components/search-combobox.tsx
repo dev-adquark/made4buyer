@@ -98,7 +98,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
           autoComplete="off"
           maxLength={100}
-          placeholder={variant === "hero" ? "Try “MacBook Air”, “noise cancelling” or “Pixel”" : "Search products, brands and guides"}
+          placeholder={variant === "hero" ? "Try “MacBook Air” or “Pixel”" : "Search products, brands and guides"}
           value={q}
           autoFocus={autoFocus}
           onChange={(e) => {
