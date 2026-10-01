@@ -164,11 +164,15 @@ async function apify() {
   }
 }
 
-/** Keyword-to-Blog: an empty request is rejected at validation when the key is valid, so no quota is used. */
+/**
+ * Keyword-to-Blog: even a request rejected at validation counts against the plan's daily quota,
+ * so the live probe only runs when KEYWORD_TO_BLOG_PROBE=true. Otherwise configuration only.
+ */
 async function keywordToBlog() {
   const url = config.aiGuides.url();
   const key = config.aiGuides.key();
   if (!url || !key) return add("keywordToBlog", "BLOCKED_BY_ENVIRONMENT", { missing: [!url && "KEYWORD_TO_BLOG_API_URL", !key && "KEYWORD_TO_BLOG_API_KEY"].filter(Boolean) });
+  if (process.env.KEYWORD_TO_BLOG_PROBE !== "true") return add("keywordToBlog", "OK", { configured: true, probed: false, note: "not called: every request, even a rejected one, uses daily quota (set KEYWORD_TO_BLOG_PROBE=true to probe)" });
   const res = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json" }, body: "{}", timeoutMs: 20000, maxRedirects: 0, readBody: true, maxBytes: 100_000 });
   let code: string | undefined;
   try {
@@ -176,7 +180,7 @@ async function keywordToBlog() {
   } catch {
     /* non-JSON */
   }
-  if (res.status === 400 && code === "VALIDATION_ERROR") return add("keywordToBlog", "OK", { auth: "accepted", note: "checked without generating (no quota used)" });
+  if (res.status === 400 && code === "VALIDATION_ERROR") return add("keywordToBlog", "OK", { auth: "accepted", note: "probed with an empty request (uses one daily request)" });
   if (res.status === 401 || res.status === 403) return add("keywordToBlog", "AUTH_FAILED", { httpStatus: res.status, code });
   add("keywordToBlog", "PROVIDER_ERROR", { httpStatus: res.status, code, error: res.error?.kind });
 }
