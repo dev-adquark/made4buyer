@@ -1,0 +1,66 @@
+{
+  "_note": "SAMPLE DATA for tests and local development only. Shaped like apify/web-scraper dataset items produced by lib/pipeline/apify.ts PAGE_FUNCTION. Not real reviews; never proof of production success.",
+  "items": [
+    {
+      "m4b": 1,
+      "url": "https://reviews.example.test/reviews/framework-laptop-13?utm_source=feed",
+      "canonicalUrl": "https://reviews.example.test/reviews/framework-laptop-13/",
+      "title": "Framework Laptop 13 review: the repairable laptop grows up",
+      "author": "Sample Writer",
+      "publisher": "Example Reviews (sample)",
+      "datePublished": "2026-09-20T08:00:00Z",
+      "dateModified": "2026-09-21T08:00:00Z",
+      "excerpt": "A modular, repairable 13-inch laptop with swappable ports and a sharper display.",
+      "body": "The Framework Laptop 13 is a 13.5-inch laptop built around user repair. Every part, from the battery to the keyboard, can be replaced with a screwdriver that comes in the box.\n\nThe new display is sharper and brighter, and battery life covers most of a working day on Windows 11.\n\nPorts are modular expansion cards, so you choose your own mix of USB-C, USB-A, HDMI and storage.",
+      "rating": 4,
+      "ratingScale": 5,
+      "productName": "Framework Laptop 13",
+      "brand": "Framework",
+      "model": null,
+      "sku": null,
+      "mpn": null,
+      "gtin": null,
+      "price": null,
+      "currency": null,
+      "image": "https://reviews.example.test/img/framework.jpg",
+      "extractedFrom": { "jsonLd": true, "review": true, "product": true }
+    },
+    {
+      "m4b": 1,
+      "url": "https://reviews.example.test/reviews/framework-laptop-13",
+      "canonicalUrl": "https://reviews.example.test/reviews/framework-laptop-13",
+      "title": "Framework Laptop 13 review: the repairable laptop grows up",
+      "author": "Sample Writer",
+      "datePublished": "2026-09-20T08:00:00Z",
+      "excerpt": "Duplicate crawl of the same page (tracking parameters differ).",
+      "body": "The Framework Laptop 13 is a 13.5-inch laptop built around user repair. Every part, from the battery to the keyboard, can be replaced with a screwdriver that comes in the box.\n\nThe new display is sharper and brighter, and battery life covers most of a working day on Windows 11.",
+      "productName": "Framework Laptop 13",
+      "brand": "Framework"
+    },
+    {
+      "m4b": 1,
+      "url": "https://elsewhere.example.org/reviews/stolen-copy",
+      "canonicalUrl": "https://elsewhere.example.org/reviews/stolen-copy",
+      "title": "A page on a domain this source does not own",
+      "datePublished": "2026-09-19T08:00:00Z",
+      "body": "This page is on a different domain and must be rejected as SOURCE_NOT_ALLOWED before any processing happens at all."
+    },
+    {
+      "m4b": 1,
+      "url": "https://reviews.example.test/reviews/future-phone",
+      "canonicalUrl": "https://reviews.example.test/reviews/future-phone",
+      "title": "Future Phone review: a date that has not happened yet",
+      "datePublished": "2031-01-01T00:00:00Z",
+      "body": "This review claims a publication date years in the future, which must be rejected as PUBLICATION_DATE_FUTURE and never published or reordered as the latest content."
+    },
+    {
+      "m4b": 1,
+      "url": "https://reviews.example.test/reviews/too-short",
+      "canonicalUrl": "https://reviews.example.test/reviews/too-short",
+      "title": "Too short to be a review at all",
+      "datePublished": "2026-09-18T08:00:00Z",
+      "body": "Just a teaser."
+    },
+    { "#debug": { "note": "listing page result without the m4b marker: ignored" } }
+  ]
+}

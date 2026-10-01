@@ -68,6 +68,11 @@ export const config = {
     apiKey: () => str("SOVRN_API_KEY"),
     authScheme: () => str("SOVRN_AUTH_SCHEME") ?? "secret",
     queryParam: () => str("SOVRN_QUERY_PARAM") ?? "search-keywords",
+    /** Sovrn's own approval state for this site, copied from the Sovrn dashboard by the owner. Never inferred. */
+    siteStatus: (): "PENDING" | "APPROVED" | "DENIED" | "UNKNOWN" => {
+      const v = (str("SOVRN_SITE_STATUS") ?? "").toUpperCase();
+      return v === "PENDING" || v === "APPROVED" || v === "DENIED" ? v : "UNKNOWN";
+    },
     siteKey: () => str("SOVRN_SITE_KEY"),
     linkWrapperUrl: () => str("SOVRN_LINK_WRAPPER_URL") ?? "https://redirect.viglink.com",
     timeoutMs: () => num("SOVRN_TIMEOUT_MS", 12000, 1000, 60000),
@@ -126,6 +131,17 @@ export const config = {
     maxRows: () => num("CSV_MAX_ROWS", 5000, 1, 50_000),
   },
 
+  /** Apify Web Scraper: the source of genuine editorial reviews (server-side token only). */
+  apify: {
+    token: () => str("APIFY_API_TOKEN"),
+    actorId: () => str("APIFY_ACTOR_ID") ?? "apify/web-scraper",
+    /** Overridable only so tests can point at a local stub. */
+    baseUrl: () => (str("APIFY_API_BASE_URL") ?? "https://api.apify.com/v2").replace(/\/+$/, ""),
+    runTimeoutSecs: () => num("APIFY_RUN_TIMEOUT_SECS", 1800, 60, 7200),
+    memoryMb: () => num("APIFY_MEMORY_MB", 2048, 256, 8192),
+    maxItemsPerCollect: () => num("APIFY_MAX_ITEMS_PER_COLLECT", 100, 1, 1000),
+  },
+
   /** Test-only escape hatch so integration/E2E suites can verify links against loopback stubs. */
   allowLoopbackForTests: () =>
     bool("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS", false) && process.env.VERCEL_ENV !== "production",
@@ -138,6 +154,7 @@ export function integrationStatus() {
   return {
     database: state(Boolean(str("DATABASE_URL"))),
     contentApi: state(Boolean(config.contentApi.url())),
+    apify: state(Boolean(config.apify.token())),
     aiGuides: state(Boolean(config.aiGuides.url() && config.aiGuides.key())),
     sovrn: state(Boolean(config.sovrn.apiUrl() && config.sovrn.apiKey())),
     sovrnLinkWrapper: state(Boolean(config.sovrn.siteKey())),

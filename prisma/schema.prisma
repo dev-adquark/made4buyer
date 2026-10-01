@@ -806,3 +806,62 @@ model Day30Report {
   @@index([generatedAt])
   @@map("day30_reports")
 }
+
+// ─── Editorial review sources (Apify Web Scraper) ──────────────────────────
+
+/// Whether we may republish a source's full text. Scraped sources default to EXCERPT_ONLY:
+/// the text is used for extraction and filing, the public page shows a summary and links out.
+enum ContentRights {
+  LICENSED
+  EXCERPT_ONLY
+
+  @@map("content_rights")
+}
+
+model ReviewSource {
+  id                  String        @id @default(cuid())
+  slug                String        @unique
+  name                String
+  homepageUrl         String
+  allowedDomains      String[]
+  startUrls           String[]
+  /// Glob patterns (e.g. https://example.com/reviews/**) that identify individual review pages.
+  reviewUrlPatterns   String[]
+  categoryHint        String?
+  enabled             Boolean       @default(false)
+  crawlFrequencyHours Int           @default(24)
+  maxPagesPerRun      Int           @default(20)
+  rights              ContentRights @default(EXCERPT_ONLY)
+  extractionProfile   Json?
+  notes               String?
+  lastRunAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  runs                ApifyRun[]
+
+  @@index([enabled, lastRunAt])
+  @@map("review_sources")
+}
+
+model ApifyRun {
+  id          String       @id @default(cuid())
+  sourceId    String
+  apifyRunId  String       @unique
+  datasetId   String?
+  /// Apify status (READY, RUNNING, SUCCEEDED, FAILED, ABORTED, TIMED-OUT) or ours (COLLECTING, COLLECTED, COLLECT_FAILED).
+  status      String
+  trigger     String
+  itemCount   Int?
+  accepted    Int?
+  rejected    Int?
+  ingestRunId String?
+  error       String?
+  startedAt   DateTime     @default(now())
+  finishedAt  DateTime?
+  collectedAt DateTime?
+  source      ReviewSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([status, startedAt])
+  @@index([sourceId, startedAt])
+  @@map("apify_runs")
+}

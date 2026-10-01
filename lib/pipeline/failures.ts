@@ -14,7 +14,7 @@ export type FailureInput = {
   stage: PipelineStage;
   code: ErrorCode;
   message?: string;
-  entityType: "content_item" | "normalized_review" | "affiliate_link" | "csv_item" | "ingest_run" | "job" | "search_index";
+  entityType: "content_item" | "normalized_review" | "affiliate_link" | "csv_item" | "ingest_run" | "job" | "search_index" | "review_source" | "apify_run";
   entityId: string;
   contentItemId?: string;
   normalizedReviewId?: string;

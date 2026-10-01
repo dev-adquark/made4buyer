@@ -53,12 +53,12 @@ export async function ingestRawItem(raw: unknown, source: string, run: Pick<Inge
       const reason = v.issues.join("; ").slice(0, 1000);
       const item = await db.contentItem.upsert({
         where: { source_sourceId: { source, sourceId } },
-        create: { source, sourceId, rawPayload: rawJson, contentHash: sha256(stableStringify(raw)), processingStatus: "FAILED", errorCode: "CONTENT_SCHEMA_INVALID", statusReason: reason, ingestRunId: run.id },
-        update: { rawPayload: rawJson, contentHash: sha256(stableStringify(raw)), processingStatus: "FAILED", errorCode: "CONTENT_SCHEMA_INVALID", statusReason: reason, ingestRunId: run.id, lastSeenAt: new Date() },
+        create: { source, sourceId, rawPayload: rawJson, contentHash: sha256(stableStringify(raw)), processingStatus: "FAILED", errorCode: v.code, statusReason: reason, ingestRunId: run.id },
+        update: { rawPayload: rawJson, contentHash: sha256(stableStringify(raw)), processingStatus: "FAILED", errorCode: v.code, statusReason: reason, ingestRunId: run.id, lastSeenAt: new Date() },
       });
-      await recordFailure({ stage: "VALIDATION", code: "CONTENT_SCHEMA_INVALID", message: reason, entityType: "content_item", entityId: item.id, contentItemId: item.id, runId: run.id });
+      await recordFailure({ stage: "VALIDATION", code: v.code, message: reason, entityType: "content_item", entityId: item.id, contentItemId: item.id, runId: run.id });
       c.failedNormalization++;
-      bump(c, "CONTENT_SCHEMA_INVALID");
+      bump(c, v.code);
       log.warn("content item invalid", { stage: "VALIDATION", sourceId, issues: v.issues });
       return item;
     }

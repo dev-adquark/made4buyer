@@ -5,6 +5,14 @@
   ],
   "crons": [
     {
+      "path": "/api/cron/scrape-sources",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/collect-scrapes",
+      "schedule": "45 5 * * *"
+    },
+    {
       "path": "/api/cron/cleanup-cache",
       "schedule": "0 3 * * *"
     },

@@ -16,12 +16,14 @@ import path from "node:path";
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
 
-export type StubOptions = { port?: number; sovrnKey?: string; contentKey?: string; contentOverride?: () => unknown };
+export type StubOptions = { port?: number; sovrnKey?: string; contentKey?: string; contentOverride?: () => unknown; apifyToken?: string };
 
 export async function startStubServer(opts: StubOptions = {}) {
   const root = path.resolve(process.cwd(), "fixtures");
   const content = JSON.parse(readFileSync(path.join(root, "sample-content.json"), "utf8")) as { items: unknown[] };
   const sovrn = JSON.parse(readFileSync(path.join(root, "sample-sovrn-offers.json"), "utf8")) as { responses: Record<string, unknown[]> };
+  const apifyItems = JSON.parse(readFileSync(path.join(root, "sample-apify-items.json"), "utf8")) as { items: unknown[] };
+  const apifyRuns = new Map<string, { input: unknown; polls: number }>();
   const requests: Array<{ method: string; path: string }> = [];
   let base = "";
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
@@ -41,8 +43,38 @@ export async function startStubServer(opts: StubOptions = {}) {
     if (url.pathname === "/sovrn") {
       if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
       const q = (url.searchParams.get("search-keywords") ?? "").toLowerCase();
+      if (q.includes("ratelimit")) return send(429, { error: "Too many requests" });
       const key = Object.keys(sovrn.responses).find((k) => k.toLowerCase() === q) ?? Object.keys(sovrn.responses).find((k) => q.includes(k.toLowerCase()) || k.toLowerCase().includes(q));
       return send(200, fill({ offers: key ? sovrn.responses[key] : [] }));
+    }
+    // Apify API (v2) — just enough of it for the scrape/collect jobs: runs, run status, dataset items.
+    if (url.pathname.startsWith("/apify/v2/")) {
+      if (req.headers.authorization !== `Bearer ${opts.apifyToken ?? "test-apify-token"}`) return send(401, { error: { type: "user-or-token-not-found", message: "Authentication token was not valid" } });
+      const p = url.pathname.slice("/apify/v2".length);
+      if (p === "/users/me") return send(200, { data: { username: "stub-user", plan: { id: "FREE" } } });
+      if (/^\/acts\/[^/]+\/builds\/default$/.test(p)) {
+        const properties = Object.fromEntries(["startUrls", "linkSelector", "globs", "maxCrawlingDepth", "maxPagesPerCrawl", "maxConcurrency", "respectRobotsTxtFile", "injectJQuery", "proxyConfiguration", "pageFunction", "customData"].map((k) => [k, {}]));
+        return send(200, { data: { inputSchema: JSON.stringify({ properties }) } });
+      }
+      if (/^\/acts\/[^/]+\/runs$/.test(p) && req.method === "POST") {
+        let raw = "";
+        req.on("data", (c) => (raw += c));
+        req.on("end", () => {
+          const id = `run-${apifyRuns.size + 1}`;
+          apifyRuns.set(id, { input: JSON.parse(raw || "{}"), polls: 0 });
+          send(201, { data: { id, status: "RUNNING", defaultDatasetId: `ds-${id}` } });
+        });
+        return;
+      }
+      const run = p.match(/^\/actor-runs\/([^/]+)$/);
+      if (run) {
+        const r = apifyRuns.get(run[1]);
+        if (!r) return send(404, { error: { type: "record-not-found" } });
+        r.polls++;
+        return send(200, { data: { id: run[1], status: "SUCCEEDED", defaultDatasetId: `ds-${run[1]}`, finishedAt: new Date().toISOString() } });
+      }
+      if (/^\/datasets\/[^/]+\/items$/.test(p)) return send(200, apifyItems.items);
+      return send(404, { error: { type: "page-not-found" } });
     }
     if (url.pathname === "/ktb/v1/generate" && req.method === "POST") {
       if (req.headers.authorization !== "Bearer test-ktb-key") return send(401, { error: { code: "unauthorized", message: "Invalid API key" } });

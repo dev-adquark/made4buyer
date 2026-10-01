@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { gscConfigured, inspectUrl } from "@/lib/gsc";
 import { recordFailure, resolveFailures } from "@/lib/pipeline/failures";
+import { runCollectScrapes, runScrapeSources } from "@/lib/pipeline/apify";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
@@ -40,7 +41,10 @@ async function runIndexInspection(trigger: string) {
 }
 
 export const JOBS = {
-  ingest: { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIngestion({ trigger }), locked: false },
+  // The legacy Content API feed is optional now that editorial reviews come from Apify sources.
+  ingest: { lockTtlMs: 20 * 60_000, run: (trigger: string) => (config.contentApi.url() ? runIngestion({ trigger }) : Promise.resolve({ status: "SKIPPED", reason: "CONTENT_API_URL not configured; reviews come from Apify sources" })), locked: false },
+  "scrape-sources": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runScrapeSources(trigger), locked: true },
+  "collect-scrapes": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCollectScrapes(trigger), locked: true },
   "verify-links": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runLinkVerification({ trigger }), locked: true },
   "revalidate-offers": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runOfferRefresh({ trigger }), locked: true },
   "retry-failed": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runFailedRetry({ trigger }), locked: true },

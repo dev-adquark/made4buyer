@@ -36,7 +36,19 @@ export type ValidatedContent = {
   generation?: Record<string, unknown>;
 };
 
-export type ValidationResult = { ok: true; value: ValidatedContent } | { ok: false; issues: string[]; sourceId?: string };
+export type ValidationResult = { ok: true; value: ValidatedContent } | { ok: false; issues: string[]; sourceId?: string; code: ValidationCode };
+
+/** The most specific reason an item was rejected (persisted as the failure code). */
+export type ValidationCode = "PUBLICATION_DATE_INVALID" | "PUBLICATION_DATE_FUTURE" | "PUBLICATION_DATE_TOO_OLD" | "CONTENT_TOO_SHORT" | "CONTENT_SCHEMA_INVALID";
+
+export function validationCode(issues: string[]): ValidationCode {
+  // A structurally broken item (no id or title) is malformed first; specific reasons apply to otherwise well-formed items.
+  if (issues.some((i) => /^(sourceId|title|item):/.test(i))) return "CONTENT_SCHEMA_INVALID";
+  const date = issues.find((i) => i.startsWith("publishedAt:"));
+  if (date) return /future/.test(date) ? "PUBLICATION_DATE_FUTURE" : /implausibly old/.test(date) ? "PUBLICATION_DATE_TOO_OLD" : "PUBLICATION_DATE_INVALID";
+  if (issues.some((i) => i.startsWith("body:"))) return "CONTENT_TOO_SHORT";
+  return "CONTENT_SCHEMA_INVALID";
+}
 
 type Raw = Record<string, unknown>;
 
@@ -147,7 +159,7 @@ export function publicationDateIssues(parsed: Date | undefined, raw: unknown, no
 }
 
 export function validateContentItem(input: unknown): ValidationResult {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, issues: ["item must be a JSON object"] };
+  if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, issues: ["item must be a JSON object"], code: "CONTENT_SCHEMA_INVALID" };
   const raw = input as Raw;
   const sourceIdRaw = asString(pick(raw, ["id", "sourceId", "source_id", "guid", "uuid"]));
   const bodyRaw = asString(pick(raw, ["body", "content", "content.text", "text", "html", "articleBody"]));
@@ -194,11 +206,8 @@ export function validateContentItem(input: unknown): ValidationResult {
   const parsed = schema.safeParse(candidate);
   const dateIssues = publicationDateIssues(candidate.publishedAt, pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"]));
   if (!parsed.success || dateIssues.length) {
-    return {
-      ok: false,
-      sourceId: sourceIdRaw,
-      issues: [...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`)), ...dateIssues],
-    };
+    const issues = [...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`)), ...dateIssues];
+    return { ok: false, sourceId: sourceIdRaw, issues, code: validationCode(issues) };
   }
   return { ok: true, value: parsed.data };
 }
