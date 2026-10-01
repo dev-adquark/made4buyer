@@ -49,7 +49,7 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
         </div>
         <div className="body">
           <div className="meta-row">
-            <span className="cat-tag">{categoryName(review.categorySlug) ?? "Technology"}</span>
+            <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
             {hasVerifiedOffer(review) && <TrustLabel kind="verified" />}
           </div>
           <Heading>{review.canonicalTitle}</Heading>
@@ -71,7 +71,7 @@ export function FeatureStory({ review }: { review: Card }) {
           <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} fetchPriority="high" decoding="async" />
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
-          <span className="cat-tag">{categoryName(review.categorySlug) ?? "Technology"}</span>
+          <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
           <KindPill kind={review.kind} />
           {hasVerifiedOffer(review) && <TrustLabel kind="verified" />}
         </div>

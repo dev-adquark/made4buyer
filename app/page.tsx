@@ -52,12 +52,12 @@ export default async function Home() {
             </span>
           </div>
           <h1 id="hero-title" className="statement">
-            <span className="line">Tech worth</span>{" "}
-            <span className="line indent">buying.</span>
+            <span className="line">Buy less.</span>{" "}
+            <span className="line indent">Buy right.</span>
           </h1>
           <div className="hero-body">
             <div className="hero-copy">
-              <p className="lede">We help you understand what technology is worth buying right now: reviews filed by what you need, comparisons built only from facts we hold, and offers we check before we show them.</p>
+              <p className="lede">A buying guide for everything you buy: reviews filed by what you need, comparisons built only from facts we hold, and offers we check before we show them. We’re starting with technology.</p>
               <SearchCombobox variant="hero" label="Search products, brands and guides" />
               <div className="btnrow">
                 <Link className="btn primary large" href="/match" data-cursor="Start">
@@ -90,7 +90,7 @@ export default async function Home() {
                   <span className="tape" aria-hidden="true" />
                   <SafeImg src={cardImage(lead).url} fallback={placeholderPath(lead.categorySlug)} alt="" width={380} height={285} />
                   <span className="clip-body">
-                    <span className="cat-tag">{categoryName(lead.categorySlug) ?? "Technology"}</span>
+                    <span className="cat-tag">{categoryName(lead.categorySlug) ?? "General"}</span>
                     <span className="clip-title">{lead.productName}</span>
                     <span className="label muted">Latest review, {dateline(lead.sourcePublishedAt ?? lead.publishedAt)}</span>
                   </span>

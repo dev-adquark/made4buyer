@@ -46,7 +46,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       name: r.productName,
       image: publicImageUrl(r.images[0], r.categorySlug).url,
       fallback: placeholderPath(r.categorySlug),
-      categoryName: categoryName(r.categorySlug) ?? "Technology",
+      categoryName: categoryName(r.categorySlug) ?? "General",
       facts: {
         Brand: r.brand,
         Category: categoryName(r.categorySlug) ?? null,

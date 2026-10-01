@@ -12,7 +12,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const { total } = await publishedGuides(1);
   return {
     title: "Buying guides",
-    description: "AI-assisted technology buying guides, each read and approved by a Made4Buyers editor.",
+    description: "AI-assisted buying guides, each read and approved by a Made4Buyers editor.",
     alternates: { canonical: "/guides" },
     robots: total === 0 || (page && page !== "1") ? { index: false, follow: true } : undefined,
   };

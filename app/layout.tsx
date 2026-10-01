@@ -17,8 +17,8 @@ const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", d
 
 export const metadata: Metadata = {
   metadataBase: new URL(config.siteUrl()),
-  title: { default: "Made4Buyers — Tech worth buying", template: "%s | Made4Buyers" },
-  description: "Buyer-focused technology reviews, comparisons and offers that are checked before they are shown.",
+  title: { default: "Made4Buyers — Buy less. Buy right.", template: "%s | Made4Buyers" },
+  description: "A universal buying guide: reviews filed by what you need, comparisons built from facts, and offers checked before they are shown.",
   openGraph: { siteName: "Made4Buyers", type: "website" },
   twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },

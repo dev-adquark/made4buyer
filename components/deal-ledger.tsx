@@ -17,7 +17,7 @@ export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2
     <DealImpression linkId={d.linkId} reviewId={r.id} categorySlug={r.categorySlug}>
       <article className="deal-card" style={themeStyle(r.categorySlug) as React.CSSProperties}>
         <div className="dc-top">
-          <span className="cat-tag">{categoryName(r.categorySlug) ?? "Technology"}</span>
+          <span className="cat-tag">{categoryName(r.categorySlug) ?? "General"}</span>
           <TrustLabel kind="verified" />
         </div>
         <div className="dc-main">

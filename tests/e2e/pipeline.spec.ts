@@ -356,7 +356,7 @@ test("find my match walks the real taxonomy", async () => {
 test("hero: editorial statement, real collage, motion respects reduced motion", async ({ browser }) => {
   const full = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await full.goto("/");
-  await expect(full.getByRole("heading", { level: 1 })).toHaveText(/Tech worth\s+buying\./i);
+  await expect(full.getByRole("heading", { level: 1 })).toHaveText(/Buy less\.\s+Buy right\./i);
   const collage = full.getByRole("complementary", { name: "On the cutting table" });
   await expect(collage).toBeVisible();
   // Clippings are real records: the latest review links to its page, the deal clip to a verified offer.

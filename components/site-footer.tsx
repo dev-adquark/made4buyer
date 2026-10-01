@@ -10,7 +10,7 @@ export default function SiteFooter({ categories }: { categories: NavCategory[] }
           Made4Buyers, the buyer’s tear-sheet
         </p>
         <p className="big">
-          Make better <span>tech</span> decisions.
+          Make better <span>buying</span> decisions.
         </p>
       </div>
       <div className="wrap footer-grid">

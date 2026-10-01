@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ page?: string }> }): Promise<Metadata> {
   const { page } = await searchParams;
-  return { title: "All reviews", description: "Every published Made4Buyers technology review, newest first.", alternates: { canonical: "/reviews" }, robots: page && page !== "1" ? { index: false, follow: true } : undefined };
+  return { title: "All reviews", description: "Every published Made4Buyers review, newest first.", alternates: { canonical: "/reviews" }, robots: page && page !== "1" ? { index: false, follow: true } : undefined };
 }
 
 export default async function ReviewsIndex({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
