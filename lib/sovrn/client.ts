@@ -87,7 +87,7 @@ export async function fetchSovrnOffers(query: OfferQuery, opts: { bypassCache?: 
     // not a temporary provider problem, so it is reported separately and not retried.
     const auth = result.status === 401 || result.status === 403;
     const message = auth
-      ? `Sovrn rejected the credentials (HTTP ${result.status}). Check SOVRN_API_KEY is the secret API key, not the public site key.`
+      ? `Sovrn rejected the request (HTTP ${result.status}). If SOVRN_API_KEY is this site's secret key, the site is probably not yet approved for the price-comparison API (see SOVRN_SITE_STATUS); otherwise check it is the secret key, not the public site key.`
       : result.error?.message ?? `Sovrn HTTP ${result.status}${isRetryableStatus(result.status) ? " (temporary)" : ""}`;
     const limited = result.status === 429;
     const providerStatus = timeout ? "TIMEOUT" : auth ? "AUTH_FAILED" : limited ? "RATE_LIMITED" : "ERROR";
