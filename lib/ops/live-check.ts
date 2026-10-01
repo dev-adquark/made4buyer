@@ -186,6 +186,7 @@ function sovrnSite() {
   const status = config.sovrn.siteStatus();
   add("sovrnSiteApproval", status === "APPROVED" ? "OK" : status === "DENIED" ? "FAIL" : "EMPTY", {
     SOVRN_SITE_STATUS: status,
+    commerceScript: config.sovrn.commerceScript() ? (config.sovrn.siteKey() ? "installed on public pages" : "enabled but SOVRN_SITE_KEY missing") : "not installed (SOVRN_COMMERCE_SCRIPT=false)",
     note: status === "APPROVED" ? "set by the site owner from the Sovrn dashboard" : "Complete Sovrn's site approval, then set SOVRN_SITE_STATUS to what the Sovrn dashboard shows.",
   });
 }

@@ -7,6 +7,7 @@ import RevealProvider from "@/components/reveal-provider";
 import SiteFooter from "@/components/site-footer";
 import SiteHeader from "@/components/site-header";
 import EditorialCursor from "@/components/editorial-cursor";
+import SovrnCommerce from "@/components/sovrn-commerce";
 import { config } from "@/lib/config";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <RevealProvider />
         <ExternalAnalytics />
         <EditorialCursor />
+        <SovrnCommerce siteKey={config.sovrn.commerceScript() ? (config.sovrn.siteKey() ?? null) : null} />
         <div id="main">{children}</div>
         <SiteFooter categories={categories} />
       </body>

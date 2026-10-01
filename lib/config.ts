@@ -68,6 +68,8 @@ export const config = {
     apiKey: () => str("SOVRN_API_KEY"),
     authScheme: () => str("SOVRN_AUTH_SCHEME") ?? "secret",
     queryParam: () => str("SOVRN_QUERY_PARAM") ?? "search-keywords",
+    /** Load the Sovrn Commerce (VigLink) script on public pages. Off unless explicitly enabled. */
+    commerceScript: () => bool("SOVRN_COMMERCE_SCRIPT", false),
     /** Sovrn's own approval state for this site, copied from the Sovrn dashboard by the owner. Never inferred. */
     siteStatus: (): "PENDING" | "APPROVED" | "DENIED" | "UNKNOWN" => {
       const v = (str("SOVRN_SITE_STATUS") ?? "").toUpperCase();

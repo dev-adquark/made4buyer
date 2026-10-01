@@ -2,16 +2,20 @@ import type { NextConfig } from "next";
 
 const isProd = process.env.NODE_ENV === "production";
 const analyticsHost = process.env.NEXT_PUBLIC_ANALYTICS_HOST; // optional external analytics origin
+// Sovrn Commerce (VigLink) script, only when explicitly enabled (needed for Sovrn site approval).
+const sovrnCommerce = ["1", "true", "yes", "on"].includes((process.env.SOVRN_COMMERCE_SCRIPT ?? "").toLowerCase());
+const extraScript = [analyticsHost, sovrnCommerce && "https://cdn.viglink.com"].filter(Boolean).join(" ");
+const extraConnect = [analyticsHost, sovrnCommerce && "https://*.viglink.com"].filter(Boolean).join(" ");
 
 // Next.js injects inline bootstrap scripts, so script-src needs 'unsafe-inline' without nonces;
 // everything else is locked to self. Images may be remote (licensed merchant/CDN images).
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}${analyticsHost ? ` ${analyticsHost}` : ""}`,
+  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}${extraScript ? ` ${extraScript}` : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https: data:",
   "font-src 'self' data:",
-  `connect-src 'self'${analyticsHost ? ` ${analyticsHost}` : ""}`,
+  `connect-src 'self'${extraConnect ? ` ${extraConnect}` : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
