@@ -7,6 +7,7 @@ import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import { successMetrics, reviewsWithVerifiedDeal } from "@/lib/analytics/metrics";
 import { categoryName } from "@/lib/taxonomy/definitions";
+import SovrnStatusNotice from "@/components/sovrn-status-notice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Overview" };
@@ -36,6 +37,7 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
   return (
     <>
       <h1>Overview</h1>
+      <SovrnStatusNotice />
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <div className="btnrow">
         <ActionForm action="/api/admin/jobs" fields={{ job: "ingest" }} label="Run ingestion now" returnTo="/admin" className="btn primary" disabledReason={integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured (BLOCKED_BY_ENVIRONMENT)" : undefined} />

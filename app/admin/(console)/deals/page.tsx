@@ -7,6 +7,7 @@ import { ActionForm, Badge, Stat, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
+import SovrnStatusNotice from "@/components/sovrn-status-notice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Deals" };
@@ -55,6 +56,7 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
   return (
     <>
       <h1>Deals</h1>
+      <SovrnStatusNotice />
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       {sovrn !== "READY" && <p className="notice warn">Sovrn is BLOCKED_BY_ENVIRONMENT: set SOVRN_API_URL and SOVRN_API_KEY (and SOVRN_SITE_KEY for link wrapping). No offers are fabricated while it is unavailable.</p>}
       <div className="stats">

@@ -9,7 +9,9 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs & runs" };
 
 const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
-  ingest: "Fetch the Content API, snapshot raw items, normalize, dedupe and run all review stages.",
+  ingest: "Fetch the legacy Content API (skipped when not configured) and run all review stages.",
+  "scrape-sources": "Start Apify Web Scraper runs for enabled review sources whose crawl interval has elapsed (robots.txt checked first).",
+  "collect-scrapes": "Poll running Apify runs; fetch finished datasets, reject invalid pages with a reason, and ingest the rest into the QA queue.",
   "verify-links": "Re-verify affiliate links that are due (or pending).",
   "revalidate-offers": "Re-query Sovrn for reviews with stale or failed deal data.",
   "retry-failed": "Retry due retryable failures with bounded attempts.",

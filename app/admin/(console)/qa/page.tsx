@@ -1,7 +1,7 @@
 import type { Prisma, ReviewStatus } from "@prisma/client";
 import Link from "next/link";
 import Flash from "@/components/flash";
-import { ActionForm, Badge, Pager, pct } from "@/components/admin-ui";
+import { ActionForm, Badge, Pager, pct, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { categoryName } from "@/lib/taxonomy/definitions";
@@ -113,6 +113,19 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
                     <div className="small muted">
                       {r.productName}
                       {r.brand ? ` · ${r.brand}` : ""}
+                    </div>
+                    <div className="small muted">
+                      {r.kind === "AI_GUIDE" ? "AI-assisted guide" : r.source.replace(/^apify:/, "Scraped: ")}
+                      {", "}
+                      {r.sourcePublishedAt ? `published ${when(r.sourcePublishedAt)}` : <strong>no publication date</strong>}
+                      {r.sourceUrl && (
+                        <>
+                          {" · "}
+                          <a href={r.sourceUrl} rel="noopener noreferrer" target="_blank">
+                            source
+                          </a>
+                        </>
+                      )}
                     </div>
                   </td>
                   <td data-label="Category">{r.categorySlug ? categoryName(r.categorySlug) : <Badge value="MISSING" tone="error" />}</td>

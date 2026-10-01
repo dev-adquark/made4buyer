@@ -10,6 +10,7 @@
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { checkGscAccess } from "@/lib/gsc";
+import { actorInputFields, apifyAccount, buildActorInput } from "@/lib/pipeline/apify";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { contentApiHeaders, extractContentItems, nextContentPage } from "@/lib/pipeline/content-source";
 import { searchPexels } from "@/lib/pipeline/pexels";
@@ -28,7 +29,7 @@ const add = (integration: string, status: LiveCheckStatus, detail: Record<string
 const httpStatus = (s: number): LiveCheckStatus => (s === 401 || s === 403 ? "AUTH_FAILED" : "PROVIDER_ERROR");
 
 function environment() {
-  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "SOVRN_API_URL", "SOVRN_API_KEY", "SOVRN_SITE_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON"];
+  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "SOVRN_API_URL", "SOVRN_API_KEY", "SOVRN_SITE_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON", "APIFY_API_TOKEN", "KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY", "SOVRN_SITE_STATUS"];
   const set = Object.fromEntries(names.map((n) => [n, Boolean(process.env[n])]));
   const problems: string[] = [];
   const secret = process.env.SOVRN_API_KEY;
@@ -147,6 +148,48 @@ async function gsc() {
   add("gsc", access.ok ? "OK" : /authentication/.test(access.reason) || access.httpStatus === 403 ? "AUTH_FAILED" : "FAIL", access);
 }
 
+/** Apify: token works, and the actor's input schema still has every field we send. */
+async function apify() {
+  if (!config.apify.token()) return add("apify", "BLOCKED_BY_ENVIRONMENT", { missing: "APIFY_API_TOKEN" });
+  try {
+    const account = await apifyAccount();
+    const fields = await actorInputFields();
+    const sent = Object.keys(buildActorInput({ slug: "check", startUrls: ["https://example.com"], reviewUrlPatterns: ["https://example.com/**"], maxPagesPerRun: 1 }));
+    const unknown = fields ? sent.filter((f) => !fields.includes(f)) : [];
+    const sources = await db.reviewSource.count({ where: { enabled: true } }).catch(() => null);
+    add("apify", unknown.length ? "INVALID_RESPONSE" : "OK", { username: account.username, plan: account.plan, actor: config.apify.actorId(), inputSchemaChecked: Boolean(fields), unknownInputFields: unknown, enabledSources: sources });
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    add("apify", code === "APIFY_AUTH_FAILED" ? "AUTH_FAILED" : "PROVIDER_ERROR", { error: (error as Error).message });
+  }
+}
+
+/** Keyword-to-Blog: an empty request is rejected at validation when the key is valid, so no quota is used. */
+async function keywordToBlog() {
+  const url = config.aiGuides.url();
+  const key = config.aiGuides.key();
+  if (!url || !key) return add("keywordToBlog", "BLOCKED_BY_ENVIRONMENT", { missing: [!url && "KEYWORD_TO_BLOG_API_URL", !key && "KEYWORD_TO_BLOG_API_KEY"].filter(Boolean) });
+  const res = await safeFetch(url, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json" }, body: "{}", timeoutMs: 20000, maxRedirects: 0, readBody: true, maxBytes: 100_000 });
+  let code: string | undefined;
+  try {
+    code = (JSON.parse(res.body ?? "") as { error?: { code?: string } }).error?.code;
+  } catch {
+    /* non-JSON */
+  }
+  if (res.status === 400 && code === "VALIDATION_ERROR") return add("keywordToBlog", "OK", { auth: "accepted", note: "checked without generating (no quota used)" });
+  if (res.status === 401 || res.status === 403) return add("keywordToBlog", "AUTH_FAILED", { httpStatus: res.status, code });
+  add("keywordToBlog", "PROVIDER_ERROR", { httpStatus: res.status, code, error: res.error?.kind });
+}
+
+/** Sovrn's approval of this site is only knowable from the Sovrn dashboard; it is never inferred. */
+function sovrnSite() {
+  const status = config.sovrn.siteStatus();
+  add("sovrnSiteApproval", status === "APPROVED" ? "OK" : status === "DENIED" ? "FAIL" : "EMPTY", {
+    SOVRN_SITE_STATUS: status,
+    note: status === "APPROVED" ? "set by the site owner from the Sovrn dashboard" : "Complete Sovrn's site approval, then set SOVRN_SITE_STATUS to what the Sovrn dashboard shows.",
+  });
+}
+
 /** Runs every probe once. Read-only: no DB writes, no provider caching, no secret values. */
 export async function runLiveCheck(options: LiveCheckOptions = {}) {
   opts = options;
@@ -157,6 +200,9 @@ export async function runLiveCheck(options: LiveCheckOptions = {}) {
   await sovrn(product);
   await pexels(product);
   await gsc();
+  await apify();
+  await keywordToBlog();
+  sovrnSite();
   const failed = results.filter((r) => !["OK", "BLOCKED_BY_ENVIRONMENT", "EMPTY"].includes(r.status));
   return { checkedAt: new Date().toISOString(), ok: failed.length === 0, results };
 }
