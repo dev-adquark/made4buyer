@@ -25,7 +25,7 @@ export default function RevealProvider() {
       { rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
     );
     const scan = () => {
-      document.querySelectorAll(".reveal:not(.in)").forEach((el) => {
+      document.querySelectorAll(".reveal:not(.in), .mask-reveal:not(.in)").forEach((el) => {
         const r = el.getBoundingClientRect();
         // Anything already on screen is shown immediately, so nothing flashes on load.
         if (r.top < window.innerHeight && r.bottom > 0) el.classList.add("in");

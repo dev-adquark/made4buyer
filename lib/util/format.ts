@@ -18,3 +18,10 @@ export function shortDate(d: Date | string | null | undefined) {
   if (!d) return null;
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
+
+/** Dateline style for mono labels: "01 OCT 2026". */
+export function dateline(d: Date | string | null | undefined) {
+  if (!d) return null;
+  const x = new Date(d);
+  return `${String(x.getUTCDate()).padStart(2, "0")} ${x.toLocaleString("en-US", { month: "short", timeZone: "UTC" }).toUpperCase()} ${x.getUTCFullYear()}`;
+}
