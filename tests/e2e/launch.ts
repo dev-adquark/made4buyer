@@ -41,6 +41,8 @@ async function main() {
     SOVRN_API_KEY: "e2e-sovrn",
     KEYWORD_TO_BLOG_API_URL: `${stub.base}/ktb/v1/generate`,
     KEYWORD_TO_BLOG_API_KEY: "test-ktb-key",
+    APIFY_API_TOKEN: "test-apify-token",
+    APIFY_API_BASE_URL: `${stub.base}/apify/v2`,
     ADMIN_EMAIL: "admin@e2e.test",
     ADMIN_PASSWORD: "e2e-password-123456",
     ADMIN_SESSION_SECRET: "e2e-session-secret-with-at-least-32-characters",

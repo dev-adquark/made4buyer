@@ -8,7 +8,8 @@ wipes or replaces production data.
 
 | Variable | Notes |
 |---|---|
-| `CONTENT_API_URL`, `CONTENT_API_KEY` | Plus `CONTENT_API_AUTH_HEADER` / `CONTENT_API_AUTH_SCHEME` if the API doesn't use `Authorization: Bearer`. |
+| `APIFY_API_TOKEN` | Reviews now come from sources in Admin → Sources, crawled by Apify (see [REVIEW_SOURCES.md](REVIEW_SOURCES.md)). The legacy `CONTENT_API_*` feed is optional. |
+| `SOVRN_SITE_STATUS` | Copy the site's approval status from the Sovrn dashboard (`PENDING`, `APPROVED`, `DENIED`). Never inferred. |
 | `SOVRN_API_URL`, `SOVRN_API_KEY` | `SOVRN_API_KEY` is the **secret** API key. The public site key (`SOVRN_SITE_KEY`, already set) is a different credential; the preflight fails if they are equal. |
 | `GSC_SITE_URL`, `GSC_SERVICE_ACCOUNT_JSON` | Add the service account's `client_email` as a user on the Search Console property first. |
 | `PEXELS_API_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DIRECT_URL` | Already set. |
@@ -32,8 +33,9 @@ makes one request per provider. It writes nothing except an audit-log entry with
 
 ## 3. Limited real run
 
-1. Keep `AUTO_PUBLISH_ENABLED=false`. Set `INGEST_MAX_ITEMS_PER_RUN=10`.
-2. Admin → Overview → **Run ingestion now**. Check Ingestion (invalid items and reasons),
+1. Keep `AUTO_PUBLISH_ENABLED=false`. Set the source's "Review pages per run" to 10.
+2. Admin → Sources: add a source whose terms allow crawling, enable it, **Run now**, then
+   Jobs → **collect-scrapes** once the run finishes. Check Ingestion (invalid items and reasons),
    Entities and Categorization (low-confidence items), Deals (`MATCHED` / `NO_MATCH` /
    `FAILED`), Link health (`VERIFIED_OK` share) and Failures.
 3. Publish two or three reviews from the QA queue by hand. Open each public page: source

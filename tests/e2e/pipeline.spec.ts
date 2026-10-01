@@ -227,7 +227,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
 });
 
 test("no dead links and no dead buttons", async () => {
-  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc", "/admin/go-live"];
+  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc", "/admin/go-live", "/admin/sources"];
   const hrefs = new Set<string>();
   for (const p of pages) {
     const res = await page.goto(p);
@@ -401,6 +401,30 @@ test("go-live checks run read-only probes and report honestly", async () => {
   await expect(row("environment")).toContainText("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS");
   await expect(row("gsc")).toContainText("BLOCKED_BY_ENVIRONMENT");
   await expect(page.locator("body")).not.toContainText(/e2e-sovrn|test-ktb-key|e2e-cron-secret/);
+});
+
+test("review sources: add, enable, robots-checked crawl, collect job (sample stub)", async ({ request }) => {
+  await page.goto("/admin/sources");
+  await page.getByLabel("Name").fill("Example Reviews");
+  await page.getByLabel("Slug").fill("example");
+  await page.getByLabel("Homepage").fill("https://reviews.example.test");
+  await page.getByLabel("Allowed domains").fill("example.test");
+  await page.getByLabel("Start (listing) URLs, one per line").fill("https://reviews.example.test/reviews");
+  await page.getByLabel("Review URL patterns, one per line").fill("https://reviews.example.test/reviews/**");
+  await page.getByRole("button", { name: "Add source" }).click();
+  await flash(/added \(disabled\)/);
+  const row = page.getByRole("row").filter({ hasText: "Example Reviews" });
+  await expect(row).toContainText("DISABLED");
+  await expect(row).toContainText("Excerpt only");
+  await row.getByRole("button", { name: "Enable" }).click();
+  await flash(/enabled/);
+  await page.getByRole("row").filter({ hasText: "Example Reviews" }).getByRole("button", { name: "Run now" }).click();
+  // The sample domain's robots.txt can't be reached from the test sandbox, so the crawl is refused
+  // rather than started blind. (The successful crawl → collect path is covered in tests/integration/apify.test.ts.)
+  await expect(page.getByRole("alert").filter({ hasText: /ROBOTS_DISALLOWED: robots\.txt could not be read/ })).toBeVisible();
+  const collect = await request.get("/api/cron/collect-scrapes", { headers: { authorization: "Bearer e2e-cron-secret" } });
+  expect(collect.status()).toBe(200);
+  expect(await collect.json()).toMatchObject({ results: { "collect-scrapes": { collected: 0 } } });
 });
 
 test("AI guide: generate, editor approval gate, publish with disclosure", async () => {
