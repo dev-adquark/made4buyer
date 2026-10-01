@@ -345,7 +345,7 @@ test("mega menu shows real category data", async () => {
 test("find my match walks the real taxonomy", async () => {
   await page.goto("/match");
   await page.locator(".option-grid").getByRole("link", { name: /^Laptops/ }).click();
-  await expect(page.getByRole("heading", { name: "What will you mostly use it for?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What matters most?" })).toBeVisible();
   await page.getByRole("link", { name: /No preference/ }).click();
   await page.locator(".option-grid").getByRole("link", { name: /^Windows/ }).click();
   await page.getByRole("link", { name: /No preference/ }).click();
@@ -353,26 +353,32 @@ test("find my match walks the real taxonomy", async () => {
   expect(await page.locator(".review-card").count()).toBeGreaterThanOrEqual(1);
 });
 
-test("3D hero: loads when allowed, stays off for reduced motion", async ({ browser }) => {
+test("hero: editorial statement, real collage, motion respects reduced motion", async ({ browser }) => {
   const full = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  await full.goto("/?tier=2");
-  await expect(full.locator(".hero-canvas canvas")).toHaveCount(1, { timeout: 20_000 });
-  await expect(full.locator(".hero-canvas")).toHaveAttribute("aria-hidden", "true");
-  await expect(full.getByRole("heading", { level: 1 })).toContainText("We help you find the right technology to buy.");
+  await full.goto("/");
+  await expect(full.getByRole("heading", { level: 1 })).toHaveText(/Tech worth\s+buying\./i);
+  const collage = full.getByRole("complementary", { name: "On the cutting table" });
+  await expect(collage).toBeVisible();
+  // Clippings are real records: the latest review links to its page, the deal clip to a verified offer.
+  await expect(collage.locator('a.clip.photo[href^="/review/"]')).toHaveCount(1);
+  await expect(collage.locator("a.clip.deal")).toContainText("Verified offer");
+  await expect(full.getByRole("region", { name: "Running now" })).toBeVisible();
   await full.close();
   const reduced = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
   await reduced.goto("/");
-  await expect(reduced.locator(".hero-static-art")).toHaveAttribute("data-tier", "0");
-  await expect(reduced.locator(".hero-canvas canvas")).toHaveCount(0);
+  await expect(reduced.locator(".cursor")).toBeHidden();
+  const before = await reduced.locator(".ticker-track").evaluate((el) => el.scrollLeft);
+  await reduced.waitForTimeout(800);
+  expect(await reduced.locator(".ticker-track").evaluate((el) => el.scrollLeft)).toBe(before);
   await reduced.close();
 });
 
-test("visual QA screenshots at seven viewports", async ({ browser }, info) => {
+test("visual QA screenshots at ten viewports", async ({ browser }, info) => {
   const review = await page.request.get("/sitemap.xml").then((r) => r.text()).then((x) => x.match(/<loc>[^<]*(\/review\/[^<]+)<\/loc>/)?.[1] ?? "/");
-  const sizes: Array<[string, number, number]> = [["xl", 1440, 900], ["desktop", 1280, 800], ["laptop", 1024, 768], ["tablet", 768, 1024], ["mobile", 390, 844], ["phone", 375, 812], ["small", 320, 700]];
+  const sizes: Array<[string, number, number]> = [["fhd", 1920, 1080], ["wide", 1600, 900], ["xl", 1440, 900], ["desktop", 1280, 800], ["laptop", 1024, 768], ["tablet", 768, 1024], ["large-phone", 430, 932], ["mobile", 390, 844], ["phone", 375, 812], ["small", 320, 700]];
   for (const [name, width, height] of sizes) {
     const v = await browser.newPage({ viewport: { width, height } });
-    for (const [label, path] of [["home", "/"], ["review", review], ["category", "/category/laptops"], ["compare", "/compare"], ["deals", "/deals"]] as const) {
+    for (const [label, path] of [["home", "/"], ["review", review], ["category", "/category/laptops"], ["compare", "/compare"], ["deals", "/deals"], ["match", "/match"], ["guides", "/guides"], ["search", "/search?q=laptop"], ["about", "/about"]] as const) {
       await v.goto(path);
       const overflow = await v.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, `${label}@${name}`).toBeLessThanOrEqual(1);
