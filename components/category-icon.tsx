@@ -21,6 +21,17 @@ const PATHS: Record<string, string> = {
   "productivity-software": "M5 4h14v16H5z M8 8h8 M8 12h8 M8 16h5",
   "drones-gadgets": "M9 10h6v4H9z M5 5l4 5 M19 5l-4 5 M5 19l4-5 M19 19l-4-5 M3 5h4 M17 5h4 M3 19h4 M17 19h4",
   "automotive-tech": "M5 13l2-6h10l2 6v5H5z M5 13h14 M8 16h.01 M16 16h.01",
+  mattresses: "M3 13h18v5H3z M3 18v2 M21 18v2 M5 13v-3a2 2 0 0 1 2-2h4v5",
+  furniture: "M6 10h12v5H6z M7 15v5 M17 15v5 M8 10V5h8v5",
+  "kitchen-appliances": "M6 3h12v18H6z M6 9h12 M9 6h.01 M10 13h4",
+  "home-appliances": "M5 3h14v18H5z M12 14a4 4 0 1 0 0 0.01 M8 6h.01 M11 6h5",
+  "fitness-equipment": "M4 9v6 M7 7v10 M17 7v10 M20 9v6 M7 12h10",
+  "personal-care": "M9 3h6v4H9z M8 7h8v14H8z M11 11h2",
+  "outdoor-garden": "M12 21V11 M12 11c-4 0-6-3-6-7 4 0 6 3 6 7 M12 11c4 0 6-3 6-7-4 0-6 3-6 7",
+  "tools-diy": "M14 6l4 4-9 9H5v-4z M13 7l4 4",
+  "baby-kids": "M5 12h14l-2 6H7z M9 18v2 M15 18v2 M12 6a3 3 0 1 0 0 0.01",
+  "pet-supplies": "M7 9a2 2 0 1 0 0 0.01 M12 6a2 2 0 1 0 0 0.01 M17 9a2 2 0 1 0 0 0.01 M8 17c0-3 2-5 4-5s4 2 4 5c0 2-8 2-8 0",
+  "luggage-travel": "M9 4h6v3H9z M5 7h14v13H5z M9 7v13 M15 7v13",
   general: "M5 5h14v10H5z M9 19h6 M12 15v4",
 };
 

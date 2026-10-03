@@ -32,6 +32,17 @@ const QUERIES: Record<string, string> = {
   "productivity-software": "laptop office productivity",
   "drones-gadgets": "drone flying",
   "automotive-tech": "car dashboard technology",
+  mattresses: "bedroom bed mattress",
+  furniture: "ergonomic office chair desk",
+  "kitchen-appliances": "kitchen countertop appliances",
+  "home-appliances": "modern home interior appliance",
+  "fitness-equipment": "home gym equipment",
+  "personal-care": "bathroom grooming products",
+  "outdoor-garden": "garden backyard grill",
+  "tools-diy": "power tools workshop",
+  "baby-kids": "baby stroller park",
+  "pet-supplies": "dog at home",
+  "luggage-travel": "suitcase travel airport",
 };
 
 export type CategoryPhoto = { url: string; alt: string; photographer: string; photographerUrl: string; pexelsUrl: string };

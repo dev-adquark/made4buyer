@@ -27,6 +27,17 @@ export const THEMES: Record<string, CategoryTheme> = {
   "productivity-software": { from: "#0EA5E9", to: "#0EA5E9", ink: "#075985", soft: "#DBE9F1", glow: "rgba(14, 165, 233, 0.28)", onSignal: "#03202d" },
   "drones-gadgets": { from: "#84CC16", to: "#84CC16", ink: "#3F6212", soft: "#E6EDD2", glow: "rgba(132, 204, 22, 0.3)", onSignal: "#141f02" },
   "automotive-tech": { from: "#64748B", to: "#64748B", ink: "#334155", soft: "#E1E3E6", glow: "rgba(100, 116, 139, 0.3)", onSignal: "#ffffff" },
+  mattresses: { from: "#6C8EBF", to: "#6C8EBF", ink: "#2F4C78", soft: "#E0E4EC", glow: "rgba(108, 142, 191, 0.3)", onSignal: "#0b1626" },
+  furniture: { from: "#B07D4F", to: "#B07D4F", ink: "#6E4521", soft: "#EDE3D6", glow: "rgba(176, 125, 79, 0.3)", onSignal: "#1d0f03" },
+  "kitchen-appliances": { from: "#EF4444", to: "#EF4444", ink: "#A11D1D", soft: "#F3DBD8", glow: "rgba(239, 68, 68, 0.28)", onSignal: "#200404" },
+  "home-appliances": { from: "#06B6D4", to: "#06B6D4", ink: "#0A5E6E", soft: "#D8EBEE", glow: "rgba(6, 182, 212, 0.28)", onSignal: "#03202a" },
+  "fitness-equipment": { from: "#F97316", to: "#F97316", ink: "#9A3A08", soft: "#F3E0D2", glow: "rgba(249, 115, 22, 0.3)", onSignal: "#1f0b02" },
+  "personal-care": { from: "#D946EF", to: "#D946EF", ink: "#86198F", soft: "#EFDDEF", glow: "rgba(217, 70, 239, 0.28)", onSignal: "#22042a" },
+  "outdoor-garden": { from: "#16A34A", to: "#16A34A", ink: "#14602F", soft: "#DAEADC", glow: "rgba(22, 163, 74, 0.28)", onSignal: "#03180a" },
+  "tools-diy": { from: "#EAB308", to: "#EAB308", ink: "#6E5205", soft: "#F1E8C9", glow: "rgba(234, 179, 8, 0.3)", onSignal: "#1d1500" },
+  "baby-kids": { from: "#F472B6", to: "#F472B6", ink: "#9D2463", soft: "#F2DFE7", glow: "rgba(244, 114, 182, 0.28)", onSignal: "#26061a" },
+  "pet-supplies": { from: "#8E5F3A", to: "#8E5F3A", ink: "#663F1F", soft: "#ECE2D7", glow: "rgba(142, 95, 58, 0.3)", onSignal: "#ffffff" },
+  "luggage-travel": { from: "#0F766E", to: "#0F766E", ink: "#0F5F59", soft: "#D9E8E5", glow: "rgba(15, 118, 110, 0.28)", onSignal: "#ffffff" },
   general: { from: "#18181C", to: "#18181C", ink: "#18181C", soft: "#E3E0D8", glow: "rgba(24, 24, 28, 0.2)", onSignal: "#ffffff" },
 };
 

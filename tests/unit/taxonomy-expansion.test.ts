@@ -43,6 +43,24 @@ describe("expanded taxonomy", () => {
     ["Microsoft 365 review", "productivity-software"],
     ["1Password review: the best password manager", "productivity-software"],
     ["Mac mini M4 review", "desktops"],
+    ["Purple Restore hybrid mattress review", "mattresses"],
+    ["Tempur-Pedic memory foam mattress topper review", "mattresses"],
+    ["Herman Miller Aeron office chair review", "furniture"],
+    ["Secretlab Titan Evo gaming chair review", "furniture"],
+    ["Ninja Foodi dual-zone air fryer review", "kitchen-appliances"],
+    ["Breville Barista Express espresso machine review", "kitchen-appliances"],
+    ["Dyson V15 Detect cordless vacuum review", "home-appliances"],
+    ["Coway Airmega air purifier review", "home-appliances"],
+    ["Peloton Bike+ exercise bike review", "fitness-equipment"],
+    ["Dyson Supersonic hair dryer review", "personal-care"],
+    ["Oral-B iO Series 10 electric toothbrush review", "personal-care"],
+    ["Ooni Koda 16 pizza oven review", "outdoor-garden"],
+    ["Husqvarna robotic lawn mower review", "outdoor-garden"],
+    ["DeWalt 20V cordless drill review", "tools-diy"],
+    ["UPPAbaby Vista V3 stroller review", "baby-kids"],
+    ["Nanit Pro baby monitor review", "baby-kids"],
+    ["Furbo 360 dog camera review", "pet-supplies"],
+    ["Away The Bigger Carry-On suitcase review", "luggage-travel"],
   ])("classifies %s as %s", (title, expected) => {
     expect(cat(title)).toBe(expected);
   });
@@ -53,5 +71,10 @@ describe("expanded taxonomy", () => {
     expect(cat("Logitech G Pro X Superlight 2 gaming mouse review")).toBe("accessories");
     expect(cat("Apple Watch Series 11 review: heart rate monitor accuracy")).toBe("wearables");
     expect(cat("Anker Prime 100W USB-C charger review")).toBe("accessories");
+    expect(cat("Roborock Saros 10 robot vacuum review")).toBe("smart-home");
+    expect(cat("Oura Ring 4 review: sleep tracking accuracy")).toBe("wearables");
+    expect(cat("Fitbit Charge 7 fitness tracker review")).toBe("wearables");
+    expect(cat("Claude review: the best AI tool for long documents")).toBe("ai-tools");
+    expect(cat("Visual Studio Code review: the developer tool every coder uses")).toBe("developer-software");
   });
 });
