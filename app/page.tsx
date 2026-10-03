@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Collage from "@/components/collage";
 import DealLedger from "@/components/deal-ledger";
@@ -14,18 +15,28 @@ import { config } from "@/lib/config";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryPhotos } from "@/lib/public/category-images";
 import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, verifiedDealRows } from "@/lib/public/queries";
-import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
+import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, money } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const style = (slug: string | null | undefined) => themeStyle(slug) as React.CSSProperties;
 const NA = <span className="na">Not available</span>;
 
 export default async function Home() {
-  const [reviews, guides, ledger, deals, trending, pair, stats] = await Promise.all([latestByKind("REVIEW", 6), latestByKind("AI_GUIDE", 3), categoryLedger(), verifiedDealRows({ take: 6 }), trendingReviews(7, 4), comparePair(), trustStats()]);
-  const photos = await categoryPhotos(ledger.map((c) => c.slug)).catch(() => ({}) as Record<string, null>);
+  // Photos depend only on the static taxonomy, so they load alongside the database queries.
+  const [reviews, guides, ledger, deals, trending, pair, stats, photos] = await Promise.all([
+    latestByKind("REVIEW", 6),
+    latestByKind("AI_GUIDE", 3),
+    categoryLedger(),
+    verifiedDealRows({ take: 6 }),
+    trendingReviews(7, 4),
+    comparePair(),
+    trustStats(),
+    categoryPhotos(CATEGORIES.map((c) => c.slug)).catch(() => ({}) as Record<string, null>),
+  ]);
   const site = config.siteUrl();
   const lead = reviews[0];
   const heroDeal = deals[0];

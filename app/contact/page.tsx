@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-export const metadata: Metadata = { title: "Contact", alternates: { canonical: "/contact" } };
+export const metadata: Metadata = { title: "Contact", description: "Contact the Made4Buyers editors about a review, a correction or a partnership.", alternates: { canonical: "/contact" } };
 
 /** Shows the configured contact address (NEXT_PUBLIC_CONTACT_EMAIL); never invents one. */
 export default function Contact() {

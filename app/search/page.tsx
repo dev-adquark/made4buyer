@@ -10,7 +10,7 @@ import { categoryCounts, searchGroups, searchReviews } from "@/lib/public/querie
 import { themeStyle } from "@/lib/taxonomy/themes";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Search reviews", robots: { index: false, follow: true }, alternates: { canonical: "/search" } };
+export const metadata: Metadata = { title: "Search reviews", description: "Search Made4Buyers reviews and guides by product, brand or category.", robots: { index: false, follow: true }, alternates: { canonical: "/search" } };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q: raw } = await searchParams;

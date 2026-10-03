@@ -61,14 +61,15 @@ export async function relatedReviews(review: { id: string; categorySlug: string 
   if (review.subcategorySlug) tiers.push({ subcategorySlug: review.subcategorySlug });
   if (review.categorySlug) tiers.push({ categorySlug: review.categorySlug });
   if (review.brandSlug) tiers.push({ brandSlug: review.brandSlug });
-  for (const where of tiers) {
-    if (out.length >= take) break;
-    const rows = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", id: { notIn: [...seen] }, ...where }, orderBy: LATEST_FIRST, take: take - out.length, select: cardSelect });
+  // Tiers load in parallel; taking `take` (+ overlap) from each keeps the tier-priority result identical.
+  const results = await Promise.all(tiers.map((where, i) => db.normalizedReview.findMany({ where: { status: "PUBLISHED", id: { not: review.id }, ...where }, orderBy: LATEST_FIRST, take: take * (i + 1), select: cardSelect })));
+  for (const rows of results)
     for (const r of rows) {
+      if (out.length >= take) return out;
+      if (seen.has(r.id)) continue;
       seen.add(r.id);
       out.push(r);
     }
-  }
   return out;
 }
 
@@ -153,12 +154,12 @@ export async function trendingReviews(days = 7, take = 6) {
   return ranked.flatMap((r) => (bySlug.has(r.slug) ? [{ review: bySlug.get(r.slug)!, views: r.views }] : [])).slice(0, take);
 }
 
-export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean };
+export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" };
 
 /** Instant search suggestions (published reviews only). */
 export async function suggest(q: string, take = 6): Promise<Suggestion[]> {
   const rows = await searchReviews(q, take);
-  return rows.map((r) => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r) }));
+  return rows.map((r) => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r), kind: r.kind }));
 }
 
 export const publishedGuides = cache(async (page = 1, pageSize = 24) => {
@@ -176,6 +177,19 @@ export async function latestByKind(kind: "REVIEW" | "AI_GUIDE", take = 6, catego
 
 /** One row per verified offer (VERIFIED_OK link on a matched offer) of a published review. */
 export type DealRow = { linkId: string; merchant: string | null; price: number | null; currency: string | null; availability: string | null; verifiedAt: Date; isBest: boolean; review: ReviewCard };
+
+/** Verified offers per category and the newest check, without loading full cards. */
+export async function dealLedgerSummary(): Promise<{ counts: Map<string, number>; newest: Date | null }> {
+  const links = await db.affiliateLink.findMany({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } }, select: { lastVerifiedAt: true, updatedAt: true, review: { select: { categorySlug: true } } } });
+  const counts = new Map<string, number>();
+  let newest: Date | null = null;
+  for (const l of links) {
+    if (l.review.categorySlug) counts.set(l.review.categorySlug, (counts.get(l.review.categorySlug) ?? 0) + 1);
+    const at = l.lastVerifiedAt ?? l.updatedAt;
+    if (!newest || at > newest) newest = at;
+  }
+  return { counts, newest };
+}
 
 export async function verifiedDealRows({ categorySlug, merchant, q, take = 60 }: { categorySlug?: string; merchant?: string; q?: string; take?: number } = {}): Promise<DealRow[]> {
   const terms = (q ?? "").split(/\s+/).filter((t) => t.length >= 2).slice(0, 6);
@@ -305,7 +319,7 @@ export type SearchGroups = {
 export async function searchGroups(q: string): Promise<SearchGroups> {
   const term = q.trim().toLowerCase();
   const rows = await searchReviews(q, 24);
-  const toS = (r: ReviewCard): Suggestion => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r) });
+  const toS = (r: ReviewCard): Suggestion => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r), kind: r.kind });
   const categories: SearchGroups["categories"] = [];
   for (const c of CATEGORIES) {
     if (c.name.toLowerCase().includes(term) || c.aliases.some((a) => a.includes(term))) categories.push({ slug: c.slug, name: c.name, href: `/category/${c.slug}`, parent: null });

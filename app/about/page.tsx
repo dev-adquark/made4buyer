@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "About & methodology", alternates: { canonical: "/about" } };
+export const metadata: Metadata = { title: "About & methodology", description: "How Made4Buyers works: where reviews come from, how they are checked, how offers are verified and what we never do.", alternates: { canonical: "/about" } };
 
 export default function About() {
   return (

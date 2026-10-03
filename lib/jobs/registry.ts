@@ -7,6 +7,7 @@ import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
 import { withLock } from "./lock";
+import { runStaleContentDetection } from "./stale-content";
 import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob } from "./revalidation";
 
 /**
@@ -52,6 +53,7 @@ export const JOBS = {
   "retry-failed": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runFailedRetry({ trigger }), locked: true },
   "cleanup-cache": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runCacheCleanup({ trigger }), locked: true },
   "publish-cycle": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runPublishCycleJob({ trigger }), locked: true },
+  "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
 } as const;
 
@@ -59,6 +61,15 @@ export type JobName = keyof typeof JOBS;
 
 export function isJobName(name: string): name is JobName {
   return Object.prototype.hasOwnProperty.call(JOBS, name);
+}
+
+const DID_NOT_RUN = new Set(["BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "DISABLED", "SKIPPED", "FAILED"]);
+
+/** Whether a job's result means it actually did its work, so callers never report a no-op as success. */
+export function jobOutcome(result: unknown): { ran: boolean; status: string; reason?: string } {
+  const r = (result ?? {}) as { status?: unknown; reason?: unknown };
+  const status = typeof r.status === "string" ? r.status : "OK";
+  return { ran: !DID_NOT_RUN.has(status), status, reason: typeof r.reason === "string" ? r.reason : undefined };
 }
 
 /** Runs a job under its lock. Ingestion manages its own lock inside runIngestion. */

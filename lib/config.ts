@@ -59,6 +59,13 @@ export const config = {
     autoPublish: () => bool("AUTO_PUBLISH_ENABLED", false),
   },
 
+  freshness: {
+    /** A published review whose source article is older than this is flagged for an editor. */
+    reviewMonths: () => num("STALE_REVIEW_MONTHS", 18, 1, 120),
+    /** A published AI-assisted guide older than this is flagged for a refresh. */
+    guideMonths: () => num("STALE_GUIDE_MONTHS", 12, 1, 120),
+  },
+
   taxonomy: {
     autoAcceptThreshold: () => num("TAXONOMY_AUTO_ACCEPT_THRESHOLD", 0.8, 0, 1),
   },

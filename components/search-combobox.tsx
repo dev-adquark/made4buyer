@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
-type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean };
+type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" };
 
 /**
  * Accessible search combobox (ARIA 1.2 pattern) with instant suggestions from published
@@ -142,6 +142,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
                   <span>
                     <span className="s-title">{s.productName}</span>
                     <span className="s-meta">
+                      {s.kind === "AI_GUIDE" && <span className="pill plain">AI-assisted guide</span>}
                       {s.categorySlug && <span className="pill">{categoryName(s.categorySlug)}</span>}
                       {s.brand && <span className="pill plain">{s.brand}</span>}
                       {s.verifiedOffer && <span className="pill verified">Verified offer</span>}

@@ -36,7 +36,7 @@ export default async function GuidesIndex({ searchParams }: { searchParams: Prom
           <aside className="kind-banner ai" aria-label="How guides are written">
             <div>
               <strong>Every guide here is AI-assisted.</strong>
-              Guides are drafted with an AI writing tool, then read and approved by an editor before they’re published. They aren’t hands-on reviews and never carry a rating. For tested products, see <Link href="/reviews">reviews</Link>.
+              Guides are drafted with an AI writing tool, then read and approved by an editor before they’re published. They aren’t hands-on reviews and never carry a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
             </div>
           </aside>
           {rows.length ? (

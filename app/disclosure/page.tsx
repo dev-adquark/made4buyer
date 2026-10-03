@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Affiliate disclosure", alternates: { canonical: "/disclosure" } };
+export const metadata: Metadata = { title: "Affiliate disclosure", description: "How Made4Buyers earns money from affiliate links, and why that never changes which products we cover or how.", alternates: { canonical: "/disclosure" } };
 
 export default function Disclosure() {
   return (

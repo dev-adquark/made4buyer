@@ -42,7 +42,7 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
       <div className="btnrow">
         <ActionForm action="/api/admin/jobs" fields={{ job: "ingest" }} label="Run ingestion now" returnTo="/admin" className="btn primary" disabledReason={integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured (BLOCKED_BY_ENVIRONMENT)" : undefined} />
         <ActionForm action="/api/admin/jobs" fields={{ job: "verify-links" }} label="Verify due links" returnTo="/admin" />
-        <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin" />
+        <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin" disabledReason={integrations.sovrn === "READY" ? undefined : "Sovrn not configured"} />
         <Link className="btn" href="/admin/qa?status=QUEUED">
           Review publish queue ({reviews("QUEUED")})
         </Link>

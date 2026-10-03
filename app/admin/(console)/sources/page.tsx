@@ -2,6 +2,7 @@ import { ActionForm, Badge, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
+import { sourceHealth } from "@/lib/admin/source-health";
 import { apifyConfigured } from "@/lib/pipeline/apify";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 
@@ -14,9 +15,14 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
   await requireAdminPage();
   const sp = await searchParams;
   const editId = param(sp, "edit");
-  const [sources, runs] = await Promise.all([db.reviewSource.findMany({ orderBy: { name: "asc" } }), db.apifyRun.findMany({ orderBy: { startedAt: "desc" }, take: 30, include: { source: { select: { name: true } } } })]);
+  const [sources, runs, latest] = await Promise.all([
+    db.reviewSource.findMany({ orderBy: { name: "asc" } }),
+    db.apifyRun.findMany({ orderBy: { startedAt: "desc" }, take: 30, include: { source: { select: { name: true } } } }),
+    db.apifyRun.findMany({ orderBy: { startedAt: "desc" }, distinct: ["sourceId"] }),
+  ]);
+  const health = await sourceHealth(sources.map((s) => s.id));
   const edit = editId ? sources.find((s) => s.id === editId) : undefined;
-  const last = (id: string) => runs.find((r) => r.sourceId === id);
+  const last = (id: string) => latest.find((r) => r.sourceId === id);
   return (
     <>
       <h1>Review sources</h1>
@@ -36,6 +42,9 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
               <th>Rights</th>
               <th>Every</th>
               <th>Last run</th>
+              <th>Last success</th>
+              <th className="num">Discovered</th>
+              <th>Robots.txt</th>
               <th>Last result</th>
               <th>Actions</th>
             </tr>
@@ -43,11 +52,17 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
           <tbody>
             {sources.map((s) => {
               const r = last(s.id);
+              const h = health.get(s.id);
               return (
                 <tr key={s.id} className={s.enabled ? undefined : "row-inactive"}>
                   <td data-label="Source">
                     <strong>{s.name}</strong>
                     <div className="small muted">{s.allowedDomains.join(", ")}</div>
+                    <details className="small">
+                      <summary>Listing URLs and patterns</summary>
+                      <div>Start: {s.startUrls.join(", ")}</div>
+                      <div>Reviews: {s.reviewUrlPatterns.join(", ")}</div>
+                    </details>
                   </td>
                   <td data-label="Status">
                     <Badge value={s.enabled ? "ENABLED" : "DISABLED"} tone={s.enabled ? "ok" : "warn"} />
@@ -55,6 +70,14 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   <td data-label="Rights">{s.rights === "LICENSED" ? "Licensed (full text)" : "Excerpt only"}</td>
                   <td data-label="Every">{s.crawlFrequencyHours} h</td>
                   <td data-label="Last run">{when(s.lastRunAt)}</td>
+                  <td data-label="Last success">{h?.lastSuccessAt ? when(h.lastSuccessAt) : "Never"}</td>
+                  <td className="num" data-label="Discovered">
+                    {h?.discovered ?? 0}
+                    {h && h.discovered > 0 && <div className="small muted">{h.accepted} accepted</div>}
+                  </td>
+                  <td data-label="Robots.txt">
+                    <Badge value={h?.robots === "DISALLOWED" ? "DISALLOWED" : h?.robots === "ALLOWED" ? "ALLOWED AT LAST START" : "NOT CHECKED"} tone={h?.robots === "DISALLOWED" ? "error" : h?.robots === "ALLOWED" ? "ok" : "warn"} />
+                  </td>
                   <td data-label="Last result">
                     {r ? (
                       <>
@@ -68,6 +91,11 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                       </>
                     ) : (
                       "Never run"
+                    )}
+                    {h?.lastFailure && (
+                      <div className="small">
+                        Last failure ({when(h.lastFailure.at)}): <code>{h.lastFailure.code}</code> {h.lastFailure.message.slice(0, 200)}
+                      </div>
                     )}
                   </td>
                   <td data-label="Actions">
@@ -84,7 +112,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
             })}
             {!sources.length && (
               <tr>
-                <td colSpan={7}>No sources yet. Add the first one below.</td>
+                <td colSpan={10}>No sources yet. Add the first one below.</td>
               </tr>
             )}
           </tbody>

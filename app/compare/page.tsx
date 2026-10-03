@@ -11,7 +11,7 @@ import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { availabilityLabel, money, shortDate } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Compare products", robots: { index: false, follow: true }, alternates: { canonical: "/compare" } };
+export const metadata: Metadata = { title: "Compare products", description: "Put two reviewed products side by side: specs, verdicts and verified offers from the reviews we publish.", robots: { index: false, follow: true }, alternates: { canonical: "/compare" } };
 
 const SECTIONS: CompareSection[] = [
   { title: "Overview", rows: ["Brand", "Category", "Type", "Model"] },

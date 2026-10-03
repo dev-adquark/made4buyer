@@ -45,7 +45,7 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
     title: `${def.name} reviews`,
     description: `${def.description} Buyer-focused reviews with verified offers.`,
     alternates: { canonical: `/category/${slug}` },
-    openGraph: { title: `${def.name} reviews`, description: def.description, url: `/category/${slug}` },
+    openGraph: { siteName: "Made4Buyers", type: "website", title: `${def.name} reviews`, description: def.description, url: `/category/${slug}` },
     // Empty or filtered listing pages are not indexed (avoids thin/duplicate pages).
     robots: count === 0 || filtered ? { index: false, follow: true } : undefined,
   };
@@ -243,7 +243,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
             {reviews.length ? (
               <ReviewGrid reviews={reviews} eagerCount={3} headingLevel={3} />
             ) : (
-              <EmptyState title={anyFilter ? "No reviews match these filters." : "We’re waiting for the next verified review."} headingLevel={3} action={anyFilter ? <Link className="btn" href={`/category/${slug}`}>Clear filters</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
+              <EmptyState title={anyFilter ? "No reviews match these filters." : "We’re waiting for the next published review."} headingLevel={3} action={anyFilter ? <Link className="btn" href={`/category/${slug}`}>Clear filters</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
                 {anyFilter ? "Try removing a filter." : "Reviews appear here once they pass editorial QA."}
               </EmptyState>
             )}
@@ -315,7 +315,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       {guides.length > 0 && (
         <section className="section" id="guides" aria-labelledby="cg-title">
           <div className="wrap">
-            <SectionHeader id="cg-title" label={`${guides.length} published`} title={`${def.name} buying guides`}>
+            <SectionHeader id="cg-title" label="Latest" title={`${def.name} buying guides`}>
               AI-assisted and editor-approved. Not hands-on reviews.
             </SectionHeader>
             <ReviewGrid reviews={guides} />

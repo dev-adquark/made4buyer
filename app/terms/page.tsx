@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Terms of use", alternates: { canonical: "/terms" } };
+export const metadata: Metadata = { title: "Terms of use", description: "The terms for using Made4Buyers, including how reviews, guides and offers should be read.", alternates: { canonical: "/terms" } };
 
 export default function Terms() {
   return (

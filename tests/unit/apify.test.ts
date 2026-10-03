@@ -82,3 +82,25 @@ describe("AI guides stay separate from reviews", () => {
     expect(guide.ok && guide.value.contentKind === "AI_GUIDE" && guide.value.rating === undefined).toBe(true);
   });
 });
+
+describe("robots.txt wildcard matching", () => {
+  it("matches prefixes, wildcards and end anchors like Google's parser", async () => {
+    const { robotsPatternMatches: m } = await import("@/lib/pipeline/apify");
+    expect(m("/reviews", "/reviews/x")).toBe(true);
+    expect(m("/reviews", "/review")).toBe(false);
+    expect(m("/*.pdf$", "/files/a.pdf")).toBe(true);
+    expect(m("/*.pdf$", "/files/a.pdf?x=1")).toBe(false);
+    expect(m("/a*b*c", "/a-x-b-y-c-z")).toBe(true);
+    expect(m("/a*b*c", "/a-x-c-b")).toBe(false);
+    expect(m("/", "/anything")).toBe(true);
+    expect(m("/x$", "/x")).toBe(true);
+    expect(m("/x$", "/xy")).toBe(false);
+  });
+
+  it("stays fast on hostile wildcard rules", async () => {
+    const { robotsPatternMatches: m } = await import("@/lib/pipeline/apify");
+    const started = Date.now();
+    expect(m(`/${"*a".repeat(40)}$`, `/${"a".repeat(2000)}b`)).toBe(false);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+});

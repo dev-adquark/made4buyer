@@ -97,15 +97,43 @@ export function robotsAllows(robots: string, path: string): boolean {
   if (!group) return true;
   let best: { allow: boolean; len: number } | null = null;
   for (const r of group.rules) {
-    const re = new RegExp(`^${r.path.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\\\$$/, "$")}`);
-    if (re.test(path) && (!best || r.path.length > best.len || (r.path.length === best.len && r.allow))) best = { allow: r.allow, len: r.path.length };
+    if (robotsPatternMatches(r.path, path) && (!best || r.path.length > best.len || (r.path.length === best.len && r.allow))) best = { allow: r.allow, len: r.path.length };
   }
   return best ? best.allow : true;
 }
 
+/**
+ * robots.txt path match: `*` matches any run of characters, a trailing `$` anchors the end.
+ * Iterative wildcard matching (no RegExp), so hostile rules cannot cause catastrophic backtracking.
+ */
+export function robotsPatternMatches(pattern: string, path: string): boolean {
+  const anchored = pattern.endsWith("$");
+  const p = anchored ? pattern.slice(0, -1) : pattern;
+  let i = 0;
+  let j = 0;
+  let star = -1;
+  let mark = 0;
+  while (j < path.length) {
+    if (i < p.length && p[i] === "*") {
+      star = i++;
+      mark = j;
+    } else if (i < p.length && p[i] === path[j]) {
+      i++;
+      j++;
+    } else if (i === p.length && !anchored) {
+      return true; // prefix match
+    } else if (star >= 0) {
+      i = star + 1;
+      j = ++mark;
+    } else return false;
+  }
+  while (i < p.length && p[i] === "*") i++;
+  return i === p.length;
+}
+
 async function checkRobots(url: string): Promise<{ allowed: boolean; reason?: string }> {
   const u = new URL(url);
-  const res = await safeFetch(`${u.origin}/robots.txt`, { timeoutMs: 8000, maxRedirects: 3, readBody: true, maxBytes: 500_000 });
+  const res = await safeFetch(`${u.origin}/robots.txt`, { timeoutMs: 8000, maxRedirects: 3, readBody: true, maxBytes: 500_000, standardPortsOnly: true });
   // 4xx: the site publishes no rules. Unreachable or 5xx: don't crawl until it can be read.
   if (!res.ok) return res.status >= 400 && res.status < 500 ? { allowed: true, reason: "no robots.txt" } : { allowed: false, reason: `robots.txt could not be read (${res.status || res.error?.kind}); not crawling until it can` };
   return { allowed: robotsAllows(res.body ?? "", u.pathname + u.search) };

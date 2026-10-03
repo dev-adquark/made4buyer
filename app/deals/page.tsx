@@ -4,24 +4,28 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import DealLedger from "@/components/deal-ledger";
 import EmptyState from "@/components/empty-state";
 import SectionHeader from "@/components/section-header";
-import { dealMerchants, lapsedOffers, verifiedDealRows } from "@/lib/public/queries";
+import { db } from "@/lib/db";
+import { dealLedgerSummary, dealMerchants, lapsedOffers, VERIFIED_LINK, verifiedDealRows } from "@/lib/public/queries";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, shortDate } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Verified deals", description: "Offers on reviewed products whose links we have checked, with the date of the last check.", alternates: { canonical: "/deals" } };
-
 type Search = { category?: string; merchant?: string; q?: string };
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }): Promise<Metadata> {
+  const sp = await searchParams;
+  // Filtered views and an empty ledger are not useful search results.
+  const thin = Boolean(sp.category || sp.merchant || sp.q) || (await db.affiliateLink.count({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } } })) === 0;
+  return { title: "Verified deals", description: "Offers on reviewed products whose links we have checked, with the date of the last check.", alternates: { canonical: "/deals" }, robots: thin ? { index: false, follow: true } : undefined };
+}
 
 export default async function Deals({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const category = sp.category && CATEGORY_BY_SLUG.has(sp.category) ? sp.category : undefined;
   const merchant = sp.merchant ? sp.merchant.slice(0, 120) : undefined;
   const q = (sp.q ?? "").trim().slice(0, 80);
-  const [rows, all, merchants, lapsed] = await Promise.all([verifiedDealRows({ categorySlug: category, merchant, q, take: 80 }), verifiedDealRows({ take: 300 }), dealMerchants(), lapsedOffers(8, category)]);
-  const counts = new Map<string, number>();
-  for (const r of all) if (r.review.categorySlug) counts.set(r.review.categorySlug, (counts.get(r.review.categorySlug) ?? 0) + 1);
+  const [rows, { counts, newest }, merchants, lapsed] = await Promise.all([verifiedDealRows({ categorySlug: category, merchant, q, take: 80 }), dealLedgerSummary(), dealMerchants(), lapsedOffers(8, category)]);
   const filtered = Boolean(category || merchant || q);
   const href = (patch: Partial<Search>) => {
     const p = new URLSearchParams();
@@ -30,7 +34,6 @@ export default async function Deals({ searchParams }: { searchParams: Promise<Se
     const s = p.toString();
     return `/deals${s ? `?${s}` : ""}`;
   };
-  const newest = all.reduce<Date | null>((d, r) => (!d || r.verifiedAt > d ? r.verifiedAt : d), null);
 
   return (
     <main style={themeStyle(category) as React.CSSProperties}>

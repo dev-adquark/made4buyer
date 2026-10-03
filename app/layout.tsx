@@ -12,9 +12,10 @@ import { config } from "@/lib/config";
 import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 
 const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"] });
-const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"] });
+// Only the display and UI faces are preloaded: they paint the masthead and hero (LCP).
+const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"], preload: false });
 const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"] });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"], preload: false });
 
 export const metadata: Metadata = {
   metadataBase: new URL(config.siteUrl()),
@@ -22,7 +23,6 @@ export const metadata: Metadata = {
   description: "A universal buying guide: reviews filed by what you need, comparisons built from facts, and offers checked before they are shown.",
   openGraph: { siteName: "Made4Buyers", type: "website" },
   twitter: { card: "summary_large_image" },
-  robots: { index: true, follow: true },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#eeebe3" };

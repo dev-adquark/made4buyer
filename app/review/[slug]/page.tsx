@@ -13,7 +13,7 @@ import { placeholderPath } from "@/lib/pipeline/images";
 import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { buildPageRenderModel, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
+import { buildPageRenderModel, RENDER_MODEL_VERSION, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
 import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
 
@@ -29,7 +29,9 @@ const loadPage = cache(async (slug: string) => {
     select: { id: true, status: true, slug: true, categorySlug: true, subcategorySlug: true, brandSlug: true, renderModel: { select: { model: true, version: true } } },
   });
   if (!review || review.status !== "PUBLISHED") return null;
-  const model = (review.renderModel?.model as PageRenderModel | undefined) ?? (await buildPageRenderModel(review.id));
+  // A model stored before the current version (e.g. without text rights) is rebuilt, never trusted.
+  const stored = review.renderModel?.version === RENDER_MODEL_VERSION ? (review.renderModel.model as PageRenderModel) : undefined;
+  const model = stored ?? (await buildPageRenderModel(review.id));
   return { review, model };
 });
 
@@ -43,7 +45,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: m.title,
     description: m.metaDescription,
     alternates: { canonical: m.canonicalPath },
-    openGraph: { type: "article", title: m.title, description: m.metaDescription, url: m.canonicalPath, images, publishedTime: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined, modifiedTime: m.updatedAt },
+    openGraph: { siteName: "Made4Buyers", type: "article", title: m.title, description: m.metaDescription, url: m.canonicalPath, images, publishedTime: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined, modifiedTime: m.updatedAt },
     twitter: { card: images.length ? "summary_large_image" : "summary", title: m.title, description: m.metaDescription, images: images.map((i) => i.url) },
   };
 }
@@ -80,7 +82,7 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
       datePublished: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
       dateModified: m.updatedAt,
-      ...(m.kind === "AI_GUIDE" ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
+      ...(m.kind === "AI_GUIDE" || excerpt ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
       publisher,
       about: { "@type": "Thing", name: m.productName },
       ...(excerpt && m.source.url ? { isBasedOn: m.source.url, citation: { "@type": "CreativeWork", url: m.source.url, ...(m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}), publisher: { "@type": "Organization", name: m.source.name } } } : {}),

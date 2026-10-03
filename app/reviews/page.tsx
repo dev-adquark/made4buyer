@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ page?: string }> }): Promise<Metadata> {
   const { page } = await searchParams;
-  return { title: "All reviews", description: "Every published Made4Buyers review, newest first.", alternates: { canonical: "/reviews" }, robots: page && page !== "1" ? { index: false, follow: true } : undefined };
+  const { total } = await publishedReviews(1);
+  return { title: "All reviews", description: "Every published Made4Buyers review, newest first.", alternates: { canonical: "/reviews" }, robots: total === 0 || (page && page !== "1") ? { index: false, follow: true } : undefined };
 }
 
 export default async function ReviewsIndex({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
@@ -39,7 +40,7 @@ export default async function ReviewsIndex({ searchParams }: { searchParams: Pro
       </section>
       <section className="section">
         <div className="wrap">
-          {rows.length ? <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} /> : <EmptyState title="We’re waiting for the next verified review.">Reviews appear here once they pass editorial QA.</EmptyState>}
+          {rows.length ? <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} /> : <EmptyState title="We’re waiting for the next published review.">Reviews appear here once they pass editorial QA.</EmptyState>}
           {pages > 1 && (
             <nav className="pagination" aria-label="Pagination">
               {page > 1 && (

@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       job:
-        description: "Job to run (ingest, verify-links, revalidate-offers, retry-failed, publish-cycle, cleanup-cache, inspect-index)"
+        description: "Job to run (scrape-sources, collect-scrapes, ingest, generate-guides, verify-links, revalidate-offers, retry-failed, publish-cycle, cleanup-cache, detect-stale, inspect-index)"
         required: true
         default: verify-links
 

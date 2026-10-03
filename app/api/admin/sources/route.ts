@@ -1,7 +1,9 @@
 import { adminAction, field } from "@/lib/admin/route";
 import { parseSourceForm } from "@/lib/admin/sources";
 import { db } from "@/lib/db";
-import { apifyConfigured, startSourceRun } from "@/lib/pipeline/apify";
+import { apifyConfigured, sourceKey, startSourceRun } from "@/lib/pipeline/apify";
+import { persistPageRenderModel } from "@/lib/pipeline/render-model";
+import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { audit } from "@/lib/security/audit";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,15 @@ export const POST = adminAction("/admin/sources", async ({ form, ctx }) => {
     if (!before) return { error: "Source not found" };
     const after = await db.reviewSource.update({ where: { id }, data: v });
     await audit(ctx, { action: "source.update", entityType: "review_source", entityId: id, before, after });
+    // Text rights decide what the public page may show, so live pages are rebuilt immediately.
+    if (before.rights !== after.rights) {
+      const live = await db.normalizedReview.findMany({ where: { source: sourceKey(after.slug), status: "PUBLISHED" }, select: { id: true, slug: true, categorySlug: true, brandSlug: true } });
+      for (const r of live) {
+        await persistPageRenderModel(r.id);
+        revalidateReviewPaths(r);
+      }
+      return { ok: `${after.name} saved; ${live.length} published page(s) rebuilt for the new text rights` };
+    }
     return { ok: `${after.name} saved` };
   }
   // New sources start disabled: an admin enables them after checking the source's terms.

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Privacy", alternates: { canonical: "/privacy" } };
+export const metadata: Metadata = { title: "Privacy", description: "What Made4Buyers collects, why, how long it is kept and which third parties are involved.", alternates: { canonical: "/privacy" } };
 
 export default function Privacy() {
   return (

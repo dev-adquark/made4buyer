@@ -3,7 +3,9 @@ import { ActionForm, Badge, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
-import { JOBS } from "@/lib/jobs/registry";
+import { jobOutcome, JOBS } from "@/lib/jobs/registry";
+import { apifyConfigured } from "@/lib/pipeline/apify";
+import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs & runs" };
@@ -18,36 +20,47 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "retry-failed": "Retry due retryable failures with bounded attempts.",
   "cleanup-cache": "Delete expired Sovrn cache rows, sessions, rate-limit buckets and stale locks.",
   "publish-cycle": "Publish QA-passing queued reviews (only when AUTO_PUBLISH_ENABLED=true).",
+  "detect-stale": "Flag published reviews whose source article is older than STALE_REVIEW_MONTHS (default 18) and AI guides older than STALE_GUIDE_MONTHS (default 12) as CONTENT_STALE in Failures. Nothing is unpublished automatically.",
   "inspect-index": "Inspect published URLs with the Search Console URL Inspection API.",
 };
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
   const sp = await searchParams;
-  const [locks, runs] = await Promise.all([db.jobLock.findMany(), db.revalidationRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 })]);
+  const [locks, runs, lastRuns] = await Promise.all([
+    db.jobLock.findMany(),
+    db.revalidationRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
+    db.auditLog.findMany({ where: { entityType: "job", action: { startsWith: "job.run." } }, orderBy: { createdAt: "desc" }, distinct: ["entityId"], select: { entityId: true, actor: true, createdAt: true, metadata: true } }),
+  ]);
   const integrations = integrationStatus();
   const blocked: Partial<Record<keyof typeof JOBS, string | undefined>> = {
     ingest: integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured" : undefined,
     "revalidate-offers": integrations.sovrn !== "READY" ? "Sovrn not configured" : undefined,
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
+    "scrape-sources": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
+    "collect-scrapes": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
+    "generate-guides": integrations.aiGuides !== "READY" ? "Keyword-to-Blog not configured" : config.aiGuides.autoGenerate() ? undefined : "GUIDE_AUTOGEN_ENABLED is not true",
   };
   return (
     <>
       <h1>Jobs &amp; runs</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
-      <p className="muted">Scheduled via Vercel Cron at /api/cron/&lt;job&gt; (Bearer CRON_SECRET — {integrations.cron}). Every job holds a DB lock; stale locks expire automatically.</p>
+      <p className="muted">Scheduled daily via Vercel Cron (vercel.json) and hourly or six-hourly via the GitHub Actions workflow, both at /api/cron/&lt;job&gt; (Bearer CRON_SECRET — {integrations.cron}). Every job holds a DB lock; stale locks expire automatically.</p>
       <div className="table-wrap">
         <table className="table responsive">
           <thead>
             <tr>
               <th scope="col">Job</th>
               <th scope="col">What it does</th>
+              <th scope="col">Last run</th>
               <th scope="col">Lock</th>
               <th scope="col">Run</th>
             </tr>
           </thead>
           <tbody>
             {(Object.keys(JOBS) as Array<keyof typeof JOBS>).map((name) => {
+              const last = lastRuns.find((r) => r.entityId === name);
+              const outcome = last ? jobOutcome(last.metadata) : undefined;
               const lock = locks.find((l) => l.name === (name === "ingest" ? "ingestion" : `job:${name}`));
               return (
                 <tr key={name}>
@@ -55,6 +68,16 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                     <code>{name}</code>
                   </td>
                   <td data-label="What it does" className="small">{DESCRIPTIONS[name]}</td>
+                  <td data-label="Last run" className="small">
+                    {last && outcome ? (
+                      <>
+                        <Badge value={outcome.status} tone={outcome.ran ? "ok" : "warn"} /> {when(last.createdAt)} by {last.actor}
+                        {outcome.reason && <div className="muted">{outcome.reason}</div>}
+                      </>
+                    ) : (
+                      "No run recorded"
+                    )}
+                  </td>
                   <td data-label="Lock">{lock ? <Badge value={lock.expiresAt > new Date() ? `held until ${when(lock.expiresAt)}` : "stale (will be recovered)"} tone="warn" /> : "free"}</td>
                   <td data-label="Run">
                     <ActionForm action="/api/admin/jobs" fields={{ job: name }} label="Run now" returnTo="/admin/jobs" disabledReason={blocked[name]} />

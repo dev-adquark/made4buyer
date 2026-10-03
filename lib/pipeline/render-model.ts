@@ -3,6 +3,8 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
+import { AI_GUIDE_SOURCE } from "./ai-guides";
+import { contentSourceName } from "./content-source";
 import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
 
 /**
@@ -11,7 +13,8 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  * is a publish-time snapshot; the page overlays live verified offers at request time.
  */
 
-export const RENDER_MODEL_VERSION = 1;
+/** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
+export const RENDER_MODEL_VERSION = 2;
 
 export type PublicDeal = {
   linkId: string;
@@ -165,9 +168,14 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
   return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), textRights: await textRightsFor(review.source) });
 }
 
-/** Scraped sources (apify:<slug>) are excerpt-only unless the source is marked LICENSED. */
+/**
+ * Fails closed: full text only for our own AI-assisted guides, the contracted Content API feed
+ * and Apify sources marked LICENSED. Every other source is excerpt-only.
+ */
 export async function textRightsFor(source: string): Promise<"FULL" | "EXCERPT"> {
-  if (!source.startsWith("apify:")) return "FULL";
+  if (source === AI_GUIDE_SOURCE) return "FULL";
+  if (config.contentApi.url() && source === contentSourceName()) return "FULL";
+  if (!source.startsWith("apify:")) return "EXCERPT";
   const row = await db.reviewSource.findUnique({ where: { slug: source.slice("apify:".length) }, select: { rights: true } });
   return row?.rights === "LICENSED" ? "FULL" : "EXCERPT";
 }
