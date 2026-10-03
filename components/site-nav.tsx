@@ -11,7 +11,18 @@ import SearchCombobox from "./search-combobox";
 import type { NavFeed } from "@/lib/public/queries";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
-export type NavCategory = { slug: string; name: string; blurb: string; subs: Array<{ slug: string; name: string }> };
+export type NavCategory = { slug: string; name: string; blurb: string; issue: number; department: string; departmentName: string; subs: Array<{ slug: string; name: string }> };
+
+/** Groups categories by department, keeping first-seen department order and category order. */
+export function byDepartment(categories: NavCategory[]) {
+  const groups: Array<{ slug: string; name: string; items: NavCategory[] }> = [];
+  for (const c of categories) {
+    let g = groups.find((x) => x.slug === c.department);
+    if (!g) groups.push((g = { slug: c.department, name: c.departmentName, items: [] }));
+    g.items.push(c);
+  }
+  return groups;
+}
 
 // Order: Reviews · Categories (menu) · Deals · Compare · Guides
 const BEFORE: Array<[string, string]> = [["/reviews", "Reviews"]];
@@ -220,18 +231,27 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
             transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
           >
             <div className="container mega-inner">
-              <ul className="mega-cats" aria-label="Categories">
-                {categories.map((c) => (
-                  <li key={c.slug} style={themeStyle(c.slug)}>
-                    <button type="button" aria-pressed={c.slug === selected.slug} onClick={() => choose(c.slug)} onPointerEnter={() => choose(c.slug)} onFocus={() => choose(c.slug)}>
-                      <span className="swatch">
-                        <CategoryIcon slug={c.slug} size={16} />
-                      </span>
-                      {c.name}
-                    </button>
-                  </li>
+              <div className="mega-cats">
+                {byDepartment(categories).map((g) => (
+                  <div key={g.slug} className="mega-dept">
+                    <h2 className="mega-dept-name" id={`dept-${g.slug}`}>
+                      {g.name}
+                    </h2>
+                    <ul aria-labelledby={`dept-${g.slug}`}>
+                      {g.items.map((c) => (
+                        <li key={c.slug} style={themeStyle(c.slug)}>
+                          <button type="button" aria-pressed={c.slug === selected.slug} onClick={() => choose(c.slug)} onPointerEnter={() => choose(c.slug)} onFocus={() => choose(c.slug)}>
+                            <span className="num" aria-hidden="true">
+                              {String(c.issue).padStart(2, "0")}
+                            </span>
+                            {c.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
               <MegaPanel category={selected} feed={feeds[selected.slug]} failed={Boolean(failed[selected.slug])} />
             </div>
           </motion.div>
@@ -324,8 +344,12 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
                   </li>
                 ))}
               </ul>
-              <ul className="sheet-cats" aria-label="Categories">
-                {categories.map((c) => (
+              {byDepartment(categories).map((g) => (
+              <ul key={g.slug} className="sheet-cats" aria-label={g.name}>
+                <li className="sheet-dept" aria-hidden="true">
+                  {g.name}
+                </li>
+                {g.items.map((c) => (
                   <li key={c.slug} style={themeStyle(c.slug)}>
                     <div className="sheet-cat-row">
                       <Link href={`/category/${c.slug}`}>
@@ -352,6 +376,7 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
                   </li>
                 ))}
               </ul>
+              ))}
             </nav>
             <p className="small" style={{ color: "var(--on-ink-muted)" }}>
               <Link href="/about" style={{ color: "#fff" }}>How we review</Link> and <Link href="/disclosure" style={{ color: "#fff" }}>how we make money</Link>

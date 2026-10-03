@@ -209,13 +209,17 @@ export default async function Home() {
           </SectionHeader>
         </div>
         <ul className="issue-rail" aria-label="Categories">
-          {ledger.map((c, i) => {
+          {/* Categories with published content first; numbers stay each category's issue number. */}
+          {ledger
+            .map((c, i) => ({ ...c, issue: i + 1 }))
+            .sort((a, b) => Number(b.reviews + b.guides > 0) - Number(a.reviews + a.guides > 0) || a.issue - b.issue)
+            .map((c) => {
             const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
             return (
               <li key={c.slug} style={style(c.slug)}>
                 <Link className="issue-panel" href={`/category/${c.slug}`} data-cursor="Open">
                   <span className="ip-num">
-                    <span aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+                    <span aria-hidden="true">{String(c.issue).padStart(2, "0")}</span>
                     <span className="cat-tag">Issue</span>
                   </span>
                   <h3>{c.name}</h3>

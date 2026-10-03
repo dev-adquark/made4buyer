@@ -1,3 +1,4 @@
+import { CATEGORIES } from "../../lib/taxonomy/definitions";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -253,6 +254,22 @@ test("no dead links and no dead buttons", async () => {
     const res = await page.request.get(h, { maxRedirects: 3 });
     expect(res.status(), h).toBeLessThan(400);
   }
+});
+
+test("every category route returns 200; empty ones stay noindex and out of the sitemap", async ({ request }) => {
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  for (const c of CATEGORIES) {
+    const res = await request.get(`/category/${c.slug}`);
+    expect(res.status(), c.slug).toBe(200);
+    const html = await res.text();
+    const empty = /No reviews are published here yet/.test(html);
+    if (empty) {
+      expect(html, `${c.slug} noindex`).toMatch(/<meta name="robots" content="noindex/);
+      expect(sitemap.includes(`/category/${c.slug}<`), `${c.slug} not in sitemap`).toBe(false);
+    }
+  }
+  expect((await request.get("/category/accessories?sub=monitors")).status()).toBe(200);
+  expect((await request.get("/category/not-a-category")).status()).toBe(404);
 });
 
 test("mobile layout has no horizontal overflow", async ({ browser }) => {

@@ -38,7 +38,8 @@ export default function SiteFooter({ categories }: { categories: NavCategory[] }
         <nav aria-labelledby="f-cats">
           <h2 id="f-cats">Categories</h2>
           <ul>
-            {categories.slice(0, 6).map((c) => (
+            {/* One entry point per department keeps the footer short as categories grow. */}
+            {categories.filter((c, i, all) => all.findIndex((x) => x.department === c.department) === i).map((c) => (
               <li key={c.slug}>
                 <Link href={`/category/${c.slug}`}>{c.name}</Link>
               </li>

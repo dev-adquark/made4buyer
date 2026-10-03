@@ -9,7 +9,7 @@ import SiteHeader from "@/components/site-header";
 import EditorialCursor from "@/components/editorial-cursor";
 import SovrnCommerce from "@/components/sovrn-commerce";
 import { config } from "@/lib/config";
-import { CATEGORIES } from "@/lib/taxonomy/definitions";
+import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 
 const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"] });
 const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"] });
@@ -28,7 +28,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#eeebe3" };
 
 // Static taxonomy: the shell never needs the database, so static pages stay static.
-const categories = CATEGORIES.map((c) => ({ slug: c.slug, name: c.name, blurb: c.description.replace(/\.$/, ""), subs: c.subcategories.map((s) => ({ slug: s.slug, name: s.name })) }));
+// Legacy (superseded) subcategories keep working URLs but are not shown in navigation.
+const categories = CATEGORIES.map((c, i) => ({
+  slug: c.slug,
+  name: c.name,
+  blurb: c.description.replace(/\.$/, ""),
+  issue: i + 1,
+  department: c.department,
+  departmentName: DEPARTMENTS.find((d) => d.slug === c.department)?.name ?? "",
+  subs: c.subcategories.filter((s) => !s.legacy).map((s) => ({ slug: s.slug, name: s.name })),
+}));
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
