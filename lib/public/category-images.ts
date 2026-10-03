@@ -20,6 +20,18 @@ const QUERIES: Record<string, string> = {
   audio: "headphones close up",
   wearables: "smartwatch on wrist",
   networking: "wifi router home",
+  desktops: "desktop computer workspace",
+  "pc-components": "graphics card computer hardware",
+  monitors: "computer monitor desk setup",
+  printers: "office printer",
+  "smart-home": "smart home device",
+  cameras: "mirrorless camera photography",
+  gaming: "game controller console",
+  "tv-home-entertainment": "living room television",
+  "streaming-devices": "tv remote streaming",
+  "productivity-software": "laptop office productivity",
+  "drones-gadgets": "drone flying",
+  "automotive-tech": "car dashboard technology",
 };
 
 export type CategoryPhoto = { url: string; alt: string; photographer: string; photographerUrl: string; pexelsUrl: string };

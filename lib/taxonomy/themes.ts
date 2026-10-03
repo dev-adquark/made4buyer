@@ -15,6 +15,18 @@ export const THEMES: Record<string, CategoryTheme> = {
   audio: { from: "#E5007E", to: "#E5007E", ink: "#A8005C", soft: "#F1DCE4", glow: "rgba(229, 0, 126, 0.26)", onSignal: "#ffffff" },
   wearables: { from: "#00A878", to: "#00A878", ink: "#006247", soft: "#D8EBE1", glow: "rgba(0, 168, 120, 0.28)", onSignal: "#03140e" },
   networking: { from: "#F2B200", to: "#F2B200", ink: "#7A5600", soft: "#F1E7C9", glow: "rgba(242, 178, 0, 0.3)", onSignal: "#1c1500" },
+  desktops: { from: "#3A6DF0", to: "#3A6DF0", ink: "#1F47B8", soft: "#E0E5F2", glow: "rgba(58, 109, 240, 0.28)", onSignal: "#ffffff" },
+  "pc-components": { from: "#D42A22", to: "#D42A22", ink: "#A61F18", soft: "#F3DCD8", glow: "rgba(212, 42, 34, 0.28)", onSignal: "#ffffff" },
+  monitors: { from: "#14B8A6", to: "#14B8A6", ink: "#0B6158", soft: "#D8ECE8", glow: "rgba(20, 184, 166, 0.28)", onSignal: "#06201c" },
+  printers: { from: "#8B95A7", to: "#8B95A7", ink: "#3F4757", soft: "#E3E4E6", glow: "rgba(139, 149, 167, 0.3)", onSignal: "#12151c" },
+  "smart-home": { from: "#22C55E", to: "#22C55E", ink: "#13652F", soft: "#DCEDDF", glow: "rgba(34, 197, 94, 0.28)", onSignal: "#05200f" },
+  cameras: { from: "#F59E0B", to: "#F59E0B", ink: "#7E4A00", soft: "#F3E6CC", glow: "rgba(245, 158, 11, 0.3)", onSignal: "#1f1300" },
+  gaming: { from: "#A21CAF", to: "#A21CAF", ink: "#86188F", soft: "#EEDCEE", glow: "rgba(162, 28, 175, 0.28)", onSignal: "#ffffff" },
+  "tv-home-entertainment": { from: "#4F46E5", to: "#4F46E5", ink: "#3730A3", soft: "#E2E1F2", glow: "rgba(79, 70, 229, 0.28)", onSignal: "#ffffff" },
+  "streaming-devices": { from: "#EC4899", to: "#EC4899", ink: "#A3245F", soft: "#F2DEE6", glow: "rgba(236, 72, 153, 0.28)", onSignal: "#24030f" },
+  "productivity-software": { from: "#0EA5E9", to: "#0EA5E9", ink: "#075985", soft: "#DBE9F1", glow: "rgba(14, 165, 233, 0.28)", onSignal: "#03202d" },
+  "drones-gadgets": { from: "#84CC16", to: "#84CC16", ink: "#3F6212", soft: "#E6EDD2", glow: "rgba(132, 204, 22, 0.3)", onSignal: "#141f02" },
+  "automotive-tech": { from: "#64748B", to: "#64748B", ink: "#334155", soft: "#E1E3E6", glow: "rgba(100, 116, 139, 0.3)", onSignal: "#ffffff" },
   general: { from: "#18181C", to: "#18181C", ink: "#18181C", soft: "#E3E0D8", glow: "rgba(24, 24, 28, 0.2)", onSignal: "#ffffff" },
 };
 
