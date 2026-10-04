@@ -111,7 +111,7 @@ async function sovrn(product?: { productName?: string; brand?: string }) {
   if (!productName) return add("sovrn", "FAIL", { reason: "no product to search: pass --product, or configure the Content API" });
   const query = { productName, brand: arg("product") ? arg("brand") : product?.brand };
   const res = await safeFetch(buildSovrnRequestUrl(base, buildQueryString(query), config.sovrn.queryParam()), { headers: { Accept: "application/json", Authorization: `${config.sovrn.authScheme()} ${key}` }, timeoutMs: config.sovrn.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 5_000_000 });
-  if (!res.ok) return add("sovrn", res.error ? "PROVIDER_ERROR" : httpStatus(res.status), { query: buildQueryString(query), httpStatus: res.status, error: res.error?.kind, hint: res.status === 401 || res.status === 403 ? "check SOVRN_API_KEY is the secret key" : undefined });
+  if (!res.ok) return add("sovrn", res.error ? "PROVIDER_ERROR" : httpStatus(res.status), { query: buildQueryString(query), httpStatus: res.status, error: res.error?.kind, hint: res.status === 401 ? "Sovrn rejected the request: usually the site is not yet approved for the Price Comparison API (check the Sovrn dashboard); if it is approved, check SOVRN_API_KEY is the secret key" : res.status === 403 ? "Sovrn does not recognise this site key: check SOVRN_SITE_KEY / the site path" : undefined });
   let payload: unknown;
   try {
     payload = JSON.parse(res.body ?? "");
