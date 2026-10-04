@@ -52,6 +52,10 @@ enum ReviewStatus {
 enum ContentKind {
   REVIEW
   AI_GUIDE
+  /// "A vs B (vs C...)" articles: several products, no single product name.
+  COMPARISON
+  /// "Best X", "X buying guide", "X alternatives" articles from a source publisher.
+  BUYING_GUIDE
 
   @@map("content_kind")
 }
@@ -343,6 +347,7 @@ model NormalizedReview {
   offerMatches             SovrnOfferMatch[]
   affiliateLinks           AffiliateLink[]
   images                   ImageAsset[]
+  contentEntities          ContentEntity[]
   renderModel              PageRenderModel?
   publishJobs              PublishJob[]
   events                   AnalyticsEvent[]
@@ -872,4 +877,48 @@ model ApifyRun {
   @@index([status, startedAt])
   @@index([sourceId, startedAt])
   @@map("apify_runs")
+}
+
+// ─── Products / services referenced by content ──────────────────────────────
+
+/// One product or service ("NordVPN", "Cursor"), shared by every review, comparison and guide that covers it.
+model ProductEntity {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  name            String
+  /// Normalised identity: "Nord VPN", "NordVPN" and "nordvpn" share one key.
+  matchKey        String          @unique
+  aliases         String[]        @default([])
+  aliasKeys       String[]        @default([])
+  brand           String?
+  brandSlug       String?
+  categorySlug    String?
+  subcategorySlug String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  content         ContentEntity[]
+
+  @@index([brandSlug])
+  @@index([categorySlug])
+  @@index([aliasKeys], type: Gin)
+  @@map("product_entities")
+}
+
+/// Content ↔ product link. PRIMARY: the reviewed product; COMPARED: one side of a comparison; MENTIONED: covered in a guide.
+model ContentEntity {
+  id                 String           @id @default(cuid())
+  normalizedReviewId String
+  productEntityId    String
+  role               String
+  position           Int              @default(0)
+  confidence         Float
+  /// AUTO (pipeline) or ADMIN (editor). Reprocessing replaces AUTO links only.
+  source             String
+  createdAt          DateTime         @default(now())
+  review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+  entity             ProductEntity    @relation(fields: [productEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([normalizedReviewId, productEntityId])
+  @@index([productEntityId])
+  @@map("content_entities")
 }

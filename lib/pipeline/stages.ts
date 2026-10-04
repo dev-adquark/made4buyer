@@ -8,6 +8,7 @@ import { rankOffers, selectionReason, type RankedOffer } from "@/lib/sovrn/offer
 import { classify } from "@/lib/taxonomy/classify";
 import { ensureTaxonomySeeded, persistClassification } from "@/lib/taxonomy/persist";
 import { slugify } from "@/lib/util/text";
+import { detectContentKind, setAutoEntities } from "@/lib/entities/resolve";
 import { extractEntities, lowConfidenceFields, type EntityField } from "./entities";
 import { recordFailure, resolveFailures } from "./failures";
 import { enrichImage, probeImage } from "./images";
@@ -49,7 +50,7 @@ export async function loadSourceContent(review: NormalizedReview): Promise<Valid
     tags: [],
     imageLicenseVerified: false,
     author: review.author ?? undefined,
-    contentKind: review.kind,
+    contentKind: review.kind === "AI_GUIDE" ? "AI_GUIDE" : "REVIEW",
   };
 }
 
@@ -64,14 +65,29 @@ export async function runEntityStage(review: NormalizedReview, content: Validate
   const values: Record<string, unknown> = { ...extracted };
   const confidences = { ...extracted.confidences };
   for (const [field, o] of Object.entries(overrides) as Array<[EntityField, EntityOverride]>) {
-    if (!o) continue;
+    // The same JSON also holds editor choices that are not entity fields (contentKind, removedEntities).
+    if (!o || typeof o !== "object" || !("value" in o)) continue;
     // An empty override is an editor's explicit "not applicable" confirmation.
     values[field] = o.value === "" ? undefined : field === "price" ? Number(o.value) : o.value;
     confidences[field] = 1;
   }
-  const low = lowConfidenceFields({ confidences }, config.entities.lowConfidenceThreshold());
+  // What kind of article this is: a comparison of several products has no single product
+  // name or brand, so those fields are not "low confidence", they don't apply.
+  const kindOverride = (existing?.overrides as { contentKind?: "REVIEW" | "COMPARISON" | "BUYING_GUIDE" } | null)?.contentKind;
+  const detected = review.kind === "AI_GUIDE" ? null : detectContentKind(review.canonicalTitle);
+  const kind = review.kind === "AI_GUIDE" ? "AI_GUIDE" : (kindOverride ?? detected!.kind);
+  const compared = kind === "COMPARISON" ? (detected?.compared ?? null) : null;
+  if (compared) {
+    values.productName = compared.join(" vs ");
+    values.brand = undefined;
+    confidences.productName = 0.9;
+    confidences.brand = 1;
+    confidences.deviceType = Math.max(confidences.deviceType, 0.9);
+  }
+  const notApplicable: EntityField[] = kind === "COMPARISON" || kind === "BUYING_GUIDE" ? ["productName", "brand", "deviceType"] : [];
+  const low = lowConfidenceFields({ confidences }, config.entities.lowConfidenceThreshold()).filter((f) => !notApplicable.includes(f));
   const core = { productName: 0.45, brand: 0.3, deviceType: 0.25 } as const;
-  const overall = Math.round((confidences.productName * core.productName + confidences.brand * core.brand + confidences.deviceType * core.deviceType) * 100) / 100;
+  const overall = compared ? 0.9 : Math.round((confidences.productName * core.productName + confidences.brand * core.brand + confidences.deviceType * core.deviceType) * 100) / 100;
 
   const data = {
     productName: String(values.productName),
@@ -97,8 +113,17 @@ export async function runEntityStage(review: NormalizedReview, content: Validate
   });
   await db.normalizedReview.update({
     where: { id: review.id },
-    data: { productName: entities.productName, brand: entities.brand, brandSlug: entities.brand ? slugify(entities.brand, 60) : null, entityConfidence: overall },
+    data: { productName: entities.productName, brand: entities.brand, brandSlug: entities.brand ? slugify(entities.brand, 60) : null, entityConfidence: overall, kind },
   });
+
+  // Product entities: every compared product for a comparison; the reviewed product for a
+  // review (only when its name is confident; otherwise QA decides). Guides list nothing
+  // automatically: their products are added by an editor.
+  const threshold = config.entities.lowConfidenceThreshold();
+  if (compared) await setAutoEntities(review.id, compared.map((name) => ({ name, role: "COMPARED" as const, confidence: 0.9 })));
+  else if ((kind === "REVIEW" || kind === "AI_GUIDE") && confidences.productName >= threshold)
+    await setAutoEntities(review.id, [{ name: entities.productName, role: kind === "REVIEW" ? "PRIMARY" : "MENTIONED", confidence: confidences.productName, brand: entities.brand }]);
+  else await setAutoEntities(review.id, []);
 
   if (low.length) {
     await recordFailure({
@@ -147,6 +172,9 @@ export async function runTaxonomyStage(review: NormalizedReview, content: Valida
   } else {
     await resolveFailures({ stage: "TAXONOMY", entityType: REVIEW, entityId: review.id });
   }
+  // Products first seen in this article inherit its category (an editor's choice is never overwritten).
+  if (taxonomy.categorySlug)
+    await db.productEntity.updateMany({ where: { categorySlug: null, content: { some: { normalizedReviewId: review.id } } }, data: { categorySlug: taxonomy.categorySlug, subcategorySlug: taxonomy.subcategorySlug ?? null } });
   log.info("taxonomy classified", { stage: "TAXONOMY", reviewId: review.id, ...taxonomy, scores: result.scores });
   return { ...taxonomy, classification: result };
 }
@@ -231,6 +259,13 @@ export async function runOfferStage(reviewId: string, opts: { bypassCache?: bool
   const setDeal = (status: NormalizedReview["dealStatus"], reason: string) =>
     db.normalizedReview.update({ where: { id: reviewId }, data: { dealStatus: status, dealStatusReason: reason.slice(0, 500), dealCheckedAt: now } });
 
+  // Offers attach to one product. A comparison or guide covers several, so a single offer
+  // would be wrong for the page: no Sovrn query, and any previous links are retired.
+  if (review.kind !== "REVIEW") {
+    await setDeal("NO_MATCH", "Not matched: comparisons and guides cover several products; offers appear on each product's own review");
+    await db.affiliateLink.updateMany({ where: { normalizedReviewId: reviewId, isActive: true }, data: { isActive: false } });
+    return { status: "NO_MATCH", reason: "content covers several products", selected: [] };
+  }
   const outcome = await fetchSovrnOffers(query, opts);
   if (outcome.status === "UNAVAILABLE") {
     await setDeal("UNAVAILABLE", outcome.reason);

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/generate-release-notes.mjs && prisma generate && next build",
+    "build": "node scripts/generate-release-notes.mjs && tsx scripts/generate-placeholders.ts && prisma generate && next build",
     "start": "next start",
     "postinstall": "node scripts/generate-release-notes.mjs && prisma generate",
     "typecheck": "tsc --noEmit",

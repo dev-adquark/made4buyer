@@ -8,7 +8,15 @@ import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline } from "@/lib/util/format";
 
 export function KindPill({ kind }: { kind: string }) {
-  return kind === "AI_GUIDE" ? <TrustLabel kind="ai" /> : <TrustLabel kind="source" />;
+  if (kind === "AI_GUIDE") return <TrustLabel kind="ai" />;
+  if (kind === "COMPARISON") return <TrustLabel kind="source">Source comparison</TrustLabel>;
+  if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Source buying guide</TrustLabel>;
+  return <TrustLabel kind="source" />;
+}
+
+/** The noun for a content kind, for sentences like "The full comparison belongs to …". */
+export function kindNoun(kind: string): string {
+  return kind === "COMPARISON" ? "comparison" : kind === "BUYING_GUIDE" ? "buying guide" : kind === "AI_GUIDE" ? "guide" : "review";
 }
 
 /** Who wrote it: the publisher for reviews; for guides, that it is AI-assisted. */

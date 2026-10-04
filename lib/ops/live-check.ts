@@ -14,6 +14,7 @@ import { actorInputFields, apifyAccount, buildActorInput } from "@/lib/pipeline/
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { contentApiHeaders, extractContentItems, nextContentPage } from "@/lib/pipeline/content-source";
 import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
+import { runIntegrityChecks } from "./integrity";
 import { validateContentItem } from "@/lib/pipeline/validate";
 import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
 import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
@@ -207,6 +208,17 @@ function sovrnSite() {
 }
 
 /** Runs every probe once. Read-only: no DB writes, no provider caching, no secret values. */
+/** Read-only database consistency audit (duplicates, invalid references, unbuilt pages). */
+async function integrity() {
+  if (!process.env.DATABASE_URL) return add("dataIntegrity", "BLOCKED_BY_ENVIRONMENT", { missing: "DATABASE_URL" });
+  try {
+    const r = await runIntegrityChecks();
+    add("dataIntegrity", r.ok ? "OK" : "FAIL", r.checks);
+  } catch (error) {
+    add("dataIntegrity", "FAIL", { error: String(error).slice(0, 300) });
+  }
+}
+
 export async function runLiveCheck(options: LiveCheckOptions = {}) {
   opts = options;
   results = [];
@@ -219,6 +231,7 @@ export async function runLiveCheck(options: LiveCheckOptions = {}) {
   await apify();
   await keywordToBlog();
   sovrnSite();
+  await integrity();
   const failed = results.filter((r) => !["OK", "BLOCKED_BY_ENVIRONMENT", "EMPTY"].includes(r.status));
   return { checkedAt: new Date().toISOString(), ok: failed.length === 0, results };
 }

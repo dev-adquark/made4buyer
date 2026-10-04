@@ -109,7 +109,7 @@ test("8. publish the QA-passed queue", async () => {
 
 test("9. public review page", async () => {
   await page.goto("/category/laptops");
-  await page.getByRole("link", { name: /MacBook Air 13/ }).first().click();
+  await page.locator('a[href^="/review/"]', { hasText: /MacBook Air 13/ }).first().click();
   await page.waitForURL(/\/review\//);
   state.macbookSlug = page.url().split("/review/")[1];
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MacBook Air");
@@ -126,7 +126,7 @@ test("9. public review page", async () => {
 
   // A review without a verified offer shows the honest unavailable state.
   await page.goto("/category/ai-tools");
-  await page.getByRole("link", { name: /ChatGPT Plus/ }).first().click();
+  await page.locator('a[href^="/review/"]', { hasText: /ChatGPT Plus/ }).first().click();
   await expect(page.getByText("No verified offer currently available.")).toBeVisible();
   await expect(page.locator("#deal .price")).toHaveCount(0);
 });
@@ -155,7 +155,7 @@ test("11. search", async () => {
   await palette.getByRole("link", { name: /See all results for “pixel”/ }).click();
   await expect(page).toHaveURL(/\/search\?q=pixel/);
   await expect(page.getByText(/1 result for “pixel”/)).toBeVisible();
-  await page.getByRole("link", { name: /Pixel 10/ }).first().click();
+  await page.locator('a[href^="/review/"]', { hasText: /Pixel 10/ }).first().click();
   await page.waitForURL(/\/review\//);
   state.pixelSlug = page.url().split("/review/")[1];
 });
@@ -300,8 +300,26 @@ test("accessibility: no serious or critical axe violations", async () => {
     await page.waitForTimeout(900);
     const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     const serious = result.violations.filter((v) => v.impact === "serious" || v.impact === "critical").map((v) => `${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(" ")).join(" | ")}`);
-    expect(serious, p).toEqual([]);
+    expect(serious, `${p}: ${serious.join("; ")}`).toEqual([]);
   }
+});
+
+test("product hubs, content-type filters and typo suggestions", async () => {
+  // Product hub built from content ↔ product links.
+  await page.goto("/product/sony-wh-1000xm6");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sony WH-1000XM6");
+  await expect(page.locator('a[href^="/review/sony-wh-1000xm6"]').first()).toBeVisible();
+  // The type filter changes the database query, and an empty type says so honestly.
+  await page.goto("/reviews?type=comparison");
+  await expect(page.getByText("Nothing of this type has been published yet.")).toBeVisible();
+  await page.goto("/reviews?type=review");
+  expect(await page.locator(".review-card").count()).toBeGreaterThan(0);
+  // Typo tolerance suggests a real published name.
+  await page.goto("/search?q=sny");
+  await expect(page.getByRole("link", { name: "Search for Sony" })).toBeVisible();
+  // Product hubs with published content are in the sitemap.
+  const sitemap = await page.request.get("/sitemap.xml").then((r) => r.text());
+  expect(sitemap).toContain("/product/sony-wh-1000xm6");
 });
 
 test("search suggestions support keyboard navigation", async () => {

@@ -1,5 +1,6 @@
 import { adminAction, field } from "@/lib/admin/route";
 import { confirmEntities, resolveCategorySlug, resolveSubcategorySlug, setCategoryOverride, setDealOverride, setEntityOverrides } from "@/lib/admin/overrides";
+import { addContentEntity, removeContentEntity, ROLES, setContentKind, updateProductEntity } from "@/lib/admin/content-entities";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/security/audit";
 import { processReview } from "@/lib/pipeline/process";
@@ -103,6 +104,49 @@ export const POST = adminAction("/admin/qa", async ({ form, ctx }) => {
       await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
       await afterChange(id);
       return { ok: "Entity overrides saved; categorization and Sovrn matching re-run" };
+    }
+    case "entity-add": {
+      const role = field(form, "role") as (typeof ROLES)[number];
+      if (!ROLES.includes(role)) return { error: "Choose a role" };
+      try {
+        const entity = await addContentEntity(id, { name: field(form, "name"), role, brand: field(form, "brand") || null }, ctx);
+        await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
+        await afterChange(id);
+        return { ok: `${entity.name} linked as ${role.toLowerCase()}` };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    case "entity-remove": {
+      const entityId = field(form, "entityId");
+      try {
+        await removeContentEntity(id, entityId, ctx);
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+      await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
+      await afterChange(id);
+      return { ok: "Product unlinked; it won’t be re-added automatically" };
+    }
+    case "entity-update": {
+      const entityId = field(form, "entityId");
+      const category = field(form, "categorySlug");
+      try {
+        const e = await updateProductEntity(entityId, { name: field(form, "name") || undefined, brand: form.has("brand") ? field(form, "brand") || null : undefined, categorySlug: form.has("categorySlug") ? category || null : undefined, subcategorySlug: field(form, "subcategorySlug") || null }, ctx);
+        // Every published page that links this product shows its name.
+        for (const r of await db.normalizedReview.findMany({ where: { contentEntities: { some: { productEntityId: entityId } } }, select: { id: true } })) await afterChange(r.id);
+        return { ok: `${e.name} updated` };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    case "set-kind": {
+      const kind = field(form, "kind");
+      if (kind && !["REVIEW", "COMPARISON", "BUYING_GUIDE"].includes(kind)) return { error: "Unknown content kind" };
+      await setContentKind(id, (kind || null) as "REVIEW" | "COMPARISON" | "BUYING_GUIDE" | null, ctx);
+      await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
+      await afterChange(id);
+      return { ok: kind ? `Content kind set to ${kind.toLowerCase().replace("_", " ")}` : "Content kind returned to automatic detection" };
     }
     case "confirm-entities": {
       const changed = await confirmEntities(id, ctx);

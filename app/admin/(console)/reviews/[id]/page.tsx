@@ -18,6 +18,7 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
     where: { id },
     include: {
       entities: true,
+      contentEntities: { orderBy: { position: "asc" }, include: { entity: true } },
       assignments: { orderBy: [{ active: "desc" }, { tagType: "asc" }, { createdAt: "desc" }], include: { categoryTag: true }, take: 40 },
       offerMatches: { orderBy: [{ matchStatus: "asc" }, { rank: "asc" }], take: 20 },
       affiliateLinks: { orderBy: [{ isActive: "desc" }, { isBest: "desc" }] },
@@ -198,6 +199,137 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
           </div>
         </form>
         {e && e.lowConfidenceFields.length > 0 && <ActionForm action="/api/admin/reviews" fields={{ id, action: "confirm-entities" }} label={`Confirm current values of ${e.lowConfidenceFields.join(", ")}`} returnTo={self} />}
+      </section>
+
+      <section aria-labelledby="prod-h">
+        <h2 id="prod-h">Products in this article</h2>
+        <p className="muted small">
+          Kind: <Badge value={r.kind} />{" "}
+          {r.kind === "COMPARISON" ? "Each compared product is linked below. QA needs at least two." : r.kind === "REVIEW" ? "A review links one primary product." : "Guides list the products they cover."} Links never change the source article. Editor links are kept when the pipeline re-runs, and a product you remove is not re-added.
+        </p>
+        {r.kind !== "AI_GUIDE" && (
+          <form action="/api/admin/reviews" method="post" className="btnrow" style={{ alignItems: "end" }}>
+            <input type="hidden" name="id" value={id} />
+            <input type="hidden" name="action" value="set-kind" />
+            <input type="hidden" name="returnTo" value={self} />
+            <div className="field" style={{ margin: 0 }}>
+              <label htmlFor="kind-sel">Content kind</label>
+              <select id="kind-sel" name="kind" defaultValue={((e?.overrides as { contentKind?: string } | null)?.contentKind) ?? ""}>
+                <option value="">Automatic (from the title)</option>
+                <option value="REVIEW">Review of one product</option>
+                <option value="COMPARISON">Comparison of several products</option>
+                <option value="BUYING_GUIDE">Buying guide</option>
+              </select>
+            </div>
+            <button className="btn" type="submit">
+              Set kind
+            </button>
+          </form>
+        )}
+        <div className="table-wrap">
+          <table className="table responsive">
+            <thead>
+              <tr>
+                <th scope="col">Product</th>
+                <th scope="col">Role</th>
+                <th scope="col">Brand / category</th>
+                <th scope="col">Linked by</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.contentEntities.map((c) => (
+                <tr key={c.id}>
+                  <td data-label="Product">
+                    <a href={`/product/${c.entity.slug}`}>{c.entity.name}</a>
+                    {c.entity.aliases.length > 0 && <div className="small muted">aka {c.entity.aliases.join(", ")}</div>}
+                  </td>
+                  <td data-label="Role">{c.role}</td>
+                  <td data-label="Brand / category" className="small">
+                    {c.entity.brand ?? "—"} / {c.entity.categorySlug ?? "—"}
+                    {c.entity.subcategorySlug ? ` → ${c.entity.subcategorySlug}` : ""}
+                  </td>
+                  <td data-label="Linked by">
+                    {c.source} {c.source === "AUTO" ? `(${pct(c.confidence)})` : ""}
+                  </td>
+                  <td data-label="Actions">
+                    <ActionForm action="/api/admin/reviews" fields={{ id, action: "entity-remove", entityId: c.productEntityId }} label="Remove" returnTo={self} />
+                    <details className="small">
+                      <summary>Edit product</summary>
+                      <form action="/api/admin/reviews" method="post">
+                        <input type="hidden" name="id" value={id} />
+                        <input type="hidden" name="action" value="entity-update" />
+                        <input type="hidden" name="entityId" value={c.productEntityId} />
+                        <input type="hidden" name="returnTo" value={self} />
+                        <div className="field">
+                          <label htmlFor={`en-${c.id}`}>Name</label>
+                          <input id={`en-${c.id}`} name="name" defaultValue={c.entity.name} maxLength={120} />
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`eb-${c.id}`}>Brand</label>
+                          <input id={`eb-${c.id}`} name="brand" defaultValue={c.entity.brand ?? ""} maxLength={80} />
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`ec-${c.id}`}>Category</label>
+                          <select id={`ec-${c.id}`} name="categorySlug" defaultValue={c.entity.categorySlug ?? ""}>
+                            <option value="">None</option>
+                            {CATEGORIES.map((cat) => (
+                              <option key={cat.slug} value={cat.slug}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="field">
+                          <label htmlFor={`es-${c.id}`}>Subcategory slug (optional)</label>
+                          <input id={`es-${c.id}`} name="subcategorySlug" defaultValue={c.entity.subcategorySlug ?? ""} pattern="[a-z0-9-]{0,60}" />
+                        </div>
+                        <p className="field-hint">This edits the shared product, so every article that links it changes. A rename keeps the old name as an alias.</p>
+                        <button className="btn small" type="submit">
+                          Save product
+                        </button>
+                      </form>
+                    </details>
+                  </td>
+                </tr>
+              ))}
+              {!r.contentEntities.length && (
+                <tr>
+                  <td colSpan={5}>No products linked yet.{r.kind === "COMPARISON" ? " Add each compared product below." : ""}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <form action="/api/admin/reviews" method="post" className="card card-body" style={{ marginTop: 12 }}>
+          <input type="hidden" name="id" value={id} />
+          <input type="hidden" name="action" value="entity-add" />
+          <input type="hidden" name="returnTo" value={self} />
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="ea-name">Product or service</label>
+              <input id="ea-name" name="name" required minLength={2} maxLength={120} placeholder="e.g. Zellij" />
+            </div>
+            <div className="field">
+              <label htmlFor="ea-brand">Brand (optional)</label>
+              <input id="ea-brand" name="brand" maxLength={80} />
+            </div>
+            <div className="field">
+              <label htmlFor="ea-role">Role</label>
+              <select id="ea-role" name="role" defaultValue={r.kind === "COMPARISON" ? "COMPARED" : r.kind === "REVIEW" ? "PRIMARY" : "MENTIONED"}>
+                <option value="PRIMARY">Primary (the reviewed product)</option>
+                <option value="COMPARED">Compared</option>
+                <option value="MENTIONED">Covered in a guide</option>
+              </select>
+            </div>
+          </div>
+          <p className="field-hint">An existing product with the same name or alias is reused (&ldquo;Nord VPN&rdquo; links NordVPN).</p>
+          <div className="btnrow">
+            <button className="btn primary" type="submit">
+              Link product
+            </button>
+          </div>
+        </form>
       </section>
 
       <section aria-labelledby="tax-h">

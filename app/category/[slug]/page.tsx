@@ -20,7 +20,12 @@ import { themeStyle } from "@/lib/taxonomy/themes";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 24;
-type Search = { sub?: string; brand?: string; intent?: string; platform?: string; tier?: string; q?: string; page?: string };
+type Search = { sub?: string; brand?: string; intent?: string; platform?: string; tier?: string; q?: string; page?: string; type?: string };
+const TYPES = [
+  { param: "review", label: "Reviews", kinds: ["REVIEW"] },
+  { param: "comparison", label: "Comparisons", kinds: ["COMPARISON"] },
+  { param: "guide", label: "Guides", kinds: ["BUYING_GUIDE", "AI_GUIDE"] },
+] as const;
 type FilterKey = "sub" | "brand" | "intent" | "platform" | "tier";
 const FILTERS: Array<{ key: FilterKey; type?: TagType; label: string }> = [
   { key: "sub", label: "Type" },
@@ -40,7 +45,7 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
   const def = CATEGORY_BY_SLUG.get(slug);
   if (!def) return { title: "Category not found", robots: { index: false } };
   const count = (await categoryCounts()).find((c) => c.slug === slug)?.count ?? 0;
-  const filtered = FILTERS.some((f) => sp[f.key]) || Boolean(sp.q) || (sp.page && sp.page !== "1");
+  const filtered = FILTERS.some((f) => sp[f.key]) || Boolean(sp.q) || Boolean(sp.type) || (sp.page && sp.page !== "1");
   return {
     title: `${def.name} reviews`,
     description: `${def.description} Buyer-focused reviews with verified offers.`,
@@ -61,9 +66,11 @@ export default async function CategoryPage({ params, searchParams }: { params: P
   const q = (sp.q ?? "").trim().slice(0, 80);
   const terms = q.split(/\s+/).filter((t) => t.length >= 2).slice(0, 6);
   const page = Math.max(1, Math.min(500, Number(sp.page) || 1));
+  const type = TYPES.find((t) => t.param === sp.type);
   const where: Prisma.NormalizedReviewWhereInput = {
     status: "PUBLISHED",
     categorySlug: slug,
+    ...(type ? { kind: { in: [...type.kinds] } } : {}),
     ...(active.sub ? { subcategorySlug: active.sub } : {}),
     ...(active.brand ? { brandSlug: active.brand } : {}),
     AND: [
@@ -71,17 +78,26 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       ...terms.map((t) => ({ OR: [{ canonicalTitle: { contains: t, mode: "insensitive" as const } }, { productName: { contains: t, mode: "insensitive" as const } }, { brand: { contains: t, mode: "insensitive" as const } }, { summary: { contains: t, mode: "insensitive" as const } }] })),
     ],
   };
-  const anyFilter = FILTERS.some((f) => active[f.key]) || terms.length > 0;
+  const anyFilter = FILTERS.some((f) => active[f.key]) || terms.length > 0 || Boolean(type);
 
-  const [total, reviews, facets, counts, guides, deals, trending] = await Promise.all([
+  const [total, reviews, facets, counts, guides, deals, trending, products, kindCounts] = await Promise.all([
     db.normalizedReview.count({ where }),
     db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * PAGE_SIZE, take: PAGE_SIZE, select: cardSelect }),
     facetCounts({ categorySlug: slug }),
     categoryCounts(),
-    anyFilter ? Promise.resolve([]) : latestByKind("AI_GUIDE", 3, slug),
+    anyFilter ? Promise.resolve([]) : latestByKind(["AI_GUIDE", "BUYING_GUIDE"], 3, slug),
     anyFilter ? Promise.resolve([]) : verifiedDealRows({ categorySlug: slug, take: 4 }),
     anyFilter ? Promise.resolve([]) : trendingReviews(7, 30),
+    // Products and services with published content in this category (product hubs).
+    db.productEntity.findMany({
+      where: { content: { some: { review: { status: "PUBLISHED", categorySlug: slug } } } },
+      select: { slug: true, name: true, _count: { select: { content: { where: { review: { status: "PUBLISHED" } } } } } },
+      orderBy: { content: { _count: "desc" } },
+      take: 24,
+    }),
+    db.normalizedReview.groupBy({ by: ["kind"], where: { status: "PUBLISHED", categorySlug: slug }, _count: { _all: true } }),
   ]);
+  const kindCount = (kinds: readonly string[]) => kindCounts.filter((k) => kinds.includes(k.kind)).reduce((n, k) => n + k._count._all, 0);
   const categoryTotal = counts.find((c) => c.slug === slug)?.count ?? 0;
   const popular = trending.filter((t) => t.review.categorySlug === slug).slice(0, 3);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -99,6 +115,9 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       if (v) p.set(f.key, v);
     }
     if (q && key !== "q") p.set("q", q);
+    if (key === "type") {
+      if (value) p.set("type", value);
+    } else if (type) p.set("type", type.param);
     for (const [k, v] of Object.entries(extra)) p.set(k, v);
     const s = p.toString();
     return `/category/${slug}${s ? `?${s}` : ""}`;
@@ -228,7 +247,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
           <div>
             <div className="result-bar">
               <h2 id="results-title" className="small" style={{ font: "600 15px var(--font-body)", margin: 0 }} aria-live="polite">
-                {total === 1 ? "1 review" : `${total} reviews`}
+                {total === 1 ? `1 ${type ? type.label.toLowerCase().replace(/s$/, "") : "item"}` : `${total} ${type ? type.label.toLowerCase() : "items"}`}
                 {q ? ` matching “${q}”` : ""}
               </h2>
               <div className="btnrow" style={{ margin: 0 }}>
@@ -240,6 +259,24 @@ export default async function CategoryPage({ params, searchParams }: { params: P
                 )}
               </div>
             </div>
+            {kindCounts.length > 1 || type ? (
+              <nav aria-label="Filter by content type" style={{ margin: "0 0 18px" }}>
+                <ul className="chips">
+                  <li>
+                    <Link className="chip" href={hrefWith("type")} aria-current={!type ? "page" : undefined}>
+                      Everything
+                    </Link>
+                  </li>
+                  {TYPES.filter((t) => kindCount(t.kinds) > 0).map((t) => (
+                    <li key={t.param}>
+                      <Link className="chip" href={hrefWith("type", t.param)} aria-current={type?.param === t.param ? "page" : undefined}>
+                        {t.label} ({kindCount(t.kinds)})
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ) : null}
             {reviews.length ? (
               <ReviewGrid reviews={reviews} eagerCount={3} headingLevel={3} />
             ) : (
@@ -312,6 +349,22 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         </section>
       )}
 
+      {products.length > 0 && !anyFilter && (
+        <section className="section tight" aria-labelledby="cp-title">
+          <div className="wrap">
+            <SectionHeader id="cp-title" label={`${products.length} ${products.length === 1 ? "product" : "products"}`} title={`Products and services in ${def.name}`}>
+              Each one links to every review, comparison and guide that covers it.
+            </SectionHeader>
+            <ul className="entity-list">
+              {products.map((p) => (
+                <li key={p.slug}>
+                  <Link href={`/product/${p.slug}`}>{p.name}</Link> <span className="small">({p._count.content})</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
       {guides.length > 0 && (
         <section className="section" id="guides" aria-labelledby="cg-title">
           <div className="wrap">

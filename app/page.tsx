@@ -27,9 +27,10 @@ const NA = <span className="na">Not available</span>;
 
 export default async function Home() {
   // Photos depend only on the static taxonomy, so they load alongside the database queries.
-  const [reviews, guides, ledger, deals, trending, pair, stats, photos] = await Promise.all([
+  const [reviews, guides, comparisons, ledger, deals, trending, pair, stats, photos] = await Promise.all([
     latestByKind("REVIEW", 6),
-    latestByKind("AI_GUIDE", 3),
+    latestByKind(["AI_GUIDE", "BUYING_GUIDE"], 3),
+    latestByKind("COMPARISON", 3),
     categoryLedger(),
     verifiedDealRows({ take: 6 }),
     trendingReviews(7, 4),
@@ -41,11 +42,11 @@ export default async function Home() {
   const lead = reviews[0];
   const heroDeal = deals[0];
   const specSource = pair?.[0];
-  const activeCats = ledger.filter((c) => c.reviews + c.guides > 0);
+  const activeCats = ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0);
   const tickerItems: TickerItem[] = [
     ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
     ...deals.slice(0, 4).map((d) => ({ key: `d-${d.linkId}`, href: `/review/${d.review.slug}#deal`, label: "Verified deal", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
-    ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: "AI-assisted guide", text: g.productName, slug: g.categorySlug })),
+    ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "AI-assisted guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
     ...ledger.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
   ];
 
@@ -59,7 +60,8 @@ export default async function Home() {
           <div className="hero-dateline">
             <span className="label">Edition of {dateline(new Date())}</span>
             <span className="label muted">
-              {stats.published} {stats.published === 1 ? "review" : "reviews"} published, {stats.verifiedOffers} verified {stats.verifiedOffers === 1 ? "offer" : "offers"} live
+              {stats.published} {stats.published === 1 ? "review" : "reviews"}
+              {stats.comparisons ? `, ${stats.comparisons} ${stats.comparisons === 1 ? "comparison" : "comparisons"}` : ""} published, {stats.verifiedOffers} verified {stats.verifiedOffers === 1 ? "offer" : "offers"} live
             </span>
           </div>
           <h1 id="hero-title" className="statement">
@@ -223,7 +225,7 @@ export default async function Home() {
           {/* Categories with published content first; numbers stay each category's issue number. */}
           {ledger
             .map((c, i) => ({ ...c, issue: i + 1 }))
-            .sort((a, b) => Number(b.reviews + b.guides > 0) - Number(a.reviews + a.guides > 0) || a.issue - b.issue)
+            .sort((a, b) => Number(b.reviews + b.comparisons + b.guides > 0) - Number(a.reviews + a.comparisons + a.guides > 0) || a.issue - b.issue)
             .map((c) => {
             const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
             return (
@@ -252,6 +254,10 @@ export default async function Home() {
                       <div>
                         <dt>Reviews</dt>
                         <dd>{c.reviews}</dd>
+                      </div>
+                      <div>
+                        <dt>Comparisons</dt>
+                        <dd>{c.comparisons}</dd>
                       </div>
                       <div>
                         <dt>Guides</dt>
@@ -349,11 +355,23 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* ── Comparisons (only when real ones exist) ── */}
+      {comparisons.length > 0 && (
+        <section className="section tight" aria-labelledby="cmp-title">
+          <div className="wrap">
+            <SectionHeader id="cmp-title" label={`${stats.comparisons} published`} title="Head-to-head comparisons" action={<Link className="arrow-link" href="/reviews?type=comparison">All comparisons</Link>}>
+              Publishers’ side-by-side comparisons, filed under every product they cover.
+            </SectionHeader>
+            <ReviewGrid reviews={comparisons} layout="ruled" />
+          </div>
+        </section>
+      )}
+
       {/* ── Guides ── */}
       <section className="section tight" aria-labelledby="guides-title">
         <div className="wrap">
           <SectionHeader id="guides-title" label={`${stats.guides} published`} title="Buying guides" action={guides.length ? <Link className="arrow-link" href="/guides">All guides</Link> : undefined}>
-            AI-assisted and editor-approved. They explain what to look for. They are not hands-on reviews and never carry a rating.
+            Buying guides from named publishers, and AI-assisted guides an editor approved. Each is labelled; none carries a rating.
           </SectionHeader>
           {guides.length ? (
             <ReviewGrid reviews={guides} layout="ruled" />

@@ -41,7 +41,13 @@ describe("expanded taxonomy", () => {
     ["Philips Hue Bridge Pro review: smart lighting", "smart-home"],
     ["Nvidia GeForce RTX 5070 Ti graphics card review", "pc-components"],
     ["Microsoft 365 review", "productivity-software"],
-    ["1Password review: the best password manager", "productivity-software"],
+    ["1Password review: the best password manager", "security-software"],
+    ["NordVPN review", "security-software"],
+    ["Shopify review: the best ecommerce platform", "website-ecommerce"],
+    ["Hostinger web hosting review", "website-ecommerce"],
+    ["HubSpot CRM review", "business-software"],
+    ["ClickUp review: project management for teams", "business-software"],
+    ["DaVinci Resolve review: free video editing software", "creative-software"],
     ["Mac mini M4 review", "desktops"],
     ["Purple Restore hybrid mattress review", "mattresses"],
     ["Tempur-Pedic memory foam mattress topper review", "mattresses"],
@@ -80,13 +86,13 @@ describe("expanded taxonomy", () => {
 });
 
 describe("cloud storage", () => {
-  it("files cloud storage reviews under Office & Productivity → Cloud storage, not NAS", async () => {
+  it("files cloud storage reviews under Security & Privacy → Cloud storage, not NAS", async () => {
     for (const title of ["pCloud Review: Is the Cloud Storage Provider Any Good?", "Sync.com Review - Free & Secure Storage", "Icedrive Review in 2026: Cloud Storage Pricing & Features"]) {
       const r = classify({ title, productName: title.split(/ review/i)[0], summary: "", body: `${title}. We test the cloud storage service's pricing, sync speed and security.` });
-      expect(r.category?.slug, title).toBe("productivity-software");
+      expect(r.category?.slug, title).toBe("security-software");
       expect(r.subcategory?.slug, title).toBe("cloud-storage");
     }
     const nas = classify({ title: "Synology DS224+ NAS review", productName: "Synology DS224+", summary: "", body: "A two-bay NAS for home backups and a personal cloud." });
-    expect(nas.category?.slug).not.toBe("productivity-software");
+    expect(nas.category?.slug).not.toBe("security-software");
   });
 });

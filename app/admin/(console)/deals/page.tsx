@@ -38,6 +38,8 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
       },
     }),
   ]);
+  // Reviews whose last Sovrn lookup was refused (site not approved / key rejected).
+  const authBlocked = await db.pipelineFailure.count({ where: { stage: "OFFER_MATCHING", errorCode: "SOVRN_AUTH_FAILED", resolvedAt: null } });
   const count = (s: string) => counts.find((c) => c.dealStatus === s)?._count._all ?? 0;
   const [byCategory, verifiedByCategory, providerStates, unmatched] = await Promise.all([
     db.normalizedReview.groupBy({ by: ["categorySlug"], where: { status: "PUBLISHED" }, _count: { _all: true } }),
@@ -63,6 +65,7 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
         {STATUSES.map((s) => (
           <Stat key={s} label={s} value={count(s)} />
         ))}
+        <Stat label="Approval blocked (Sovrn 401/403)" value={authBlocked} />
       </div>
       <div className="chart-grid">
         <section className="chart-card" aria-labelledby="cov-cat">

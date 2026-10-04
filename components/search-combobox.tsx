@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
-type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" };
+type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
 
 /**
  * Accessible search combobox (ARIA 1.2 pattern) with instant suggestions from published

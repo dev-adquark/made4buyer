@@ -8,6 +8,7 @@ import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
 import { withLock } from "./lock";
 import { runImageBackfill } from "./image-backfill";
+import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
 import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob } from "./revalidation";
 
@@ -54,6 +55,7 @@ export const JOBS = {
   "retry-failed": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runFailedRetry({ trigger }), locked: true },
   "cleanup-cache": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runCacheCleanup({ trigger }), locked: true },
   "publish-cycle": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runPublishCycleJob({ trigger }), locked: true },
+  "reclassify-content": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runReclassify(trigger), locked: true },
   "enrich-images": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runImageBackfill(trigger, { limit: 60, pauseMs: 250 }), locked: true },
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },

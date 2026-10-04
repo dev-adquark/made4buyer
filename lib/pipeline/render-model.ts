@@ -14,7 +14,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 3;
+export const RENDER_MODEL_VERSION = 4;
 
 export type PublicDeal = {
   linkId: string;
@@ -29,7 +29,7 @@ export type PublicDeal = {
 export type PageRenderModel = {
   version: number;
   reviewId: string;
-  kind: "REVIEW" | "AI_GUIDE";
+  kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE";
   slug: string;
   canonicalPath: string;
   title: string;
@@ -49,6 +49,8 @@ export type PageRenderModel = {
   /** subject ILLUSTRATIVE: a topic photo, captioned as such; never presented as the product. */
   image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean; subject: "PRODUCT" | "ILLUSTRATIVE" | null };
   keyEntities: Array<{ label: string; value: string }>;
+  /** Products/services this content covers (one for a review, several for a comparison). */
+  products: Array<{ name: string; slug: string; role: string; brand: string | null }>;
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
   source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
@@ -89,7 +91,7 @@ export type RenderInputs = {
     categorySlug: string | null;
     subcategorySlug: string | null;
     source: string;
-    kind?: "REVIEW" | "AI_GUIDE";
+    kind?: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE";
     sourceUrl: string | null;
     author: string | null;
     sourcePublishedAt: Date | null;
@@ -102,10 +104,11 @@ export type RenderInputs = {
   deals: PublicDeal[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
+  products?: PageRenderModel["products"];
 };
 
 /** Pure composition of the PageRenderModel (shared by the DB builder and the dry-run). */
-export function composeRenderModel({ review, entities: e, assignments, image, deals, textRights = "FULL" }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, deals, textRights = "FULL", products = [] }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   const pub = publicImageUrl(image, review.categorySlug);
@@ -154,7 +157,9 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
       subject: pub.isFallback ? null : image?.subject === "ILLUSTRATIVE" ? "ILLUSTRATIVE" : "PRODUCT",
     },
     keyEntities,
-    rating: review.kind !== "AI_GUIDE" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
+    products,
+    // A rating belongs to a single-product review; comparisons and guides never carry one.
+    rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     deals,
     source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
@@ -169,9 +174,11 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
       entities: true,
       assignments: { where: { active: true }, include: { categoryTag: { select: { slug: true, name: true } } } },
       images: { where: { isPrimary: true }, take: 1 },
+      contentEntities: { orderBy: { position: "asc" }, include: { entity: { select: { name: true, slug: true, brand: true } } } },
     },
   });
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), textRights: await textRightsFor(review.source) });
+  const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), textRights: await textRightsFor(review.source), products });
 }
 
 /**

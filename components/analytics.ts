@@ -2,7 +2,7 @@
 
 /** Client-side first-party analytics. Events go to /api/events; failures never affect the page. */
 
-export type ClientEvent = "page_view" | "deal_impression" | "category_view" | "search" | "comparison";
+export type ClientEvent = "page_view" | "deal_impression" | "category_view" | "search" | "comparison" | "outbound_click";
 
 const COOKIE = "m4b_sid";
 

@@ -5,7 +5,7 @@ import { cache, Fragment } from "react";
 import Breadcrumbs, { breadcrumbJsonLd, type Crumb } from "@/components/breadcrumbs";
 import DealImpression from "@/components/deal-impression";
 import JsonLd from "@/components/json-ld";
-import { KindPill, ReviewGrid } from "@/components/review-card";
+import { KindPill, kindNoun, ReviewGrid } from "@/components/review-card";
 import TrustLabel from "@/components/trust-label";
 import { ParallaxFigure, SectionNav } from "@/components/review-chrome";
 import { themeStyle } from "@/lib/taxonomy/themes";
@@ -59,7 +59,8 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
   // Review markup only for text we publish in full; an excerpt page is an article about the
   // product that cites the original review, never a review of our own.
   const excerpt = m.textRights === "EXCERPT";
-  if (m.rating && !excerpt) {
+  // Review markup only for a single-product review whose full text we publish.
+  if (m.rating && !excerpt && m.kind === "REVIEW") {
     out.push({
       "@context": "https://schema.org",
       "@type": "Review",
@@ -84,12 +85,12 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       dateModified: m.updatedAt,
       ...(m.kind === "AI_GUIDE" || excerpt ? { author: publisher } : m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}),
       publisher,
-      about: { "@type": "Thing", name: m.productName },
+      about: (m.products ?? []).length > 1 ? m.products.map((p) => ({ "@type": "Thing", name: p.name })) : { "@type": "Thing", name: m.products?.[0]?.name ?? m.productName },
       ...(excerpt && m.source.url ? { isBasedOn: m.source.url, citation: { "@type": "CreativeWork", url: m.source.url, ...(m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}), publisher: { "@type": "Organization", name: m.source.name } } } : {}),
     });
   }
   // Product + Offer only when a verified offer with a real price exists.
-  const priced = deals.find((d) => d.isBest && d.price !== null && d.currency);
+  const priced = m.kind === "REVIEW" ? deals.find((d) => d.isBest && d.price !== null && d.currency) : undefined;
   if (priced) {
     out.push({
       "@context": "https://schema.org",
@@ -148,7 +149,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const quote = pullQuote(m.bodyParagraphs);
   const considerations = m.category && (m.intents.length > 0 || m.platforms.length > 0 || m.priceTier);
   const sections = [
-    { id: "review", label: isGuide ? "Guide" : "Review" },
+    { id: "review", label: isGuide || m.kind === "BUYING_GUIDE" ? "Guide" : m.kind === "COMPARISON" ? "Comparison" : "Review" },
+    ...(m.products?.length ? [{ id: "products", label: m.kind === "COMPARISON" ? "Products compared" : "Product" }] : []),
     { id: "facts", label: "Key facts" },
     ...(considerations ? [{ id: "considerations", label: "Buying considerations" }] : []),
     { id: "deal", label: best ? "Verified offer" : "Offer" },
@@ -239,7 +241,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             ) : (
               <aside className="kind-banner review" aria-label="About this review">
                 <div>
-                  <strong>Review from {m.source.name}.</strong>
+                  <strong>
+                    {m.kind === "COMPARISON" ? "Comparison" : m.kind === "BUYING_GUIDE" ? "Buying guide" : "Review"} from {m.source.name}.
+                  </strong>
                   {m.source.author ? `Written by ${m.source.author}. ` : ""}We summarise and file it for buyers, and add offers only after checking their links.
                 </div>
               </aside>
@@ -251,11 +255,11 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   {m.summary}
                 </p>
                 <p style={{ margin: 0 }}>
-                  This is a short excerpt. The full review belongs to {m.source.name}
+                  This is a short excerpt. The full {kindNoun(m.kind)} belongs to {m.source.name}
                   {m.source.url ? (
                     <>
                       :{" "}
-                      <a href={m.source.url} rel="noopener" target="_blank" data-cursor="Read">
+                      <a href={m.source.url} rel="noopener" target="_blank" data-cursor="Read" data-track="outbound" data-review-id={m.reviewId} data-kind="source">
                         read it on {m.source.name}
                         <span className="visually-hidden"> (opens in a new tab)</span>
                       </a>
@@ -298,6 +302,21 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               </p>
             )}
           </section>
+
+          {m.products?.length > 0 && (
+            <section id="products" aria-labelledby="products-heading">
+              <h2 id="products-heading">{m.kind === "COMPARISON" ? `Products compared (${m.products.length})` : m.products.length > 1 ? "Products covered" : "Product"}</h2>
+              <ul className="entity-list">
+                {m.products.map((p) => (
+                  <li key={p.slug}>
+                    <Link href={`/product/${p.slug}`}>{p.name}</Link>
+                    {p.brand && <span> · {p.brand}</span>}
+                  </li>
+                ))}
+              </ul>
+              {m.kind === "COMPARISON" && <p className="muted small">Each product links to everything we have filed about it. We don’t pick a winner the source didn’t.</p>}
+            </section>
+          )}
 
           <section id="facts" aria-labelledby="facts-heading">
             <h2 id="facts-heading">Key facts</h2>

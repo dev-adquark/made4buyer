@@ -20,6 +20,7 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
     where: { id: reviewId },
     include: {
       entities: { select: { lowConfidenceFields: true } },
+      _count: { select: { contentEntities: true } },
       assignments: { where: { active: true, isPrimary: true, tagType: "CATEGORY" }, select: { confidence: true, isOverride: true, reviewState: true } },
     },
   });
@@ -27,7 +28,7 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   if (review.kind === "AI_GUIDE" && !review.editorApprovedAt) {
     failures.push({ code: "AI_GUIDE_NEEDS_EDITOR_APPROVAL", message: "AI-assisted guide must be read and approved by an editor before publishing" });
   }
-  if (review.kind === "REVIEW" && !review.sourcePublishedAt) {
+  if (review.kind !== "AI_GUIDE" && !review.sourcePublishedAt) {
     failures.push({ code: "PUBLICATION_DATE_MISSING", message: "The source did not supply a publication date. Fix it in the Content API: we never guess a date" });
   }
   if (review.status === "REJECTED") failures.push({ code: "REVIEW_REJECTED", message: "Review is rejected; restore it first" });
@@ -38,6 +39,9 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   if (!primary || !review.categorySlug) failures.push({ code: "NO_PRIMARY_CATEGORY", message: "Review has no primary category" });
   else if (!primary.isOverride && primary.reviewState !== "ACCEPTED" && primary.confidence < config.taxonomy.autoAcceptThreshold()) {
     failures.push({ code: "CATEGORY_NEEDS_REVIEW", message: `Category confidence ${primary.confidence} is below ${config.taxonomy.autoAcceptThreshold()} and has not been accepted` });
+  }
+  if (review.kind === "COMPARISON" && review._count.contentEntities < 2) {
+    failures.push({ code: "COMPARISON_ENTITIES_MISSING", message: `A comparison needs at least two products; ${review._count.contentEntities} resolved. Add them under Products in this article` });
   }
   const low = review.entities?.lowConfidenceFields ?? [];
   if (!review.entities) failures.push({ code: "ENTITIES_MISSING", message: "Entity extraction has not run" });

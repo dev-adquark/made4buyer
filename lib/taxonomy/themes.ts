@@ -38,6 +38,10 @@ export const THEMES: Record<string, CategoryTheme> = {
   "baby-kids": { from: "#F472B6", to: "#F472B6", ink: "#9D2463", soft: "#F2DFE7", glow: "rgba(244, 114, 182, 0.28)", onSignal: "#26061a" },
   "pet-supplies": { from: "#8E5F3A", to: "#8E5F3A", ink: "#663F1F", soft: "#ECE2D7", glow: "rgba(142, 95, 58, 0.3)", onSignal: "#ffffff" },
   "luggage-travel": { from: "#0F766E", to: "#0F766E", ink: "#0F5F59", soft: "#D9E8E5", glow: "rgba(15, 118, 110, 0.28)", onSignal: "#ffffff" },
+  "security-software": { from: "#0E9F6E", to: "#0E9F6E", ink: "#055E41", soft: "#D9ECE3", glow: "rgba(14, 159, 110, 0.28)", onSignal: "#03170f" },
+  "business-software": { from: "#C2410C", to: "#C2410C", ink: "#9A3412", soft: "#F2E0D6", glow: "rgba(194, 65, 12, 0.28)", onSignal: "#ffffff" },
+  "website-ecommerce": { from: "#2563EB", to: "#2563EB", ink: "#1D4ED8", soft: "#DFE5F3", glow: "rgba(37, 99, 235, 0.28)", onSignal: "#ffffff" },
+  "creative-software": { from: "#DB2777", to: "#DB2777", ink: "#9D174D", soft: "#F2DCE6", glow: "rgba(219, 39, 119, 0.28)", onSignal: "#ffffff" },
   general: { from: "#18181C", to: "#18181C", ink: "#18181C", soft: "#E3E0D8", glow: "rgba(24, 24, 28, 0.2)", onSignal: "#ffffff" },
 };
 

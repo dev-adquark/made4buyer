@@ -35,8 +35,8 @@ export default async function GuidesIndex({ searchParams }: { searchParams: Prom
         <div className="wrap">
           <aside className="kind-banner ai" aria-label="How guides are written">
             <div>
-              <strong>Every guide here is AI-assisted.</strong>
-              Guides are drafted with an AI writing tool, then read and approved by an editor before they’re published. They aren’t hands-on reviews and never carry a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
+              <strong>Two kinds of guide, each labelled.</strong>
+              Source buying guides are excerpts of guides from named publishers, linked to the original. AI-assisted guides are drafted with an AI writing tool, then read and approved by an editor. Neither is a hands-on review, and neither carries a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
             </div>
           </aside>
           {rows.length ? (

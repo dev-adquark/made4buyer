@@ -1,7 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import type { ContentKind, Prisma } from "@prisma/client";
 import { cache } from "react";
 import { db } from "@/lib/db";
 import { publicImageUrl } from "@/lib/pipeline/images";
+import { entityKey } from "@/lib/entities/resolve";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 
 /** Public read models. Only PUBLISHED reviews are ever returned. */
@@ -84,15 +85,27 @@ export async function eligibleBrands() {
   return rows.filter((r) => r._count._all >= BRAND_PAGE_MIN_REVIEWS).map((r) => ({ slug: r.brandSlug!, count: r._count._all, updatedAt: r._max.updatedAt }));
 }
 
-export async function searchReviews(q: string, take = 30) {
+export type SearchKind = "REVIEW" | "COMPARISON" | "GUIDE";
+
+/** Content kinds a search type filter covers ("GUIDE" = source buying guides and AI-assisted guides). */
+export function kindsFor(type?: SearchKind | null): ContentKind[] | undefined {
+  if (!type) return undefined;
+  return type === "GUIDE" ? ["BUYING_GUIDE", "AI_GUIDE"] : [type];
+}
+
+export async function searchReviews(q: string, take = 30, opts: { type?: SearchKind | null } = {}) {
   const terms = q.split(/\s+/).filter((t) => t.length >= 2).slice(0, 6);
   if (!terms.length) return [];
+  const kinds = kindsFor(opts.type);
   const categorySlugs = CATEGORIES.filter((c) => terms.some((t) => c.name.toLowerCase().includes(t.toLowerCase()) || c.aliases.includes(t.toLowerCase()))).map((c) => c.slug);
   const rows = await db.normalizedReview.findMany({
     where: {
       status: "PUBLISHED",
+      ...(kinds ? { kind: { in: kinds } } : {}),
       AND: terms.map((t) => ({
         OR: [
+          // Products and services the content covers, including their aliases ("Nord VPN").
+          { contentEntities: { some: { entity: { OR: [{ name: { contains: t, mode: "insensitive" as const } }, { aliasKeys: { has: entityKey(t) } }, { matchKey: entityKey(t) }] } } } },
           { canonicalTitle: { contains: t, mode: "insensitive" as const } },
           { productName: { contains: t, mode: "insensitive" as const } },
           { brand: { contains: t, mode: "insensitive" as const } },
@@ -116,10 +129,12 @@ export function hasVerifiedOffer(r: ReviewCard): boolean {
   return r.affiliateLinks.length > 0;
 }
 
-export async function publishedReviews(page: number, pageSize = 24) {
+export async function publishedReviews(page: number, pageSize = 24, type?: SearchKind | null) {
+  const kinds = kindsFor(type);
+  const where = { status: "PUBLISHED", ...(kinds ? { kind: { in: kinds } } : {}) } satisfies Prisma.NormalizedReviewWhereInput;
   const [total, rows] = await Promise.all([
-    db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
-    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
+    db.normalizedReview.count({ where }),
+    db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
   ]);
   return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
 }
@@ -154,7 +169,7 @@ export async function trendingReviews(days = 7, take = 6) {
   return ranked.flatMap((r) => (bySlug.has(r.slug) ? [{ review: bySlug.get(r.slug)!, views: r.views }] : [])).slice(0, take);
 }
 
-export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" };
+export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
 
 /** Instant search suggestions (published reviews only). */
 export async function suggest(q: string, take = 6): Promise<Suggestion[]> {
@@ -163,7 +178,8 @@ export async function suggest(q: string, take = 6): Promise<Suggestion[]> {
 }
 
 export const publishedGuides = cache(async (page = 1, pageSize = 24) => {
-  const where = { status: "PUBLISHED", kind: "AI_GUIDE" } satisfies Prisma.NormalizedReviewWhereInput;
+  // Source buying guides and our AI-assisted guides (each labelled on its card).
+  const where = { status: "PUBLISHED", kind: { in: ["AI_GUIDE", "BUYING_GUIDE"] } } satisfies Prisma.NormalizedReviewWhereInput;
   const [total, rows] = await Promise.all([
     db.normalizedReview.count({ where }),
     db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
@@ -171,8 +187,8 @@ export const publishedGuides = cache(async (page = 1, pageSize = 24) => {
   return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
 });
 
-export async function latestByKind(kind: "REVIEW" | "AI_GUIDE", take = 6, categorySlug?: string) {
-  return db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind, ...(categorySlug ? { categorySlug } : {}) }, orderBy: LATEST_FIRST, take, select: cardSelect });
+export async function latestByKind(kind: ContentKind | ContentKind[], take = 6, categorySlug?: string) {
+  return db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind: { in: Array.isArray(kind) ? kind : [kind] }, ...(categorySlug ? { categorySlug } : {}) }, orderBy: LATEST_FIRST, take, select: cardSelect });
 }
 
 /** One row per verified offer (VERIFIED_OK link on a matched offer) of a published review. */
@@ -307,8 +323,59 @@ export async function navFeed(categorySlug: string): Promise<NavFeed> {
   };
 }
 
+/** Products/services with published content whose name or alias matches the query. */
+export async function searchProducts(q: string, take = 8) {
+  const term = q.trim();
+  if (term.length < 2) return [];
+  const key = entityKey(term);
+  return db.productEntity.findMany({
+    where: { content: { some: { review: { status: "PUBLISHED" } } }, OR: [{ name: { contains: term, mode: "insensitive" } }, { matchKey: key }, { aliasKeys: { has: key } }, { brand: { contains: term, mode: "insensitive" } }] },
+    orderBy: { name: "asc" },
+    take,
+    select: { slug: true, name: true, brand: true, categorySlug: true, _count: { select: { content: { where: { review: { status: "PUBLISHED" } } } } } },
+  });
+}
+
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 3) return 99;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let diag = prev[0];
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = prev[j];
+      prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diag = tmp;
+    }
+  }
+  return prev[b.length];
+}
+
+/**
+ * Typo tolerance: when a search finds nothing, the closest published product, brand or category
+ * name within a small edit distance ("nordvnp" → "NordVPN"). Only names that exist are suggested.
+ */
+export async function didYouMean(q: string): Promise<string | null> {
+  const term = q.trim().toLowerCase();
+  if (term.length < 3 || term.length > 40) return null;
+  const [entities, brands] = await Promise.all([
+    db.productEntity.findMany({ where: { content: { some: { review: { status: "PUBLISHED" } } } }, select: { name: true }, take: 2000 }),
+    db.normalizedReview.findMany({ where: { status: "PUBLISHED", brand: { not: null } }, distinct: ["brand"], select: { brand: true }, take: 500 }),
+  ]);
+  const names = [...entities.map((e) => e.name), ...brands.map((b) => b.brand!), ...CATEGORIES.map((c) => c.name)];
+  const limit = term.length <= 5 ? 1 : 2;
+  let best: { name: string; d: number } | null = null;
+  for (const name of names) {
+    const d = editDistance(term, name.toLowerCase());
+    if (d > 0 && d <= limit && (!best || d < best.d)) best = { name, d };
+  }
+  return best?.name ?? null;
+}
+
 export type SearchGroups = {
   reviews: Suggestion[];
+  comparisons: Suggestion[];
+  products: Array<{ name: string; href: string; count: number }>;
   guides: Suggestion[];
   deals: Suggestion[];
   categories: Array<{ slug: string; name: string; href: string; parent: string | null }>;
@@ -336,9 +403,12 @@ export async function searchGroups(q: string): Promise<SearchGroups> {
   const eligible = new Set(brandCounts.size ? (await eligibleBrands()).map((b) => b.slug) : []);
   // A brand page exists only for brands with enough reviews; otherwise search for the brand.
   const brands = [...brandCounts.values()].slice(0, 3).map((b) => ({ name: b.name, count: b.count, href: b.slug && eligible.has(b.slug) ? `/brand/${b.slug}` : `/search?q=${encodeURIComponent(b.name)}` }));
+  const products = await searchProducts(q, 4);
   return {
     reviews: rows.filter((r) => r.kind === "REVIEW").slice(0, 5).map(toS),
-    guides: rows.filter((r) => r.kind === "AI_GUIDE").slice(0, 3).map(toS),
+    comparisons: rows.filter((r) => r.kind === "COMPARISON").slice(0, 3).map(toS),
+    products: products.map((p) => ({ name: p.name, href: `/product/${p.slug}`, count: p._count.content })),
+    guides: rows.filter((r) => r.kind === "AI_GUIDE" || r.kind === "BUYING_GUIDE").slice(0, 3).map(toS),
     deals: rows.filter(hasVerifiedOffer).slice(0, 3).map(toS),
     categories: categories.slice(0, 4),
     brands,
@@ -369,14 +439,15 @@ export async function comparePair() {
 /** Stored counts shown on the trust section. Nothing here is estimated. */
 export async function trustStats() {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-  const [published, guides, verifiedOffers, checkedThisWeek, categories] = await Promise.all([
+  const [published, comparisons, guides, verifiedOffers, checkedThisWeek, categories] = await Promise.all([
     db.normalizedReview.count({ where: { status: "PUBLISHED", kind: "REVIEW" } }),
-    db.normalizedReview.count({ where: { status: "PUBLISHED", kind: "AI_GUIDE" } }),
+    db.normalizedReview.count({ where: { status: "PUBLISHED", kind: "COMPARISON" } }),
+    db.normalizedReview.count({ where: { status: "PUBLISHED", kind: { in: ["AI_GUIDE", "BUYING_GUIDE"] } } }),
     db.affiliateLink.count({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } } }),
     db.affiliateLink.count({ where: { lastVerifiedAt: { gte: weekAgo }, review: { status: "PUBLISHED" } } }),
     categoryCounts(),
   ]);
-  return { published, guides, verifiedOffers, checkedThisWeek, categoriesCovered: categories.filter((c) => c.count > 0).length };
+  return { published, comparisons, guides, verifiedOffers, checkedThisWeek, categoriesCovered: categories.filter((c) => c.count > 0).length };
 }
 
 /** Per-category counts of published reviews, guides and live verified offers (all stored data). */
@@ -390,7 +461,8 @@ export const categoryLedger = cache(async () => {
     name: c.name,
     description: c.description,
     reviews: byKind.find((r) => r.categorySlug === c.slug && r.kind === "REVIEW")?._count._all ?? 0,
-    guides: byKind.find((r) => r.categorySlug === c.slug && r.kind === "AI_GUIDE")?._count._all ?? 0,
+    comparisons: byKind.find((r) => r.categorySlug === c.slug && r.kind === "COMPARISON")?._count._all ?? 0,
+    guides: byKind.filter((r) => r.categorySlug === c.slug && (r.kind === "AI_GUIDE" || r.kind === "BUYING_GUIDE")).reduce((n, r) => n + r._count._all, 0),
     deals: deals.filter((d) => d.review.categorySlug === c.slug).length,
   }));
 });

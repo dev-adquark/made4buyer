@@ -73,7 +73,13 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   <td data-label="Last success">{h?.lastSuccessAt ? when(h.lastSuccessAt) : "Never"}</td>
                   <td className="num" data-label="Discovered">
                     {h?.discovered ?? 0}
-                    {h && h.discovered > 0 && <div className="small muted">{h.accepted} accepted</div>}
+                    {h && (h.discovered > 0 || h.published > 0 || h.inQa > 0) && (
+                      <div className="small muted">
+                        {h.accepted} accepted · {h.rejected} rejected · {h.duplicates} duplicate
+                        <br />
+                        {h.inQa} in QA · {h.published} published{h.unpublishedOrRejected ? ` · ${h.unpublishedOrRejected} unpublished/rejected` : ""}
+                      </div>
+                    )}
                   </td>
                   <td data-label="Robots.txt">
                     <Badge value={h?.robots === "DISALLOWED" ? "DISALLOWED" : h?.robots === "ALLOWED" ? "ALLOWED AT LAST START" : "NOT CHECKED"} tone={h?.robots === "DISALLOWED" ? "error" : h?.robots === "ALLOWED" ? "ok" : "warn"} />

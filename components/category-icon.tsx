@@ -1,5 +1,9 @@
 /** Simple stroked category pictograms (decorative; always paired with a text label). */
 const PATHS: Record<string, string> = {
+  "security-software": "M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z M9 12l2 2 4-4",
+  "business-software": "M4 8h16v11H4z M9 8V5h6v3 M4 13h16",
+  "website-ecommerce": "M3 5h18v14H3z M3 9h18 M6 7h1 M9 7h1",
+  "creative-software": "M4 20l4-1 11-11-3-3L5 16z M14 6l3 3",
   laptops: "M5 6h14v9H5z M3 18h18",
   phones: "M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z M11 18h2",
   "ai-tools": "M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z M18 15l.8 2 2 .8-2 .7-.8 2-.8-2-2-.7 2-.8z",

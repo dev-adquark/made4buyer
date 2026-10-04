@@ -37,7 +37,9 @@ function toGroups(g: SearchGroups): Group[] {
   const review = (s: SearchGroups["reviews"][number], badge?: string): Item => ({ key: `r:${s.slug}:${badge ?? ""}`, href: `/review/${s.slug}${badge === "Verified offer" ? "#deal" : ""}`, title: s.productName, sub: [categoryName(s.categorySlug), s.brand].filter(Boolean).join(", "), image: s.image, swatch: s.categorySlug, badge });
   return [
     { id: "reviews", label: "Reviews", items: g.reviews.map((s) => review(s)) },
-    { id: "guides", label: "Buying guides", items: g.guides.map((s) => ({ ...review(s), key: `g:${s.slug}`, title: s.title, badge: "AI guide" })) },
+    { id: "comparisons", label: "Comparisons", items: (g.comparisons ?? []).map((s) => ({ ...review(s), key: `cmp:${s.slug}`, title: s.title, badge: "Comparison" })) },
+    { id: "products", label: "Products", items: (g.products ?? []).map((p) => ({ key: `p:${p.href}`, href: p.href, title: p.name, sub: p.count === 1 ? "1 article" : `${p.count} articles` })) },
+    { id: "guides", label: "Buying guides", items: g.guides.map((s) => ({ ...review(s), key: `g:${s.slug}`, title: s.title, badge: s.kind === "AI_GUIDE" ? "AI guide" : "Source guide" })) },
     { id: "deals", label: "Verified deals", items: g.deals.map((s) => review(s, "Verified offer")) },
     { id: "categories", label: "Categories", items: g.categories.map((c) => ({ key: `c:${c.href}`, href: c.href, title: c.name, sub: c.parent ? `in ${c.parent}` : "Category", swatch: c.slug })) },
     { id: "brands", label: "Brands", items: g.brands.map((b) => ({ key: `b:${b.name}`, href: b.href, title: b.name, sub: b.count === 1 ? "1 result" : `${b.count} results` })) },

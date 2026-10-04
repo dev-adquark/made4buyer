@@ -3,10 +3,10 @@ import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 
 /** First-party analytics event names. Client-reported events are a strict subset. */
-export const EVENT_NAMES = ["page_view", "deal_impression", "affiliate_click", "category_view", "search", "comparison", "publish", "ingestion", "verification"] as const;
+export const EVENT_NAMES = ["page_view", "deal_impression", "affiliate_click", "category_view", "search", "comparison", "outbound_click", "publish", "ingestion", "verification"] as const;
 export type EventName = (typeof EVENT_NAMES)[number];
 
-export const CLIENT_EVENTS: ReadonlySet<EventName> = new Set(["page_view", "deal_impression", "category_view", "search", "comparison"]);
+export const CLIENT_EVENTS: ReadonlySet<EventName> = new Set(["page_view", "deal_impression", "category_view", "search", "comparison", "outbound_click"]);
 
 export async function recordEvent(e: {
   event: EventName;

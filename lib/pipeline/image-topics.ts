@@ -24,10 +24,12 @@ const RULES: Rule[] = [
   { key: "terminal", label: "the command line", match: ["terminal", "tmux", "zellij", "wezterm", "iterm", "iterm2", "ghostty"], queries: ["programming code terminal screen", "computer code dark screen"], accept: ["code", "coding", "programming", "terminal", "programmer", "developer", "screen", "computer"] },
   { key: "ai-coding", label: "AI-assisted programming", match: ["cursor", "windsurf", "copilot", "ide", "code editor", "ai editor", "coding assistant"], queries: ["programming code on screen", "developer coding laptop"], accept: ["code", "coding", "programming", "programmer", "developer", "software", "computer", "laptop"] },
   { key: "dev-platform", label: "software development", match: ["launchdarkly", "unleash", "growthbook", "posthog", "feature flag", "feature flags", "temporal", "inngest", "trigger.dev", "bullmq", "workflow", "queue"], queries: ["software developer team code", "programming code on screen"], accept: ["code", "coding", "programming", "developer", "software", "computer", "laptop", "team"] },
+  { key: "website", label: "websites and online stores", match: ["website builder", "wix", "squarespace", "shopify", "woocommerce", "bigcommerce", "ecommerce", "online store", "web hosting", "wordpress hosting", "bluehost", "hostinger", "siteground", "domain registrar"], queries: ["website design on laptop", "online shopping ecommerce"], accept: ["website", "web", "laptop", "online", "shopping", "ecommerce", "computer", "design"] },
+  { key: "creative", label: "design and creative work", match: ["photoshop", "lightroom", "figma", "canva", "video editor", "video editing", "photo editor", "graphic design", "davinci resolve", "premiere pro"], queries: ["graphic designer workspace", "video editing workstation"], accept: ["design", "designer", "creative", "editing", "video", "photo", "artist", "drawing", "computer"] },
   { key: "project-management", label: "project planning and teamwork", match: ["project management", "clickup", "monday.com", "zoho", "asana", "trello", "kanban", "todoist"], queries: ["team planning project board", "office team meeting laptop"], accept: ["team", "planning", "meeting", "office", "board", "notes", "work", "laptop", "colleagues", "business"] },
 ];
 
-const SOFTWARE_CATEGORIES = new Set(["developer-software", "productivity-software", "ai-tools"]);
+const SOFTWARE_CATEGORIES = new Set(["developer-software", "productivity-software", "ai-tools", "security-software", "business-software", "website-ecommerce", "creative-software"]);
 
 /** Per-category fallback topic, used when no specific rule matches. */
 const CATEGORY_TOPICS: Record<string, Omit<ImageTopic, "key">> = {
@@ -37,6 +39,10 @@ const CATEGORY_TOPICS: Record<string, Omit<ImageTopic, "key">> = {
   "ai-tools": { label: "artificial intelligence", queries: ["artificial intelligence technology"], accept: ["artificial", "intelligence", "robot", "technology", "computer", "code"] },
   "developer-software": { label: "software development", queries: ["programming code on screen"], accept: ["code", "coding", "programming", "developer", "computer", "software"] },
   "productivity-software": { label: "work and productivity", queries: ["laptop office work"], accept: ["laptop", "office", "work", "desk", "computer", "business"] },
+  "security-software": { label: "online security and privacy", queries: ["cybersecurity network privacy", "data security padlock"], accept: ["security", "cybersecurity", "privacy", "padlock", "lock", "encryption", "network", "secure", "protection"] },
+  "business-software": { label: "business teams at work", queries: ["team planning project board", "office team meeting laptop"], accept: ["team", "planning", "meeting", "office", "business", "work", "laptop", "colleagues"] },
+  "website-ecommerce": { label: "websites and online stores", queries: ["website design on laptop", "online shopping ecommerce"], accept: ["website", "web", "laptop", "online", "shopping", "ecommerce", "computer", "design"] },
+  "creative-software": { label: "design and creative work", queries: ["graphic designer workspace", "video editing workstation"], accept: ["design", "designer", "creative", "editing", "video", "photo", "artist", "drawing", "tablet", "computer"] },
   accessories: { label: "computer accessories", queries: ["keyboard mouse desk"], accept: ["keyboard", "mouse", "desk", "accessories", "computer"] },
   audio: { label: "headphones and audio", queries: ["headphones close up"], accept: ["headphones", "headphone", "earbuds", "speaker", "audio", "music"] },
   wearables: { label: "wearables", queries: ["smartwatch on wrist"], accept: ["smartwatch", "watch", "wrist", "fitness", "tracker"] },
