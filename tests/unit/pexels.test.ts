@@ -28,3 +28,12 @@ describe("Pexels relevance", () => {
     expect(pickRelevantPhoto([photo(5, "Black wireless headphones on a table")], "Wireless Headphones Pro", null)).toBeNull();
   });
 });
+
+describe("product photo identity", () => {
+  it("does not treat a generic product-type word as the product", async () => {
+    const { stillShowsProduct } = await import("@/lib/pipeline/pexels");
+    expect(stillShowsProduct("A person relaxes with a laptop displaying a VPN save screen", "Surfshark VPN", "Surfshark")).toBe(false);
+    expect(stillShowsProduct("Sony WH-1000XM6 headphones on a wooden table", "WH-1000XM6", "Sony")).toBe(true);
+    expect(stillShowsProduct("MacBook Air on a desk", "MacBook Air", "Apple")).toBe(true);
+  });
+});

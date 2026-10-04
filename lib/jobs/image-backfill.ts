@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { probeImage } from "@/lib/pipeline/images";
-import type { PexelsSearchResult } from "@/lib/pipeline/pexels";
+import { stillShowsProduct, type PexelsSearchResult } from "@/lib/pipeline/pexels";
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { imageRank, loadSourceContent, runImageStage } from "@/lib/pipeline/stages";
@@ -51,13 +51,15 @@ export async function runImageBackfill(trigger: string, opts: { limit?: number; 
     out.checked++;
     const current = review.images[0];
     const working = current && !current.isFallback && current.sourceUrl ? (await probeImage(current.sourceUrl)).ok : false;
+    // A Pexels "product" photo that no longer passes the relevance rule is re-chosen.
+    const misidentified = Boolean(current?.subject === "PRODUCT" && current.providerPhotoId?.startsWith("pexels:") && !stillShowsProduct(current.altText ?? "", review.productName, review.brand));
     // Already has a working licensed image (Pexels or a licensed feed image): nothing to do.
-    if (working && current.licenseState !== "UNVERIFIED" && imageRank(current) > 0) {
+    if (working && !misidentified && current.licenseState !== "UNVERIFIED" && imageRank(current) > 0) {
       out.skippedGood++;
       out.items.push({ slug: review.slug, outcome: "kept", subject: current.subject, photo: current.providerPhotoId });
       continue;
     }
-    const broken = Boolean(current && !current.isFallback && current.sourceUrl && !working);
+    const broken = Boolean(current && !current.isFallback && current.sourceUrl && !working) || misidentified;
     if (current?.providerPhotoId) used.delete(current.providerPhotoId);
     try {
       const content = await loadSourceContent(review);

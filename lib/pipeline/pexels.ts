@@ -17,7 +17,9 @@ import { imageTopic, photoMatchesTopic, type ImageTopic } from "./image-topics";
 
 export type PexelsPhoto = { id: number; url: string; alt: string; photographer: string; photographer_url?: string; width: number; height: number; src: { large: string; large2x: string; landscape: string } };
 
-const GENERIC = new Set(["the", "and", "with", "for", "new", "review", "gen", "generation", "inch", "wireless", "laptop", "notebook", "phone", "smartphone", "tablet", "headphones", "earbuds", "mouse", "keyboard", "charger", "monitor", "watch", "plus", "pro", "max", "mini", "ultra", "lite", "edition", "model", "series"]);
+const GENERIC = new Set(["the", "and", "with", "for", "new", "review", "gen", "generation", "inch", "wireless", "laptop", "notebook", "phone", "smartphone", "tablet", "headphones", "earbuds", "mouse", "keyboard", "charger", "monitor", "watch", "plus", "pro", "max", "mini", "ultra", "lite", "edition", "model", "series",
+  // Product-type words: a photo of "a laptop showing a VPN" is not a photo of Surfshark VPN.
+  "vpn", "vpns", "app", "apps", "software", "service", "services", "cloud", "storage", "drive", "password", "manager", "browser", "editor", "platform", "tool", "tools", "api", "database", "hosting", "antivirus", "router", "speaker", "camera", "tv", "printer", "vacuum", "mattress", "chair", "desk"]);
 const BRANDS_LOWER = KNOWN_BRANDS.map((b) => b.toLowerCase());
 
 export function distinctiveTokens(productName: string, brand?: string | null): string[] {
@@ -59,6 +61,11 @@ export function pickRelevantPhoto(photos: PexelsPhoto[], productName: string, br
     if (matched.length >= Math.min(2, tokens.length) && (!best || matched.length > best.matched.length)) best = { photo, matched };
   }
   return best;
+}
+
+/** Whether a stored PRODUCT photo still qualifies under the current relevance rule. */
+export function stillShowsProduct(alt: string, productName: string, brand?: string | null): boolean {
+  return pickRelevantPhoto([{ id: 0, url: "", alt, photographer: "", width: MIN_PHOTO_WIDTH, height: 1, src: { large: "", large2x: "", landscape: "" } }], productName, brand) !== null;
 }
 
 export function pexelsConfigured(): boolean {
