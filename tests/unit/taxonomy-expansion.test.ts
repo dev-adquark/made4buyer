@@ -78,3 +78,15 @@ describe("expanded taxonomy", () => {
     expect(cat("Visual Studio Code review: the developer tool every coder uses")).toBe("developer-software");
   });
 });
+
+describe("cloud storage", () => {
+  it("files cloud storage reviews under Office & Productivity → Cloud storage, not NAS", async () => {
+    for (const title of ["pCloud Review: Is the Cloud Storage Provider Any Good?", "Sync.com Review - Free & Secure Storage", "Icedrive Review in 2026: Cloud Storage Pricing & Features"]) {
+      const r = classify({ title, productName: title.split(/ review/i)[0], summary: "", body: `${title}. We test the cloud storage service's pricing, sync speed and security.` });
+      expect(r.category?.slug, title).toBe("productivity-software");
+      expect(r.subcategory?.slug, title).toBe("cloud-storage");
+    }
+    const nas = classify({ title: "Synology DS224+ NAS review", productName: "Synology DS224+", summary: "", body: "A two-bay NAS for home backups and a personal cloud." });
+    expect(nas.category?.slug).not.toBe("productivity-software");
+  });
+});
