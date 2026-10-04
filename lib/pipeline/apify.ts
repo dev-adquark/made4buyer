@@ -427,9 +427,16 @@ export async function collectRun(run: ApifyRun, trigger: string): Promise<Collec
 /** Polls unfinished runs and collects finished ones. */
 export async function runCollectScrapes(trigger: string) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", collected: 0 };
-  const runs = await db.apifyRun.findMany({ where: { status: { in: [...ACTIVE, "SUCCEEDED"] } }, orderBy: { startedAt: "asc" }, take: 20 });
+  const runs = await db.apifyRun.findMany({ where: { status: { in: [...ACTIVE, "SUCCEEDED"] } }, orderBy: { startedAt: "asc" }, take: 20, include: { source: { select: { enabled: true } } } });
   const results: Array<CollectResult | { runId: string; status: string; error?: string }> = [];
-  for (const r of runs) {
+  for (const { source, ...r } of runs) {
+    // A source disabled after its run started (e.g. its terms forbid crawling) is never ingested.
+    if (!source.enabled) {
+      if (ACTIVE.includes(r.status)) await apifyRequest(`/actor-runs/${r.apifyRunId}/abort`, { method: "POST" }).catch(() => undefined);
+      await db.apifyRun.update({ where: { id: r.id }, data: { status: "SOURCE_DISABLED", finishedAt: r.finishedAt ?? new Date(), error: "Source was disabled before collection; nothing ingested" } });
+      results.push({ runId: r.apifyRunId, status: "SOURCE_DISABLED" });
+      continue;
+    }
     try {
       const fresh = ACTIVE.includes(r.status) ? await refreshRun(r) : r;
       if (fresh.status === "SUCCEEDED") results.push(await collectRun(fresh, trigger));

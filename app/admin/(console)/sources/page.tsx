@@ -9,7 +9,7 @@ import { CATEGORIES } from "@/lib/taxonomy/definitions";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Review sources" };
 
-const RUN_TONE: Record<string, "ok" | "warn" | "error"> = { COLLECTED: "ok", SUCCEEDED: "ok", RUNNING: "warn", READY: "warn", COLLECTING: "warn", FAILED: "error", ABORTED: "error", "TIMED-OUT": "error", COLLECT_FAILED: "error" };
+const RUN_TONE: Record<string, "ok" | "warn" | "error"> = { COLLECTED: "ok", SUCCEEDED: "ok", RUNNING: "warn", READY: "warn", COLLECTING: "warn", FAILED: "error", ABORTED: "error", "TIMED-OUT": "error", COLLECT_FAILED: "error", SOURCE_DISABLED: "warn" };
 
 export default async function SourcesPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();

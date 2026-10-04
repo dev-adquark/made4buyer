@@ -98,6 +98,16 @@ describe("Apify scrape → collect → ingestion", () => {
     await addSource({ enabled: false });
     expect(await runScrapeSources("test")).toMatchObject({ started: 0 });
   });
+
+  it("never ingests a run whose source was disabled after it started", async () => {
+    const source = await addSource();
+    expect(await runScrapeSources("test")).toMatchObject({ started: 1 });
+    await db.reviewSource.update({ where: { id: source.id }, data: { enabled: false } });
+    const collected = await runCollectScrapes("test");
+    expect(collected.results?.[0]).toMatchObject({ status: "SOURCE_DISABLED" });
+    expect(await db.contentItem.count()).toBe(0);
+    expect((await db.apifyRun.findFirstOrThrow()).status).toBe("SOURCE_DISABLED");
+  });
 });
 
 describe("Sovrn edge cases", () => {
