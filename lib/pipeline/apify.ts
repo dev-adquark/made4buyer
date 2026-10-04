@@ -198,14 +198,16 @@ export function buildActorInput(source: Pick<ReviewSource, "slug" | "startUrls" 
   return {
     startUrls: source.startUrls.map((url) => ({ url })),
     linkSelector: "a[href]",
-    // Only review pages are followed from the listing pages (depth 1). No proxy rotation, no login.
+    // Only review pages are followed from the listing pages (depth 1). No login.
     globs: source.reviewUrlPatterns.map((glob) => ({ glob })),
     maxCrawlingDepth: 1,
     maxPagesPerCrawl: Math.max(1, source.maxPagesPerRun + source.startUrls.length),
     maxConcurrency: 2,
     respectRobotsTxtFile: true,
     injectJQuery: false,
-    proxyConfiguration: { useApifyProxy: false },
+    // Web Scraper requires a proxy setting. Apify's default datacenter pool is its normal egress:
+    // no residential IPs and no block evasion. robots.txt and the source's terms still decide.
+    proxyConfiguration: { useApifyProxy: true },
     pageFunction: PAGE_FUNCTION,
     customData: { source: source.slug, reviewPatterns: source.reviewUrlPatterns.map(globToRegex) },
   };

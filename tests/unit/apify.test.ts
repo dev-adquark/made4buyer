@@ -38,7 +38,8 @@ describe("Apify helpers", () => {
   });
   it("builds a polite actor input: robots respected, no proxy, depth 1, page function compiles", () => {
     const input = buildActorInput({ slug: "example", startUrls: ["https://example.test/reviews"], reviewUrlPatterns: ["https://example.test/reviews/**"], maxPagesPerRun: 10 });
-    expect(input).toMatchObject({ respectRobotsTxtFile: true, maxCrawlingDepth: 1, maxConcurrency: 2, proxyConfiguration: { useApifyProxy: false } });
+    expect(input).toMatchObject({ respectRobotsTxtFile: true, maxCrawlingDepth: 1, maxConcurrency: 2, proxyConfiguration: { useApifyProxy: true } });
+    expect(input.proxyConfiguration).not.toHaveProperty("apifyProxyGroups");
     expect(() => new Function(`return (${PAGE_FUNCTION})`)()).not.toThrow();
   });
 });
