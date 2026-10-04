@@ -119,6 +119,8 @@ export const config = {
     enrichmentUrl: () => str("IMAGE_ENRICHMENT_URL"),
     enrichmentKey: () => str("IMAGE_ENRICHMENT_API_KEY"),
     pexelsKey: () => str("PEXELS_API_KEY"),
+    /** Overridable only so tests can point at a local stub. */
+    pexelsBaseUrl: () => (str("PEXELS_API_BASE_URL") ?? "https://api.pexels.com/v1").replace(/\/+$/, ""),
     cdnTemplate: () => str("IMAGE_CDN_URL_TEMPLATE"),
     requireLicense: () => bool("IMAGE_REQUIRE_LICENSE", true),
     timeoutMs: () => num("IMAGE_TIMEOUT_MS", 10000, 1000, 30000),

@@ -237,7 +237,7 @@ export default async function Home() {
                   <span className="ip-media">
                     {photo ? (
                       <>
-                        <img src={photo.url} alt="" width={400} height={500} loading="lazy" decoding="async" />
+                        <SafeImg src={photo.url} fallback={placeholderPath(c.slug)} alt="" width={400} height={500} loading="lazy" decoding="async" />
                         <span className="credit">Photo: {photo.photographer} / Pexels</span>
                       </>
                     ) : (

@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/detect-stale",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/enrich-images",
+      "schedule": "15 6 * * *"
     }
   ]
 }

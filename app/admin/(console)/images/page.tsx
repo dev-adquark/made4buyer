@@ -59,7 +59,10 @@ export default async function ImagesPage() {
                   </td>
                   <td data-label="Source" className="small" style={{ wordBreak: "break-all" }}>
                     {a.sourceType}
+                    {a.subject && <Badge value={a.subject} tone={a.subject === "PRODUCT" ? "ok" : "warn"} />}
                     <div className="muted">{a.sourceUrl}</div>
+                    {a.searchQuery && <div className="muted">Query: “{a.searchQuery}”{a.providerPhotoId ? ` · ${a.providerPhotoId}` : ""}</div>}
+                    {a.attribution && <div className="muted">{a.attribution}</div>}
                   </td>
                   <td data-label="CDN" className="small" style={{ wordBreak: "break-all" }}>{a.cdnUrl ?? "—"}</td>
                   <td data-label="License">

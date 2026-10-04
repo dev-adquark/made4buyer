@@ -1,5 +1,6 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
+import { ALL_TOPIC_QUERIES } from "../../lib/pipeline/image-topics";
 import path from "node:path";
 
 /**
@@ -26,6 +27,7 @@ export async function startStubServer(opts: StubOptions = {}) {
   const apifyRuns = new Map<string, { input: unknown; polls: number }>();
   const requests: Array<{ method: string; path: string }> = [];
   let base = "";
+  const pexels = { broken: false, rateLimited: false };
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
 
   const server = http.createServer((req, res) => {
@@ -114,11 +116,48 @@ export async function startStubServer(opts: StubOptions = {}) {
     const merchant = url.pathname.match(/^\/merchant\/([\w-]+)$/);
     if (merchant) return merchant[1] === "sv-ank-1" ? send(404, "not found", { "content-type": "text/html" }) : send(200, "<html><body>merchant</body></html>", { "content-type": "text/html" });
     if (url.pathname.startsWith("/image/")) return send(200, PNG, { "content-type": "image/png", "content-length": String(PNG.length) });
+    // Pexels API stub (SAMPLE data). Product queries return generic desk photos (no product
+    // named), except "sony", so tests exercise both the PRODUCT and ILLUSTRATIVE paths.
+    if (url.pathname === "/pexels/v1/search") {
+      if (req.headers.authorization !== "test-pexels-key") return send(401, { error: "Unauthorized" });
+      const q = (url.searchParams.get("query") ?? "").toLowerCase();
+      const rl = { "x-ratelimit-limit": "200", "x-ratelimit-remaining": "150", "x-ratelimit-reset": "1900000000" };
+      if (q.includes("ratelimit") || pexels.rateLimited) return send(429, { error: "Too many requests" }, { ...rl, "x-ratelimit-remaining": "0" });
+      if (q.includes("malformed")) return send(200, { unexpected: true }, rl);
+      if (q.includes("nothing")) return send(200, { photos: [] }, rl);
+      let seed = 0;
+      for (const c of q) seed = (seed * 31 + c.charCodeAt(0)) % 100000;
+      const photo = (i: number, alt: string, extra: Record<string, unknown> = {}) => ({
+        id: seed * 10 + i,
+        url: `https://www.pexels.com/photo/stub-${seed * 10 + i}/`,
+        alt,
+        photographer: `Stub Photographer ${i}`,
+        photographer_url: `https://www.pexels.com/@stub-${i}`,
+        width: 4000,
+        height: 2667,
+        src: { large: `${base}/pexels-img/${seed * 10 + i}.jpeg`, large2x: `${base}/pexels-img/${seed * 10 + i}.jpeg`, landscape: `${base}/pexels-img/${q.includes("broken") || pexels.broken ? "broken" : seed * 10 + i}.jpeg` },
+        ...extra,
+      });
+      const topical = ALL_TOPIC_QUERIES.includes(q);
+      const photos = q.includes("sony")
+        ? [photo(1, "Sony WH-1000XM6 headphones on a wooden table")]
+        : [
+            photo(1, "A person working at a desk with a coffee"),
+            photo(2, `Stock photo: ${q}`, { src: { large: "http://evil.example/x.jpg", large2x: "http://evil.example/x.jpg", landscape: "http://evil.example/x.jpg" } }),
+            photo(3, `Stock photo: ${q}`, { width: 640, height: 427 }),
+            ...(topical ? [photo(4, `Stock photo: ${q}`), photo(5, `Another stock photo: ${q}`)] : [photo(4, "Hands on a laptop keyboard")]),
+          ];
+      return send(200, { page: 1, per_page: photos.length, photos }, rl);
+    }
+    if (url.pathname.startsWith("/pexels-img/")) {
+      if (url.pathname.includes("broken")) return send(404, "<html>gone</html>", { "content-type": "text/html" });
+      return send(200, PNG, { "content-type": "image/jpeg", "content-length": String(PNG.length) });
+    }
     return send(404, { error: "not found" });
   });
 
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

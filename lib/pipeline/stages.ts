@@ -10,7 +10,8 @@ import { ensureTaxonomySeeded, persistClassification } from "@/lib/taxonomy/pers
 import { slugify } from "@/lib/util/text";
 import { extractEntities, lowConfidenceFields, type EntityField } from "./entities";
 import { recordFailure, resolveFailures } from "./failures";
-import { enrichImage } from "./images";
+import { enrichImage, probeImage } from "./images";
+import type { PexelsSearchResult } from "./pexels";
 import { normalizeContent } from "./normalize";
 import { validateContentItem, type ValidatedContent } from "./validate";
 import { nextVerificationDelayMs, verifyAffiliateLink } from "./verify-link";
@@ -152,8 +153,22 @@ export async function runTaxonomyStage(review: NormalizedReview, content: Valida
 
 // ─── IMAGE_ENRICHMENT ───────────────────────────────────────────────────────
 
-export async function runImageStage(review: NormalizedReview, content: ValidatedContent) {
-  const current = await db.normalizedReview.findUniqueOrThrow({ where: { id: review.id }, select: { categorySlug: true, productName: true, brand: true } });
+/** How good an image is for its page: a photo of the product beats a labelled topic photo, which beats the placeholder. */
+export function imageRank(a: { isFallback: boolean; subject?: string | null; licenseState?: string | null } | null | undefined): number {
+  if (!a || a.isFallback) return 0;
+  // An image we are not allowed to show is worth no more than the placeholder.
+  if (a.licenseState === "UNVERIFIED" && config.images.requireLicense()) return 0;
+  return a.subject === "ILLUSTRATIVE" ? 1 : 2;
+}
+
+export type ImageStageOptions = { excludePhotoIds?: Set<string>; searchCache?: Map<string, PexelsSearchResult>; replaceExisting?: boolean };
+
+export async function runImageStage(review: NormalizedReview, content: ValidatedContent, opts: ImageStageOptions = {}) {
+  const current = await db.normalizedReview.findUniqueOrThrow({ where: { id: review.id }, select: { categorySlug: true, subcategorySlug: true, productName: true, brand: true, canonicalTitle: true } });
+  // Photos other reviews already use, so each page gets its own image where one exists.
+  const exclude =
+    opts.excludePhotoIds ??
+    new Set((await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true } })).map((a) => a.providerPhotoId!));
   let decision;
   try {
     decision = await enrichImage({
@@ -164,13 +179,23 @@ export async function runImageStage(review: NormalizedReview, content: Validated
       productName: current.productName,
       brand: current.brand,
       categorySlug: current.categorySlug,
+      subcategorySlug: current.subcategorySlug,
+      title: current.canonicalTitle,
+      excludePhotoIds: exclude,
+      searchCache: opts.searchCache,
     });
   } catch (error) {
     // Image enrichment must never block the pipeline.
     await recordFailure({ stage: "IMAGE_ENRICHMENT", code: "IMAGE_ENRICHMENT_FAILED", message: String(error), entityType: REVIEW, entityId: review.id, normalizedReviewId: review.id });
     return null;
   }
-  const { issues, ...data } = decision;
+  const { issues, providerStatus, ...data } = decision;
+  // Never replace a working image with a worse one (e.g. a placeholder after a rate limit).
+  const existing = await db.imageAsset.findFirst({ where: { normalizedReviewId: review.id, isPrimary: true } });
+  if (existing && !opts.replaceExisting && imageRank(existing) > imageRank(data) && existing.sourceUrl && (await probeImage(existing.sourceUrl)).ok) {
+    log.info("image kept", { stage: "IMAGE_ENRICHMENT", reviewId: review.id, kept: existing.providerPhotoId ?? existing.sourceType, candidate: data.isFallback ? "placeholder" : data.subject, providerStatus });
+    return Object.assign(existing, { providerStatus });
+  }
   await db.imageAsset.updateMany({ where: { normalizedReviewId: review.id, isPrimary: true }, data: { isPrimary: false } });
   const asset = await db.imageAsset.create({ data: { normalizedReviewId: review.id, ...data, isPrimary: true } });
   // Keep history bounded: remove superseded non-primary assets beyond the latest 5.
@@ -185,8 +210,8 @@ export async function runImageStage(review: NormalizedReview, content: Validated
       await resolveFailures({ stage: "IMAGE_ENRICHMENT", entityType: REVIEW, entityId: review.id, codes: [code] });
     }
   }
-  log.info("image enriched", { stage: "IMAGE_ENRICHMENT", reviewId: review.id, sourceType: asset.sourceType, licenseState: asset.licenseState, isFallback: asset.isFallback });
-  return asset;
+  log.info("image enriched", { stage: "IMAGE_ENRICHMENT", reviewId: review.id, sourceType: asset.sourceType, subject: asset.subject, photo: asset.providerPhotoId, licenseState: asset.licenseState, isFallback: asset.isFallback, providerStatus });
+  return Object.assign(asset, { providerStatus });
 }
 
 // ─── OFFER_MATCHING ─────────────────────────────────────────────────────────

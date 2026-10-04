@@ -13,7 +13,7 @@ import { checkGscAccess } from "@/lib/gsc";
 import { actorInputFields, apifyAccount, buildActorInput } from "@/lib/pipeline/apify";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { contentApiHeaders, extractContentItems, nextContentPage } from "@/lib/pipeline/content-source";
-import { searchPexels } from "@/lib/pipeline/pexels";
+import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
 import { validateContentItem } from "@/lib/pipeline/validate";
 import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
 import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
@@ -135,11 +135,22 @@ async function sovrn(product?: { productName?: string; brand?: string }) {
 
 async function pexels(product?: { productName?: string; brand?: string }) {
   if (!config.images.pexelsKey()) return add("pexels", "BLOCKED_BY_ENVIRONMENT", { missing: "PEXELS_API_KEY" });
+  // 1. Raw authenticated search: status, rate-limit headers, record fields.
+  const raw = await pexelsSearch("data center servers", { perPage: 5 });
+  const first = raw.photos[0];
+  const api = {
+    query: raw.query,
+    httpStatus: raw.httpStatus,
+    status: raw.status,
+    rateLimit: raw.rateLimit,
+    validPhotos: raw.photos.length,
+    sample: first ? { id: first.id, imageUrl: first.src.landscape, photographer: first.photographer, photographerUrl: first.photographer_url ?? null, pexelsUrl: first.url, original: `${first.width}x${first.height}` } : null,
+  };
+  if (raw.status !== "OK") return add("pexels", raw.status === "AUTH_FAILED" ? "AUTH_FAILED" : raw.status === "INVALID_RESPONSE" ? "INVALID_RESPONSE" : raw.status === "EMPTY" ? "EMPTY" : "PROVIDER_ERROR", { api, reason: raw.reason });
+  // 2. The pipeline's own choice for a product (photo of the product, else illustrative).
   const productName = arg("product") ?? product?.productName ?? "MacBook Air";
-  const r = await searchPexels(productName, arg("product") ? arg("brand") : product?.brand);
-  if (r.image) return add("pexels", "OK", { product: productName, attribution: r.image.attribution, attributionUrl: r.image.attributionUrl, license: r.image.license });
-  // "No relevant photo" is the relevance filter working, not a provider failure.
-  add("pexels", /HTTP 40[13]/.test(r.reason ?? "") ? "AUTH_FAILED" : /no Pexels photo/.test(r.reason ?? "") ? "EMPTY" : "PROVIDER_ERROR", { product: productName, reason: r.reason });
+  const pick = await findPexelsImage({ productName, brand: arg("product") ? arg("brand") : product?.brand });
+  add("pexels", "OK", { api, product: productName, choice: pick.image ? { subject: pick.image.subject, query: pick.image.searchQuery, attribution: pick.image.attribution, attributionUrl: pick.image.attributionUrl } : { none: pick.reason } });
 }
 
 async function gsc() {

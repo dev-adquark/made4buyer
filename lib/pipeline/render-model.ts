@@ -14,7 +14,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 2;
+export const RENDER_MODEL_VERSION = 3;
 
 export type PublicDeal = {
   linkId: string;
@@ -46,7 +46,8 @@ export type PageRenderModel = {
   bodyParagraphs: string[];
   /** Older persisted models have no value: treat as FULL (licensed feed or our own guide). */
   textRights?: "FULL" | "EXCERPT";
-  image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean };
+  /** subject ILLUSTRATIVE: a topic photo, captioned as such; never presented as the product. */
+  image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean; subject: "PRODUCT" | "ILLUSTRATIVE" | null };
   keyEntities: Array<{ label: string; value: string }>;
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
@@ -97,7 +98,7 @@ export type RenderInputs = {
   };
   entities: { brand: string | null; productName: string; modelNumber: string | null; deviceType: string | null; platform: string | null; useCase: string | null; rating: number | null; ratingScale: number | null; source: string } | null;
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
-  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null } | null | undefined;
+  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null } | null | undefined;
   deals: PublicDeal[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
@@ -140,12 +141,17 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     textRights,
     image: {
       url: pub.url,
-      alt: pub.isFallback ? `${categoryName(categorySlug) ?? "Technology"} placeholder illustration` : `${review.productName}${review.brand && !review.productName.startsWith(review.brand) ? ` by ${review.brand}` : ""}`,
+      alt: pub.isFallback
+        ? `${categoryName(categorySlug) ?? "Category"} illustration`
+        : image?.subject === "ILLUSTRATIVE"
+          ? `Illustrative photo${image.altText ? `: ${image.altText}` : ""}`
+          : (image?.altText ?? `${review.productName}${review.brand && !review.productName.startsWith(review.brand) ? ` by ${review.brand}` : ""}`),
       width: (!pub.isFallback && image?.width) || PLACEHOLDER_SIZE.width,
       height: (!pub.isFallback && image?.height) || PLACEHOLDER_SIZE.height,
       attribution: !pub.isFallback ? image?.attribution ?? null : null,
       attributionUrl: !pub.isFallback ? image?.attributionUrl ?? null : null,
       isFallback: pub.isFallback,
+      subject: pub.isFallback ? null : image?.subject === "ILLUSTRATIVE" ? "ILLUSTRATIVE" : "PRODUCT",
     },
     keyEntities,
     rating: review.kind !== "AI_GUIDE" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,

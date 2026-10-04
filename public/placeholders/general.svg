@@ -1,1 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="Technology placeholder image"><rect width="1200" height="675" fill="#eef1f6"/><path d="M450 220h300v220H450z M520 500h160 M600 440v60" fill="none" stroke="#8a95a8" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><text x="600" y="610" text-anchor="middle" font-family="system-ui,sans-serif" font-size="34" font-weight="700" fill="#5d6778">Technology</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="Made4Buyers: illustration, not a product photo">
+<rect width="1200" height="675" fill="#E3E0D8"/>
+<rect x="72" y="72" width="18" height="531" fill="#18181C"/>
+<path d="M40 68V40H68" fill="none" stroke="#18181C" stroke-width="3"/><path d="M1160 68V40H1132" fill="none" stroke="#18181C" stroke-width="3"/><path d="M40 607V635H68" fill="none" stroke="#18181C" stroke-width="3"/><path d="M1160 607V635H1132" fill="none" stroke="#18181C" stroke-width="3"/>
+<text x="130" y="140" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="26" letter-spacing="2" fill="#18181C">MADE4BUYERS</text>
+<text x="126" y="380" font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif" font-weight="900" font-size="112" letter-spacing="-3" fill="#18181C">Made4Buyers</text>
+<text x="130" y="580" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="30" fill="#18181C">No photo of this product is shown.</text>
+</svg>

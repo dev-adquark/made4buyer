@@ -543,12 +543,20 @@ model ImageAsset {
   isFallback         Boolean          @default(false)
   isPrimary          Boolean          @default(true)
   failureReason      String?
+  /// PRODUCT (the photo shows the reviewed product) or ILLUSTRATIVE (a topic photo, labelled as such).
+  subject            String?
+  /// Provider-scoped photo id, e.g. "pexels:12345", used to avoid reusing one photo across reviews.
+  providerPhotoId    String?
+  searchQuery        String?
+  altText            String?
+  photographerUrl    String?
   verifiedAt         DateTime?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
 
   @@index([normalizedReviewId, isPrimary])
+  @@index([providerPhotoId])
   @@index([enrichmentStatus])
   @@index([licenseState])
   @@map("image_assets")

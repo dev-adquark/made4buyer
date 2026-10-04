@@ -14,7 +14,7 @@ describe("image fallback", () => {
 
   it("falls back (never blocks) when the Content API image is unusable", async () => {
     restore = withEnv({ IMAGE_ENRICHMENT_URL: undefined, UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: undefined });
-    const d = await enrichImage({ productName: "Pixel 10", categorySlug: "unknown-cat", imageUrl: "http://10.1.2.3/image.png" });
+    const d = await enrichImage({ productName: "Pixel 10", categorySlug: "unknown-cat", imageUrl: "http://10.1.2.3/image.png", imageLicense: "Press image" });
     expect(d.isFallback).toBe(true);
     expect(d.enrichmentStatus).toBe("FAILED");
     expect(d.sourceUrl).toBe("/placeholders/general.svg");

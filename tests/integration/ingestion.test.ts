@@ -72,7 +72,9 @@ describe("Content API ingestion", () => {
     expect(mba.status).toBe("QUEUED");
     expect(mba.images[0]).toMatchObject({ sourceType: "CONTENT_API", licenseState: "PROVIDER_ASSERTED", isFallback: false });
     const pixel = reviews.find((r) => r.sourceId === "s-004")!;
-    expect(pixel.images[0]).toMatchObject({ sourceType: "CONTENT_API", licenseState: "UNVERIFIED" });
+    // An unlicensed feed image can't be shown (IMAGE_REQUIRE_LICENSE), so it is not stored as the
+    // page image; with no image provider configured here, the category placeholder is used.
+    expect(pixel.images[0]).toMatchObject({ sourceType: "PLACEHOLDER", isFallback: true });
     expect(await db.pipelineFailure.count({ where: { errorCode: "SOVRN_NOT_CONFIGURED" } })).toBe(13);
   });
 

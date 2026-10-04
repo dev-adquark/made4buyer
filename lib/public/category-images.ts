@@ -59,7 +59,7 @@ async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
   }
   try {
     const photos = (JSON.parse(res.body ?? "") as { photos?: Array<{ url: string; alt?: string; photographer: string; photographer_url: string; src: { portrait: string } }> }).photos ?? [];
-    const p = photos[0];
+    const p = photos.find((x) => typeof x?.src?.portrait === "string" && x.src.portrait.startsWith("https://images.pexels.com/"));
     return p ? { url: p.src.portrait, alt: p.alt ?? "", photographer: p.photographer, photographerUrl: p.photographer_url, pexelsUrl: p.url } : null;
   } catch {
     return null;
@@ -67,7 +67,16 @@ async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
 }
 
 export const categoryPhotos = unstable_cache(
-  async (slugs: string[]) => Object.fromEntries(await Promise.all(slugs.map(async (s) => [s, await fetchPhoto(s).catch(() => null)] as const))) as Record<string, CategoryPhoto | null>,
-  ["category-photos-v1"],
+  async (slugs: string[]) => {
+    // Small batches, not one burst of 32 requests: Pexels limits are per hour and per key.
+    const out: Record<string, CategoryPhoto | null> = {};
+    for (let i = 0; i < slugs.length; i += 4) {
+      const batch = slugs.slice(i, i + 4);
+      const photos = await Promise.all(batch.map((s) => fetchPhoto(s).catch(() => null)));
+      batch.forEach((s, j) => (out[s] = photos[j]));
+    }
+    return out;
+  },
+  ["category-photos-v2"],
   { revalidate: 86_400 },
 );

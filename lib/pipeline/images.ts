@@ -2,7 +2,7 @@ import type { EnrichmentStatus, ImageSourceType, LicenseState } from "@prisma/cl
 import { config } from "@/lib/config";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
-import { searchPexels } from "./pexels";
+import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
 
 /**
  * Stage IMAGE_ENRICHMENT. Priority: (1) Content API image, (2) configured image service,
@@ -25,7 +25,14 @@ export type ImageDecision = {
   enrichmentStatus: EnrichmentStatus;
   isFallback: boolean;
   failureReason?: string;
+  subject?: "PRODUCT" | "ILLUSTRATIVE";
+  providerPhotoId?: string;
+  searchQuery?: string;
+  altText?: string;
+  photographerUrl?: string;
   verifiedAt?: Date;
+  /** Provider status when the provider stopped us (rate limit, auth): the caller should pause. */
+  providerStatus?: PexelsSearchStatus;
   issues: Array<{ code: "IMAGE_ENRICHMENT_FAILED" | "LICENSE_UNVERIFIED"; message: string }>;
 };
 
@@ -41,7 +48,7 @@ export function cdnUrlFor(sourceUrl: string): string | undefined {
   return template.includes("{url}") ? template.replace("{url}", encodeURIComponent(sourceUrl)) : `${template.replace(/\/+$/, "")}/${encodeURIComponent(sourceUrl)}`;
 }
 
-async function probeImage(url: string): Promise<{ ok: true; contentType: string } | { ok: false; reason: string }> {
+export async function probeImage(url: string): Promise<{ ok: true; contentType: string } | { ok: false; reason: string }> {
   const opts = { timeoutMs: config.images.timeoutMs(), maxRedirects: 3, standardPortsOnly: true, headers: { Accept: "image/*" } };
   let res = await safeFetch(url, { ...opts, method: "HEAD" });
   if (!res.error && [403, 405, 501].includes(res.status)) res = await safeFetch(url, { ...opts, method: "GET", headers: { ...opts.headers, Range: "bytes=0-0" } });
@@ -61,16 +68,43 @@ export type ImageInput = {
   productName: string;
   brand?: string | null;
   categorySlug?: string | null;
+  subcategorySlug?: string | null;
+  title?: string;
+  /** Provider photo ids already used by other reviews (avoided where an alternative exists). */
+  excludePhotoIds?: Set<string>;
+  /** Per-run search cache shared across reviews. */
+  searchCache?: Map<string, PexelsSearchResult>;
 };
 
-type ServiceImage = { url: string; license?: string; attribution?: string; attributionUrl?: string; licenseVerified?: boolean; width?: number; height?: number; source?: string };
+type ServiceImage = {
+  url: string;
+  license?: string;
+  attribution?: string;
+  attributionUrl?: string;
+  licenseVerified?: boolean;
+  width?: number;
+  height?: number;
+  source?: string;
+  subject?: "PRODUCT" | "ILLUSTRATIVE";
+  providerPhotoId?: string;
+  searchQuery?: string;
+  altText?: string;
+  photographerUrl?: string;
+};
 
-async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string }> {
+async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
   if (config.images.pexelsKey()) {
-    const p = await searchPexels(input.productName, input.brand);
+    const p = await findPexelsImage(
+      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug },
+      { exclude: input.excludePhotoIds, cache: input.searchCache },
+    );
     // Every photo served by the Pexels API is covered by the Pexels License.
-    if (p.image) return { image: { ...p.image, licenseVerified: true, source: "pexels" } };
-    if (!config.images.enrichmentUrl()) return { reason: p.reason };
+    if (p.image) {
+      const { alt, ...rest } = p.image;
+      return { image: { ...rest, altText: alt, licenseVerified: true, source: "pexels" } };
+    }
+    const stopped = p.status === "RATE_LIMITED" || p.status === "AUTH_FAILED" ? p.status : undefined;
+    if (!config.images.enrichmentUrl() || stopped) return { reason: p.reason, providerStatus: stopped };
   }
   const base = config.images.enrichmentUrl();
   if (!base) return { reason: "IMAGE_ENRICHMENT_URL not configured (BLOCKED_BY_ENVIRONMENT)" };
@@ -119,13 +153,17 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   const now = new Date();
 
   if (input.imageUrl) {
-    const probe = await probeImage(input.imageUrl);
+    const licenseState = licenseStateOf(Boolean(input.imageLicenseVerified) || config.contentApi.imagesLicensed(), input.imageLicense);
+    // A source image we may not show (e.g. a scraped publisher's own image) is skipped, so the
+    // licensed image service gets its turn instead of the page falling back to a placeholder.
+    const showable = licenseState !== "UNVERIFIED" || !config.images.requireLicense();
+    const probe = showable ? await probeImage(input.imageUrl) : ({ ok: false, reason: "source image has no verified licence" } as const);
     if (probe.ok) {
-      const licenseState = licenseStateOf(Boolean(input.imageLicenseVerified) || config.contentApi.imagesLicensed(), input.imageLicense);
       if (licenseState === "UNVERIFIED") issues.push({ code: "LICENSE_UNVERIFIED", message: "Content API image has no license information" });
       return {
         sourceType: "CONTENT_API",
         sourceUrl: input.imageUrl,
+        subject: "PRODUCT",
         cdnUrl: cdnUrlFor(input.imageUrl),
         contentType: probe.contentType,
         licenseState,
@@ -137,7 +175,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
         issues,
       };
     }
-    issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Content API image unusable: ${probe.reason}` });
+    if (showable) issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Content API image unusable: ${probe.reason}` });
   }
 
   const service = await fromService(input);
@@ -157,6 +195,11 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
         license: service.image.license,
         attribution: service.image.attribution,
         attributionUrl: service.image.attributionUrl,
+        subject: service.image.subject,
+        providerPhotoId: service.image.providerPhotoId,
+        searchQuery: service.image.searchQuery,
+        altText: service.image.altText,
+        photographerUrl: service.image.photographerUrl,
         enrichmentStatus: "ENRICHED",
         isFallback: false,
         verifiedAt: now,
@@ -177,6 +220,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     enrichmentStatus: issues.some((i) => i.code === "IMAGE_ENRICHMENT_FAILED") ? "FAILED" : "FALLBACK",
     isFallback: true,
     failureReason: issues.map((i) => i.message).join("; ") || (service.reason ?? "no image source available"),
+    providerStatus: service.providerStatus,
     verifiedAt: now,
     issues,
   };
