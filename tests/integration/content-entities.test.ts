@@ -97,7 +97,9 @@ describe("multi-product content", () => {
     });
     expect(nord).toHaveLength(1);
     expect(nord[0]._count.content).toBe(2);
-    expect(nord[0].aliases).toContain("Nord VPN");
+    // Articles in one batch are processed concurrently: whichever spelling arrives first becomes
+    // the display name and the other an alias. Both must be on the one record.
+    expect([nord[0].name, ...nord[0].aliases].sort()).toEqual(["Nord VPN", "NordVPN"]);
     // Search finds content through the product and its alias.
     for (const r of await db.normalizedReview.findMany())
       await publishReview(r.id, ctx, "admin").catch(() => undefined);
@@ -109,9 +111,9 @@ describe("multi-product content", () => {
       (await searchReviews("vpn", 30, { type: "COMPARISON" })).length,
     ).toBe(2);
     expect((await searchReviews("vpn", 30, { type: "REVIEW" })).length).toBe(0);
-    expect((await searchProducts("nordvpn")).map((p) => p.name)).toEqual([
-      "NordVPN",
-    ]);
+    const found = await searchProducts("nordvpn");
+    expect(found).toHaveLength(1);
+    expect(["NordVPN", "Nord VPN"]).toContain(found[0].name);
   });
 
   it("keeps editor links on reprocessing and never re-adds a removed product", async () => {
