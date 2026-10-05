@@ -152,3 +152,12 @@ describe("image enrichment in the pipeline", () => {
     }
   });
 });
+
+describe("image subject by content kind", () => {
+  it("never labels a comparison's or guide's photo as the product", async () => {
+    const r = await findPexelsImage({ productName: "WH-1000XM6", brand: "Sony", categorySlug: "audio", kind: "BUYING_GUIDE" });
+    expect(r.image?.subject).toBe("ILLUSTRATIVE");
+    const review = await findPexelsImage({ productName: "WH-1000XM6", brand: "Sony", categorySlug: "audio", kind: "REVIEW" });
+    expect(review.image?.subject).toBe("PRODUCT");
+  });
+});

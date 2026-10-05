@@ -52,7 +52,7 @@ export async function runImageBackfill(trigger: string, opts: { limit?: number; 
     const current = review.images[0];
     const working = current && !current.isFallback && current.sourceUrl ? (await probeImage(current.sourceUrl)).ok : false;
     // A Pexels "product" photo that no longer passes the relevance rule is re-chosen.
-    const misidentified = Boolean(current?.subject === "PRODUCT" && current.providerPhotoId?.startsWith("pexels:") && !stillShowsProduct(current.altText ?? "", review.productName, review.brand));
+    const misidentified = Boolean(current?.subject === "PRODUCT" && current.providerPhotoId?.startsWith("pexels:") && (review.kind !== "REVIEW" || !stillShowsProduct(current.altText ?? "", review.productName, review.brand)));
     // Already has a working licensed image (Pexels or a licensed feed image): nothing to do.
     if (working && !misidentified && current.licenseState !== "UNVERIFIED" && imageRank(current) > 0) {
       out.skippedGood++;

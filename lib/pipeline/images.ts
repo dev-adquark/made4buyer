@@ -70,6 +70,8 @@ export type ImageInput = {
   categorySlug?: string | null;
   subcategorySlug?: string | null;
   title?: string;
+  /** Content kind: only a single-product REVIEW may get a "product" photo. */
+  kind?: string | null;
   /** Provider photo ids already used by other reviews (avoided where an alternative exists). */
   excludePhotoIds?: Set<string>;
   /** Per-run search cache shared across reviews. */
@@ -95,7 +97,7 @@ type ServiceImage = {
 async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
   if (config.images.pexelsKey()) {
     const p = await findPexelsImage(
-      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug },
+      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: input.kind },
       { exclude: input.excludePhotoIds, cache: input.searchCache },
     );
     // Every photo served by the Pexels API is covered by the Pexels License.

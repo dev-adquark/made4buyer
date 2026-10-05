@@ -185,7 +185,7 @@ function toImage(p: PexelsPhoto, subject: PexelsImage["subject"], query: string,
  * Photos already used by other reviews (`exclude`) are skipped where an alternative exists.
  */
 export async function findPexelsImage(
-  input: { productName: string; brand?: string | null; title?: string; categorySlug?: string | null; subcategorySlug?: string | null },
+  input: { productName: string; brand?: string | null; title?: string; categorySlug?: string | null; subcategorySlug?: string | null; kind?: string | null },
   opts: { exclude?: Set<string>; cache?: Map<string, PexelsSearchResult> } = {},
 ): Promise<PexelsLookup> {
   const exclude = opts.exclude ?? new Set<string>();
@@ -201,8 +201,9 @@ export async function findPexelsImage(
   };
   const stop = (r: PexelsSearchResult) => r.status === "NOT_CONFIGURED" || r.status === "AUTH_FAILED" || r.status === "RATE_LIMITED";
 
-  // 1. The product itself.
-  if (distinctiveTokens(input.productName, input.brand).length) {
+  // 1. The product itself: only a single-product review has one. A comparison or guide
+  // covers several products, so its photo is always illustrative.
+  if ((!input.kind || input.kind === "REVIEW") && distinctiveTokens(input.productName, input.brand).length) {
     const q = `${input.brand && !input.productName.toLowerCase().startsWith(input.brand.toLowerCase()) ? `${input.brand} ` : ""}${input.productName}`;
     const r = await search(q);
     if (stop(r)) return { status: r.status, reason: r.reason, requests };

@@ -199,7 +199,7 @@ export function imageRank(a: { isFallback: boolean; subject?: string | null; lic
 export type ImageStageOptions = { excludePhotoIds?: Set<string>; searchCache?: Map<string, PexelsSearchResult>; replaceExisting?: boolean };
 
 export async function runImageStage(review: NormalizedReview, content: ValidatedContent, opts: ImageStageOptions = {}) {
-  const current = await db.normalizedReview.findUniqueOrThrow({ where: { id: review.id }, select: { categorySlug: true, subcategorySlug: true, productName: true, brand: true, canonicalTitle: true } });
+  const current = await db.normalizedReview.findUniqueOrThrow({ where: { id: review.id }, select: { categorySlug: true, subcategorySlug: true, productName: true, brand: true, canonicalTitle: true, kind: true } });
   // Photos other reviews already use, so each page gets its own image where one exists.
   const exclude =
     opts.excludePhotoIds ??
@@ -216,6 +216,7 @@ export async function runImageStage(review: NormalizedReview, content: Validated
       categorySlug: current.categorySlug,
       subcategorySlug: current.subcategorySlug,
       title: current.canonicalTitle,
+      kind: current.kind,
       excludePhotoIds: exclude,
       searchCache: opts.searchCache,
     });
