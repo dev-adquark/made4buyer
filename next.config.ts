@@ -15,7 +15,7 @@ const extraConnect = [analyticsHost, sovrnCommerce && "https://*.viglink.com htt
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}${extraScript ? ` ${extraScript}` : ""}`,
-  "style-src 'self' 'unsafe-inline'",
+  `style-src 'self' 'unsafe-inline'${sovrnCommerce ? " https://commerce-js.sovrn.co" : ""}`,
   "img-src 'self' https: data:",
   "font-src 'self' data:",
   `connect-src 'self'${extraConnect ? ` ${extraConnect}` : ""}`,
