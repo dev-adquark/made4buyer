@@ -16,7 +16,7 @@ import { cleanText, sha256, stableStringify } from "@/lib/util/text";
 
 export const AI_GUIDE_SOURCE = "keyword-to-blog";
 
-export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string; industry?: string };
+export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string; industry?: string; articleType?: "GUIDE" | "ARTICLE" };
 
 type Section = { type?: string; heading?: string; contentMarkdown?: string; callout?: { label?: string; text?: string } };
 type KtbResponse = {
@@ -27,7 +27,7 @@ type KtbResponse = {
 };
 
 export function aiGuidesConfigured(): boolean {
-  return Boolean(config.aiGuides.url() && config.aiGuides.key());
+  return Boolean(config.aiGuides.url() && config.aiGuides.keys().length);
 }
 
 /** Markdown → the plain-text paragraph format the review body uses ("## " marks a heading). */
@@ -83,6 +83,7 @@ export function guideToContentItem(res: KtbResponse, req: GuideRequest, now = ne
       qualityStatus: res.quality?.status ?? null,
       qualityScore: res.quality?.score ?? null,
       keywords: req.keywords,
+      articleType: req.articleType ?? "GUIDE",
       generatedAt: now.toISOString(),
     },
   };
@@ -100,8 +101,8 @@ export function idempotencyKeyFor(body: unknown, day = new Date().toISOString().
 
 export async function generateGuide(req: GuideRequest) {
   const url = config.aiGuides.url();
-  const key = config.aiGuides.key();
-  if (!url || !key) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "KEYWORD_TO_BLOG_API_URL / KEYWORD_TO_BLOG_API_KEY are not configured");
+  const keys = config.aiGuides.keys();
+  if (!url || !keys.length) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "KEYWORD_TO_BLOG_API_URL / KEYWORD_TO_BLOG_API_KEY are not configured");
   const endpoint = /\/v1\/generate\/?$/.test(url) ? url : `${url.replace(/\/+$/, "")}/v1/generate`;
   const topic = req.topic?.trim() || `A practical buying guide to the ${[req.brand, req.productName].filter(Boolean).join(" ")}`;
   const body = {
@@ -120,16 +121,26 @@ export async function generateGuide(req: GuideRequest) {
     factualityMode: "verified",
   };
   const idempotencyKey = idempotencyKeyFor(body);
-  const res = await safeFetch(endpoint, {
-    method: "POST",
-    // Idempotency-Key: a retried request can never generate (or bill) twice.
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": idempotencyKey, "X-Request-ID": crypto.randomUUID() },
-    body: JSON.stringify(body),
-    timeoutMs: config.aiGuides.timeoutMs(),
-    maxRedirects: 0,
-    readBody: true,
-    maxBytes: 5_000_000,
-  });
+  // Primary key, then the fallback key when the primary is refused (auth, quota, rate limit,
+  // provider error). A timeout is not failed over: the provider may still be generating, and a
+  // second key would start (and bill) a second generation.
+  let res: Awaited<ReturnType<typeof safeFetch>> | undefined;
+  for (const [i, key] of keys.entries()) {
+    res = await safeFetch(endpoint, {
+      method: "POST",
+      // Idempotency-Key: a retried request can never generate (or bill) twice.
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": idempotencyKey, "X-Request-ID": crypto.randomUUID() },
+      body: JSON.stringify(body),
+      timeoutMs: config.aiGuides.timeoutMs(),
+      maxRedirects: 0,
+      readBody: true,
+      maxBytes: 5_000_000,
+    });
+    const failover = !res.ok && res.error?.kind !== "TIMEOUT" && (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500 || /limit|quota|unavailable/i.test(res.body ?? ""));
+    if (res.ok || !failover || i === keys.length - 1) break;
+    log.warn("Keyword-to-Blog key refused; trying the fallback key", { stage: "CONTENT_FETCH", status: res.status, key: i === 0 ? "primary" : "secondary" });
+  }
+  if (!res) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "No Keyword-to-Blog key configured");
   if (!res.ok) {
     let detail = res.error?.message ?? `HTTP ${res.status}`;
     try {

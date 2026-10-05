@@ -235,7 +235,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               <aside className="kind-banner ai" aria-label="How this guide was written">
                 <div>
                   <strong>AI-assisted buying guide.</strong>
-                  This guide was drafted with an AI writing tool and {m.approval === "AUTOMATED" ? "published after passing automated quality checks (duplicates, unsupported claims, prices, image and SEO); no editor read it before publishing" : "read and approved by a Made4Buyers editor before publishing"}. It is not a hands-on review: we haven’t tested this product. Offers, when shown, come only from links we’ve verified.
+                  This guide was drafted with an AI writing tool and {m.approval === "AUTOMATED" ? "published automatically as generated: no editor or quality review read it first (we only prevent repeated topics)" : "read and approved by a Made4Buyers editor before publishing"}. It is not a hands-on review: we haven’t tested this product, and any test results, prices or statistics in it are unverified. Offers, when shown, come only from links we’ve verified.
                 </div>
               </aside>
             ) : (

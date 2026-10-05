@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { LockHeldError } from "@/lib/jobs/lock";
 import { AI_GUIDE_SOURCE, aiGuidesConfigured, generateGuide } from "@/lib/pipeline/ai-guides";
 import { runIngestion } from "@/lib/pipeline/ingest";
+import { publishReview } from "@/lib/pipeline/publish";
+import { AUTOMATION_APPROVER } from "@/lib/automation/daily-article";
 import { audit } from "@/lib/security/audit";
 import { dbRateLimit } from "@/lib/security/rate-limit";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
@@ -31,7 +33,11 @@ export const POST = adminAction("/admin/guides", async ({ form, ctx }) => {
     const review = await db.normalizedReview.findUnique({ where: { source_sourceId: { source: AI_GUIDE_SOURCE, sourceId: item.id } }, select: { id: true } });
     await audit(ctx, { action: "guide.generate", entityType: "normalized_review", entityId: review?.id ?? item.id, metadata: { productName, keywords, requestId: response.requestId, quality: response.quality, runId: run.runId } });
     if (!review) return { error: `Guide was generated but not stored (${Object.keys(run.reasons).join(", ") || run.status}). See Ingestion.` };
-    return { redirect: `/admin/reviews/${review.id}`, ok: "Guide drafted and processed. Read it, edit if needed, then approve it before publishing." };
+    // Direct publish: a successful generation goes live as returned (no QA gate), recorded and labelled.
+    await db.normalizedReview.update({ where: { id: review.id }, data: { editorApprovedAt: new Date(), editorApprovedBy: AUTOMATION_APPROVER } });
+    const published = await publishReview(review.id, ctx, "admin", { skipQa: true });
+    await audit(ctx, { action: "guide.direct_publish", entityType: "normalized_review", entityId: review.id, metadata: { productName, keywords } });
+    return published.ok ? { redirect: `/admin/reviews/${review.id}`, ok: "Generated and published." } : { error: `Generated, but publishing failed: ${published.failures.map((f) => f.code).join(", ")}` };
   } catch (error) {
     if (error instanceof LockHeldError) return { error: "An ingestion run is in progress; try again in a minute." };
     throw error;

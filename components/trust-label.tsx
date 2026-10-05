@@ -2,7 +2,7 @@
  * Factual trust labels. Each one states something the data proves; none of them is a rating.
  *  verified: an offer link reached the retailer on its last check
  *  source:   the text is a review from a named publisher
- *  ai:       the text is an AI-assisted guide (passed quality checks; not hands-on)
+ *  ai:       the text is an AI-assisted guide (auto-published unless an editor read it; not hands-on)
  *  checked:  when the offer link was last checked
  */
 export default function TrustLabel({ kind, children }: { kind: "verified" | "source" | "ai" | "checked" | "none"; children?: React.ReactNode }) {

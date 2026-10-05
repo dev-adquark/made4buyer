@@ -15,8 +15,7 @@ import {
 import { recordFailure } from "@/lib/pipeline/failures";
 import { guideRequestFor } from "@/lib/pipeline/guide-ideas";
 import { runIngestion } from "@/lib/pipeline/ingest";
-import { evaluateQa, publishReview } from "@/lib/pipeline/publish";
-import { buildPageRenderModel } from "@/lib/pipeline/render-model";
+import { publishReview } from "@/lib/pipeline/publish";
 import { audit, SYSTEM_ACTOR } from "@/lib/security/audit";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 
@@ -38,7 +37,15 @@ export const MAX_SLOT_ATTEMPTS = 2;
 /** Minimum gap between two attempts on one slot (exponential across runs: ×2 per attempt). */
 export const RETRY_BACKOFF_MS = 45 * 60_000;
 const STUCK_MS = 30 * 60_000;
-export const AUTOMATION_APPROVER = "automation:qa-gates";
+export const AUTOMATION_APPROVER = "automation:direct-publish";
+/** Morning publishes a buying guide, evening an informational article. */
+export type ArticleType = "GUIDE" | "ARTICLE";
+export const SLOT_TYPE: Record<Slot, ArticleType> = {
+  MORNING: "GUIDE",
+  EVENING: "ARTICLE",
+};
+const typeOfKey = (key: string): ArticleType =>
+  key.startsWith("article:") ? "ARTICLE" : "GUIDE";
 const IST_OFFSET_MS = 5.5 * 3_600_000;
 
 export function istParts(now: Date) {
@@ -129,9 +136,10 @@ export const SIMILARITY_THRESHOLD = 0.75;
 export async function findDuplicate(
   subject: string,
   categorySlug: string,
-  opts: { title?: string; excludeQueueId?: string } = {},
+  opts: { title?: string; excludeQueueId?: string; type?: ArticleType } = {},
 ): Promise<string | null> {
   const key = subjectKey(subject);
+  const type = opts.type ?? "GUIDE";
   const [content, queued] = await Promise.all([
     db.normalizedReview.findMany({
       where: {
@@ -143,6 +151,7 @@ export async function findDuplicate(
         productName: true,
         kind: true,
         status: true,
+        generationMeta: true,
       },
     }),
     db.contentQueueItem.findMany({
@@ -150,11 +159,18 @@ export async function findDuplicate(
         status: { in: ["LOCKED", "GENERATING", "QA", "PUBLISHED"] },
         ...(opts.excludeQueueId ? { id: { not: opts.excludeQueueId } } : {}),
       },
-      select: { topic: true, status: true },
+      select: { topic: true, status: true, key: true },
     }),
   ]);
   for (const c of content) {
-    const isGuide = c.kind === "AI_GUIDE" || c.kind === "BUYING_GUIDE";
+    // Same subject only counts as a repeat within the same post type (a guide and an article
+    // on one subject are different posts); identical titles always count.
+    const cType =
+      (c.generationMeta as { articleType?: ArticleType } | null)?.articleType ??
+      "GUIDE";
+    const isGuide =
+      (c.kind === "AI_GUIDE" && cType === type) ||
+      (c.kind === "BUYING_GUIDE" && type === "GUIDE");
     if (isGuide && subjectKey(c.productName) === key)
       return `already covered by "${c.canonicalTitle}" (${c.status})`;
     if (opts.title && subjectKey(c.canonicalTitle) === subjectKey(opts.title))
@@ -166,7 +182,7 @@ export async function findDuplicate(
     if (isGuide && s >= SIMILARITY_THRESHOLD)
       return `overlaps "${c.canonicalTitle}" (${Math.round(s * 100)}% shared terms, ${c.status})`;
   }
-  for (const q of queued)
+  for (const q of queued.filter((q) => typeOfKey(q.key) === type))
     if (
       subjectKey(q.topic) === key ||
       similarity(subject, q.topic) >= SIMILARITY_THRESHOLD
@@ -175,119 +191,27 @@ export async function findDuplicate(
   return null;
 }
 
-// ─── Content & SEO quality agents ────────────────────────────────────────────
-
-const HANDS_ON =
-  /\b(we|I)\s+(tested|have tested|benchmarked|measured)\b|\bin our (tests|testing|lab|review)\b|\bour testing\b|\bhands-on (test|testing|review)\b|\bafter (weeks|months|days) of (use|testing)\b/i;
-const PRICE = /(?:[$₹£€]|\bUSD|\bINR|\bRs\.?)\s?\d/;
-const PERCENT = /\b\d+(?:\.\d+)?\s?%/;
-const EVIDENCE =
-  /\b(study|studies|survey|surveys|research|according to|statistics|data shows|experts say)\b/i;
-
-/** A sentence that cites a percentage as evidence ("a 2023 study found 73%…"): unverifiable here. */
-function statisticClaim(body: string): string | undefined {
-  return body
-    .split(/(?<=[.!?])\s+|\n+/)
-    .find((sentence) => PERCENT.test(sentence) && EVIDENCE.test(sentence));
-}
-
-/** Text-level gates: substance, structure, and no claims the article cannot support. */
-export function contentQualityIssues(
-  item: {
-    title: string;
-    summary?: string;
-    body: string;
-    generation?: { qualityStatus?: string | null };
-  },
-  keyword: string,
-): string[] {
-  const issues: string[] = [];
-  const words = item.body.split(/\s+/).filter(Boolean).length;
-  if (words < 500)
-    issues.push(`too short for a useful guide (${words} words, need 500+)`);
-  if (item.title.length < 15 || item.title.length > 110)
-    issues.push(`title length ${item.title.length} (need 15–110)`);
-  if (!item.summary || item.summary.length < 50)
-    issues.push("meta description missing or under 50 characters");
-  if ((item.body.match(/^## /gm) ?? []).length < 3)
-    issues.push("fewer than 3 section headings");
-  if (HANDS_ON.test(item.body))
-    issues.push(
-      "claims hands-on testing, which an AI-assisted guide cannot have done",
-    );
-  if (PRICE.test(item.body))
-    issues.push("states a price; prices may only come from verified offers");
-  const stat = statisticClaim(item.body);
-  if (stat)
-    issues.push(`unsupported statistic: "${stat.trim().slice(0, 100)}"`);
-  const q = item.generation?.qualityStatus;
-  if (q && q !== "pass") issues.push(`generator quality check: ${q}`);
-  const kw = titleTokens(keyword);
-  const covered = titleTokens(
-    `${item.title} ${(item.body.match(/^## .*$/gm) ?? []).join(" ")}`,
-  );
-  if ([...kw].filter((t) => covered.has(t)).length < Math.min(1, kw.size))
-    issues.push(`keyword "${keyword}" not reflected in the title or headings`);
-  return issues;
-}
-
-/** Page-level gates on the built page: metadata, category, image, schema-relevant fields. */
-export async function seoIssues(
-  reviewId: string,
-  expectedCategory: string,
-): Promise<string[]> {
-  const issues: string[] = [];
-  const m = await buildPageRenderModel(reviewId);
-  if (m.metaDescription.length < 50)
-    issues.push("meta description under 50 characters");
-  if (!m.category) issues.push("no category assigned");
-  else if (m.category.slug !== expectedCategory)
-    issues.push(`filed under ${m.category.slug}, expected ${expectedCategory}`);
-  if (m.image.isFallback)
-    issues.push("no unique real image (would show the placeholder)");
-  if (m.rating)
-    issues.push("carries a rating, which an AI-assisted guide must not");
-  if (m.kind !== "AI_GUIDE")
-    issues.push(`kind is ${m.kind}, expected AI_GUIDE`);
-  const img = await db.imageAsset.findFirst({
-    where: { normalizedReviewId: reviewId, isPrimary: true },
-    select: { providerPhotoId: true },
-  });
-  if (img?.providerPhotoId) {
-    const shared = await db.imageAsset.count({
-      where: {
-        isPrimary: true,
-        providerPhotoId: img.providerPhotoId,
-        normalizedReviewId: { not: reviewId },
-      },
-    });
-    if (shared)
-      issues.push(
-        `image ${img.providerPhotoId} is already another article's image`,
-      );
-  }
-  return issues;
-}
-
 // ─── Topic agent ─────────────────────────────────────────────────────────────
 
 /** Adds new calendar opportunities to the persistent queue (existing keys are left alone). */
 export async function refreshQueue(now = new Date()) {
   const opps = await contentOpportunities({ now, limit: 100 });
-  const rows = opps.map((o: Opportunity) => {
-    const req = guideRequestFor(o);
-    return {
-      key: o.key,
-      topic: o.subject,
-      keyword: req.keywords[0],
-      kind: o.kind,
-      categorySlug: o.categorySlug,
-      subcategorySlug: o.subcategorySlug ?? null,
-      productName: o.kind === "PRODUCT_GUIDE" ? o.subject : null,
-      brand: o.brand ?? null,
-      priority: o.score,
-    };
-  });
+  const rows = opps.flatMap((o: Opportunity) =>
+    (["GUIDE", "ARTICLE"] as const).map((type) => {
+      const req = guideRequestFor(o, type);
+      return {
+        key: type === "ARTICLE" ? `article:${o.key}` : o.key,
+        topic: o.subject,
+        keyword: req.keywords[0],
+        kind: o.kind,
+        categorySlug: o.categorySlug,
+        subcategorySlug: o.subcategorySlug ?? null,
+        productName: o.kind === "PRODUCT_GUIDE" ? o.subject : null,
+        brand: o.brand ?? null,
+        priority: o.score,
+      };
+    }),
+  );
   const created = rows.length
     ? await db.contentQueueItem.createMany({ data: rows, skipDuplicates: true })
     : { count: 0 };
@@ -322,6 +246,7 @@ export async function recoverStuck(now = new Date()) {
  */
 export async function pickNextTopic(
   now = new Date(),
+  type: ArticleType = "GUIDE",
 ): Promise<ContentQueueItem | null> {
   const recent = await db.contentQueueItem.findMany({
     where: {
@@ -340,7 +265,9 @@ export async function pickNextTopic(
     take: 200,
   });
   const ranked = queued
-    .filter((q) => CATEGORY_BY_SLUG.has(q.categorySlug))
+    .filter(
+      (q) => CATEGORY_BY_SLUG.has(q.categorySlug) && typeOfKey(q.key) === type,
+    )
     .map((q) => ({
       q,
       score:
@@ -547,13 +474,15 @@ export async function runDailyArticle(
   };
 
   // Topic agent + duplicate agent: free checks first, so no API call is spent on a duplicate.
+  const type = SLOT_TYPE[slot];
   let topic: ContentQueueItem | null = null;
   for (let i = 0; i < 25; i++) {
-    const next = await pickNextTopic(now);
+    const next = await pickNextTopic(now, type);
     if (!next) break;
     if (!(await claim(next.id, now))) continue;
     const dup = await findDuplicate(next.topic, next.categorySlug, {
       excludeQueueId: next.id,
+      type,
     });
     if (dup) {
       await db.contentQueueItem.update({
@@ -600,15 +529,20 @@ export async function runDailyArticle(
   });
   let item: Awaited<ReturnType<typeof generateGuide>>["item"];
   try {
-    const out = await generateWithRetry(guideRequestFor(opp), async () => {
-      await db.automationSlot.update({
-        where: { id: row.id },
-        data: { apiCalls: { increment: 1 } },
-      });
-    });
+    const out = await generateWithRetry(
+      guideRequestFor(opp, type),
+      async () => {
+        await db.automationSlot.update({
+          where: { id: row.id },
+          data: { apiCalls: { increment: 1 } },
+        });
+      },
+    );
     item = out.item;
   } catch (error) {
-    const message = (error instanceof Error ? error.message : String(error)).replace(/^Keyword-to-Blog:\s*/, "");
+    const message = (
+      error instanceof Error ? error.message : String(error)
+    ).replace(/^Keyword-to-Blog:\s*/, "");
     // The provider's daily quota is spent: the topic did nothing wrong (its attempt is not
     // counted), and further calls today would only fail, so the slot stops for today.
     const quota = /daily (api )?request limit|quota/i.test(message);
@@ -630,6 +564,7 @@ export async function runDailyArticle(
   const dupAfter = await findDuplicate(topic.topic, topic.categorySlug, {
     title: item.title,
     excludeQueueId: topic.id,
+    type,
   });
   if (dupAfter) {
     await db.contentQueueItem.update({
@@ -642,20 +577,6 @@ export async function runDailyArticle(
     });
     return fail(`generated article rejected as duplicate: ${dupAfter}`, true);
   }
-  // Content quality agent (text-level), before anything is stored.
-  const textIssues = contentQualityIssues(item, topic.keyword);
-  if (textIssues.length) {
-    await db.contentQueueItem.update({
-      where: { id: topic.id },
-      data: {
-        status: "REJECTED",
-        lockedAt: null,
-        failureReason: `content QA: ${textIssues.join("; ")}`.slice(0, 500),
-      },
-    });
-    return fail(`content QA failed: ${textIssues.join("; ")}`, true);
-  }
-
   // Entity + taxonomy + image + affiliate agents: the normal pipeline (unique image enforced).
   await db.contentQueueItem.update({
     where: { id: topic.id },
@@ -686,50 +607,16 @@ export async function runDailyArticle(
     data: { normalizedReviewId: review.id },
   });
 
-  // SEO & quality agent on the built page, then the standard QA gate.
-  const seo = await seoIssues(review.id, topic.categorySlug);
-  if (seo.length) {
-    await db.contentQueueItem.update({
-      where: { id: topic.id },
-      data: {
-        status: "REJECTED",
-        lockedAt: null,
-        failureReason: `SEO QA: ${seo.join("; ")}`.slice(0, 500),
-      },
-    });
-    return fail(
-      `SEO QA failed (kept in QA for an editor, not published): ${seo.join("; ")}`,
-      true,
-    );
-  }
-  // Publishing agent: the automated gates stand in for the editor, and say so (audited).
+  // Direct publish (owner's rule): a successful generation is published as it is, with no
+  // content, SEO or editorial gate. Only duplicates are prevented (above). Recorded and labelled.
   await db.normalizedReview.update({
     where: { id: review.id },
     data: { editorApprovedAt: now, editorApprovedBy: AUTOMATION_APPROVER },
   });
-  const qa = await evaluateQa(review.id);
-  if (qa.length) {
-    await db.normalizedReview.update({
-      where: { id: review.id },
-      data: { editorApprovedAt: null, editorApprovedBy: null },
-    });
-    await db.contentQueueItem.update({
-      where: { id: topic.id },
-      data: {
-        status: "REJECTED",
-        lockedAt: null,
-        failureReason: `publish QA: ${qa.map((q) => q.code).join(", ")}`,
-      },
-    });
-    return fail(
-      `publish QA failed (kept in QA for an editor): ${qa.map((q) => `${q.code}: ${q.message}`).join("; ")}`,
-      true,
-    );
-  }
   await audit(
     { ...SYSTEM_ACTOR, actor: AUTOMATION_APPROVER },
     {
-      action: "guide.auto_approve",
+      action: "guide.direct_publish",
       entityType: "normalized_review",
       entityId: review.id,
       metadata: { day, slot, topic: topic.key },
@@ -739,6 +626,7 @@ export async function runDailyArticle(
     review.id,
     { ...SYSTEM_ACTOR, actor: AUTOMATION_APPROVER },
     "auto",
+    { skipQa: true },
   );
   if (!published.ok) {
     await db.contentQueueItem.update({

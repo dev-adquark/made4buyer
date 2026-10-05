@@ -46,6 +46,8 @@ export const config = {
   aiGuides: {
     url: () => str("KEYWORD_TO_BLOG_API_URL"),
     key: () => str("KEYWORD_TO_BLOG_API_KEY"),
+    /** Primary key first, then the fallback key (used when the primary returns an error). */
+    keys: () => [...new Set([str("KEYWORD_TO_BLOG_API_KEY"), str("KEYWORD_TO_BLOG_API_KEY_SECONDARY")].filter((k): k is string => Boolean(k)))],
     timeoutMs: () => num("KEYWORD_TO_BLOG_TIMEOUT_MS", 270000, 5000, 280000),
     maxWords: () => num("KEYWORD_TO_BLOG_MAX_WORDS", 1200, 300, 4000),
     /** Draft original guides for newly reviewed products (never auto-approved). Off by default. */

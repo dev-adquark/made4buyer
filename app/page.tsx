@@ -371,13 +371,13 @@ export default async function Home() {
       <section className="section tight" aria-labelledby="guides-title">
         <div className="wrap">
           <SectionHeader id="guides-title" label={`${stats.guides} published`} title="Buying guides" action={guides.length ? <Link className="arrow-link" href="/guides">All guides</Link> : undefined}>
-            Buying guides from named publishers, and AI-assisted guides that passed our quality checks. Each is labelled; none carries a rating.
+            Buying guides from named publishers, and AI-assisted guides published automatically as generated. Each is labelled; none carries a rating.
           </SectionHeader>
           {guides.length ? (
             <ReviewGrid reviews={guides} layout="ruled" />
           ) : (
             <EmptyState title="New buying guides are coming." label="Guides" compact>
-              Each guide is drafted with an AI writing tool and published only after it passes our quality checks.
+              AI-assisted guides are generated with an AI writing tool and published automatically.
             </EmptyState>
           )}
         </div>
@@ -430,8 +430,8 @@ export default async function Home() {
             </li>
             <li>
               <div>
-                <h3>Quality checks publish</h3>
-                <p>Only reviews that pass quality checks go live. AI-assisted guides must also pass duplicate, claim, image and SEO checks.</p>
+                <h3>Publish, labelled</h3>
+                <p>Only reviews that pass quality checks go live. AI-assisted guides are published automatically and labelled as such.</p>
               </div>
             </li>
           </ol>

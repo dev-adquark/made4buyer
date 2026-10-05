@@ -48,6 +48,8 @@ beforeEach(async () => {
     delayMs: 0,
     requests: 0,
     quotaReached: false,
+    rejectPrimary: false,
+    keysUsed: [],
   });
 });
 
@@ -93,13 +95,21 @@ describe("daily article automation", () => {
       expect(model.approval).toBe("AUTOMATED");
       expect(model.rating).toBeNull();
     }
+    // Morning is a buying guide, evening an informational article.
+    const types = published
+      .map(
+        (p) =>
+          (p.generationMeta as { articleType?: string } | null)?.articleType,
+      )
+      .sort();
+    expect(types).toEqual(["ARTICLE", "GUIDE"]);
     expect(
       await db.automationSlot.count({
         where: { day: "2026-10-06", status: "PUBLISHED" },
       }),
     ).toBe(2);
     expect(
-      await db.auditLog.count({ where: { action: "guide.auto_approve" } }),
+      await db.auditLog.count({ where: { action: "guide.direct_publish" } }),
     ).toBe(2);
   });
 
@@ -120,7 +130,9 @@ describe("daily article automation", () => {
       },
     });
     const before = stub.ktb.requests;
-    expect(await runDailyArticle("test", { now: EVENING })).toMatchObject({
+    expect(
+      await runDailyArticle("test", { now: at("2026-10-07T02:40:00Z") }),
+    ).toMatchObject({
       status: "PUBLISHED",
     });
     const dup = await db.contentQueueItem.findUniqueOrThrow({
@@ -192,25 +204,40 @@ describe("daily article automation", () => {
     expect(r.reason).not.toMatch(/Keyword-to-Blog: Keyword-to-Blog/);
     const calls = stub.ktb.requests;
     // Later runs today make no further calls for this slot.
-    expect(await runDailyArticle("test", { now: at("2026-10-06T05:00:00Z") })).toMatchObject({ status: "NOT_DUE" });
+    expect(
+      await runDailyArticle("test", { now: at("2026-10-06T05:00:00Z") }),
+    ).toMatchObject({ status: "NOT_DUE" });
     expect(stub.ktb.requests).toBe(calls);
-    const topic = await db.contentQueueItem.findFirstOrThrow({ where: { failureReason: { contains: "limit" } } });
+    const topic = await db.contentQueueItem.findFirstOrThrow({
+      where: { failureReason: { contains: "limit" } },
+    });
     expect(topic).toMatchObject({ status: "QUEUED", attempts: 0 });
   });
 
-  it("does not publish an article that claims hands-on testing", async () => {
-    stub.ktb.handsOn = true;
+  it("publishes a successful generation directly, with no content gate (owner's rule), labelled honestly", async () => {
+    stub.ktb.handsOn = true; // would have failed the old content QA gate
     const r = await runDailyArticle("test", { now: MORNING });
-    expect(r.status).toBe("RETRYING");
-    expect(r.reason).toMatch(/hands-on/);
+    expect(r.status).toBe("PUBLISHED");
+    const p = await db.normalizedReview.findFirstOrThrow({
+      where: { status: "PUBLISHED" },
+    });
+    expect(p.editorApprovedBy).toBe(AUTOMATION_APPROVER);
     expect(
-      await db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
-    ).toBe(0);
-    expect(
-      await db.contentQueueItem.count({
-        where: { status: "REJECTED", failureReason: { contains: "hands-on" } },
-      }),
+      await db.auditLog.count({ where: { action: "guide.direct_publish" } }),
     ).toBe(1);
+  });
+
+  it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {
+    const k = withEnv({ KEYWORD_TO_BLOG_API_KEY_SECONDARY: "test-ktb-key-2" });
+    stub.ktb.rejectPrimary = true;
+    try {
+      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({
+        status: "PUBLISHED",
+      });
+      expect(stub.ktb.keysUsed.slice(0, 2)).toEqual(["primary", "secondary"]);
+    } finally {
+      k();
+    }
   });
 
   it("serialises concurrent runs: two triggers at once publish one article", async () => {

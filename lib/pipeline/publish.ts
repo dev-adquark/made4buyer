@@ -72,9 +72,10 @@ async function publishJob(reviewId: string, action: "PUBLISH" | "UNPUBLISH", sta
 
 export type PublishResult = { ok: true; review: NormalizedReview } | { ok: false; failures: QaFailure[] };
 
-export async function publishReview(reviewId: string, ctx: AuditContext, trigger: "admin" | "auto" | "csv" = "admin"): Promise<PublishResult> {
+export async function publishReview(reviewId: string, ctx: AuditContext, trigger: "admin" | "auto" | "csv" = "admin", opts: { skipQa?: boolean } = {}): Promise<PublishResult> {
   const before = await db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId } });
-  const failures = await evaluateQa(reviewId);
+  // skipQa: the owner's direct-publish mode for AI-generated articles/guides (audited, labelled).
+  const failures = opts.skipQa ? [] : await evaluateQa(reviewId);
   if (failures.length) {
     await publishJob(reviewId, "PUBLISH", "FAILED", trigger, ctx, { qaFailures: failures, errorCode: "PUBLISH_QA_FAILED", message: failures.map((f) => f.code).join(", ") });
     await recordFailure({ stage: "PUBLISH", code: "PUBLISH_QA_FAILED", message: failures.map((f) => f.message).join("; "), entityType: "normalized_review", entityId: reviewId, normalizedReviewId: reviewId });

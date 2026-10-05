@@ -18,7 +18,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
     <>
       <h1>AI-assisted guides</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
-      <p className="muted">Keyword-to-Blog drafts a buying guide with an AI model. Drafts go through the normal pipeline and QA, are labelled as AI-assisted on the site, and can’t be published until an editor approves them. They are never presented as hands-on reviews.</p>
+      <p className="muted">Keyword-to-Blog writes a buying guide with an AI model. A successful generation is published straight away (direct-publish mode: no QA or approval gate; only repeated topics are prevented). Each page is labelled AI-assisted and says no editor reviewed it. Use Unpublish on a guide to take it down.</p>
       {!configured && <p className="notice warn">Keyword-to-Blog is BLOCKED_BY_ENVIRONMENT: set KEYWORD_TO_BLOG_API_URL and KEYWORD_TO_BLOG_API_KEY.</p>}
       <form action="/api/admin/guides" method="post" className="card card-body">
         <input type="hidden" name="returnTo" value="/admin/guides" />
@@ -59,7 +59,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
           </div>
         </div>
         <button className="btn primary" type="submit" disabled={!configured}>
-          Generate draft
+          Generate and publish
         </button>
         <p className="field-hint">Takes up to a minute. Uses one Keyword-to-Blog generation from your plan.</p>
       </form>
@@ -70,7 +70,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
             <tr>
               <th scope="col">Guide</th>
               <th scope="col">Status</th>
-              <th scope="col">Editor approval</th>
+              <th scope="col">Approved by</th>
               <th scope="col">Generator quality</th>
               <th scope="col">Created</th>
             </tr>

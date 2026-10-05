@@ -30,7 +30,7 @@ export async function startStubServer(opts: StubOptions = {}) {
   const pexels = { broken: false, rateLimited: false };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
-  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false };
+  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[] };
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
 
   const server = http.createServer((req, res) => {
@@ -85,7 +85,10 @@ export async function startStubServer(opts: StubOptions = {}) {
       return send(404, { error: { type: "page-not-found" } });
     }
     if (url.pathname === "/ktb/v1/generate" && req.method === "POST") {
-      if (req.headers.authorization !== "Bearer test-ktb-key") return send(401, { error: { code: "unauthorized", message: "Invalid API key" } });
+      const auth = req.headers.authorization ?? "";
+      if (auth !== "Bearer test-ktb-key" && auth !== "Bearer test-ktb-key-2") return send(401, { error: { code: "unauthorized", message: "Invalid API key" } });
+      ktb.keysUsed.push(auth === "Bearer test-ktb-key" ? "primary" : "secondary");
+      if (ktb.rejectPrimary && auth === "Bearer test-ktb-key") return send(429, { error: { code: "RATE_LIMITED", message: "Daily API request limit reached." } });
       let raw = "";
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
@@ -101,8 +104,9 @@ export async function startStubServer(opts: StubOptions = {}) {
           return send(400, { error: { code: "VALIDATION_ERROR", message: "Invalid request body." } });
         }
         // Daily-article topics ("How to choose …") get a full-length SAMPLE article.
-        if (/^How to choose /.test(body.topic ?? "")) {
-          const subject = (body.topic ?? "").replace(/^How to choose /, "").replace(/:.*$/, "");
+        if (/^(How to choose|What to know before buying) /.test(body.topic ?? "")) {
+          const article = /^What to know/.test(body.topic ?? "");
+          const subject = (body.topic ?? "").replace(/^(How to choose|What to know before buying) /, "").replace(/:.*$/, "");
           const para = (angle: string) =>
             `When you compare ${subject}, ${angle} matters more than the headline features. Think about how often you will use it, where it will live, and who else in the household will rely on it. ` +
             `Read the manufacturer's specifications carefully, check what is included in the box, and look at how easy replacement parts are to find. A model that suits a small apartment can be the wrong choice for a large family home, and the reverse is also true. ` +
@@ -112,7 +116,7 @@ export async function startStubServer(opts: StubOptions = {}) {
             send(200, {
               requestId: `req_daily_${subject.replace(/\W+/g, "_")}_${ktb.requests}`,
               post: {
-                title: `How to choose ${subject}: a practical buying guide`,
+                title: article ? `What to know before buying ${subject}` : `How to choose ${subject}: a practical buying guide`,
                 meta: { description: `What actually matters when choosing ${subject}: size, everyday use, upkeep and warranty, explained without hype.` },
                 sections: [{ type: "introduction", contentMarkdown: para("the way you plan to use it") }, ...sections, { type: "conclusion", contentMarkdown: para("a short list of priorities") }],
                 faqs: [{ question: `What should I check first when choosing ${subject}?`, answer: "Start with the space you have and how often you will use it, then compare the options that fit." }],
