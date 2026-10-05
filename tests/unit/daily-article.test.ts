@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  istParts,
-  nextSlotRun,
-  similarity,
-  SIMILARITY_THRESHOLD,
-} from "@/lib/automation/daily-article";
+import { istParts, nextSlotRun } from "@/lib/automation/daily-article";
 
 describe("schedule (Asia/Kolkata)", () => {
   it("maps UTC to the IST day and hour", () => {
@@ -29,22 +24,3 @@ describe("schedule (Asia/Kolkata)", () => {
   });
 });
 
-describe("duplicate similarity", () => {
-  it("treats rewordings of one topic as duplicates and different topics as new", () => {
-    expect(
-      similarity("Robot vacuums", "How to choose a robot vacuum"),
-    ).toBeGreaterThanOrEqual(SIMILARITY_THRESHOLD);
-    expect(
-      similarity(
-        "Office chairs",
-        "Best office chair for back pain buying guide",
-      ),
-    ).toBeGreaterThanOrEqual(SIMILARITY_THRESHOLD);
-    expect(similarity("Robot vacuums", "Air purifiers")).toBeLessThan(
-      SIMILARITY_THRESHOLD,
-    );
-    expect(similarity("Carry-on luggage", "Checked luggage sets")).toBeLessThan(
-      SIMILARITY_THRESHOLD,
-    );
-  });
-});

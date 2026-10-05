@@ -50,6 +50,8 @@ beforeEach(async () => {
     quotaReached: false,
     rejectPrimary: false,
     keysUsed: [],
+    tinyPost: false,
+    fixedTitle: "",
   });
 });
 
@@ -225,6 +227,23 @@ describe("daily article automation", () => {
     expect(
       await db.auditLog.count({ where: { action: "guide.direct_publish" } }),
     ).toBe(1);
+  });
+
+  it("publishes whatever the API returns, however short, and whatever its quality score", async () => {
+    stub.ktb.tinyPost = true;
+    expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+    const p = await db.normalizedReview.findFirstOrThrow({ where: { status: "PUBLISHED" } });
+    expect(p.canonicalTitle).toBe("Tiny");
+    expect(p.body).toContain("One short sentence.");
+  });
+
+  it("only stops an exact repeat: the same returned title is not published twice", async () => {
+    stub.ktb.fixedTitle = "The one guide you need";
+    expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+    const r = await runDailyArticle("test", { now: EVENING });
+    expect(r.status).not.toBe("PUBLISHED");
+    expect(r.reason).toMatch(/same title/);
+    expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(1);
   });
 
   it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {

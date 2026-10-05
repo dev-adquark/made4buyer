@@ -142,6 +142,23 @@ const schema = z.object({
   generation: z.record(z.unknown()).optional(),
 });
 
+/**
+ * Keyword-to-Blog articles/guides are published exactly as returned (owner's rule): only an empty
+ * title or body (nothing to publish) is refused. No length, field or date rules apply.
+ */
+const aiSchema = schema.extend({
+  title: z.string().trim().min(1, "title is empty"),
+  body: z.string().trim().min(1, "body is empty"),
+  summary: z.string().optional(),
+  productName: z.string().optional(),
+  brand: z.string().optional(),
+  category: z.string().optional(),
+  subcategory: z.string().optional(),
+  tags: z.array(z.string()),
+  author: z.string().optional(),
+  publisher: z.string().optional(),
+});
+
 /** Publication dates may run ahead of our clock by this much (time zones, scheduled posts). */
 export const FUTURE_DATE_TOLERANCE_MS = 24 * 3_600_000;
 const EARLIEST_PLAUSIBLE = Date.UTC(1990, 0, 1);
@@ -203,8 +220,9 @@ export function validateContentItem(input: unknown): ValidationResult {
     candidate.rating = undefined;
     candidate.ratingScale = undefined;
   }
-  const parsed = schema.safeParse(candidate);
-  const dateIssues = publicationDateIssues(candidate.publishedAt, pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"]));
+  const ai = candidate.contentKind === "AI_GUIDE";
+  const parsed = (ai ? aiSchema : schema).safeParse(candidate);
+  const dateIssues = ai ? [] : publicationDateIssues(candidate.publishedAt, pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"]));
   if (!parsed.success || dateIssues.length) {
     const issues = [...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`)), ...dateIssues];
     return { ok: false, sourceId: sourceIdRaw, issues, code: validationCode(issues) };

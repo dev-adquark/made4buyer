@@ -67,67 +67,7 @@ export function nextSlotRun(slot: Slot, now: Date): Date {
   return at;
 }
 
-// ─── Duplicate & similarity agent ────────────────────────────────────────────
-
-const STOP = new Set([
-  "the",
-  "a",
-  "an",
-  "and",
-  "or",
-  "for",
-  "to",
-  "of",
-  "in",
-  "on",
-  "with",
-  "your",
-  "you",
-  "how",
-  "what",
-  "best",
-  "guide",
-  "buying",
-  "choose",
-  "choosing",
-  "before",
-  "buy",
-  "matters",
-  "actually",
-  "that",
-  "is",
-  "are",
-  "vs",
-  "review",
-  "reviews",
-  "2024",
-  "2025",
-  "2026",
-  "2027",
-]);
-
-export function titleTokens(s: string): Set<string> {
-  return new Set(
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .split(" ")
-      .map((w) => (w.length > 4 && w.endsWith("s") ? w.slice(0, -1) : w))
-      .filter((w) => w.length > 1 && !STOP.has(w)),
-  );
-}
-
-export function similarity(a: string, b: string): number {
-  const x = titleTokens(a);
-  const y = titleTokens(b);
-  if (!x.size || !y.size) return 0;
-  let inter = 0;
-  for (const t of x) if (y.has(t)) inter++;
-  return inter / Math.min(x.size, y.size);
-}
-
-/** Threshold above which two topics are "substantially the same" (shared significant words). */
-export const SIMILARITY_THRESHOLD = 0.75;
+// ─── Duplicate agent (exact repeats only) ────────────────────────────────────
 
 /**
  * Finds existing content (any status, including drafts and rejected) or queue work that already
@@ -175,17 +115,10 @@ export async function findDuplicate(
       return `already covered by "${c.canonicalTitle}" (${c.status})`;
     if (opts.title && subjectKey(c.canonicalTitle) === subjectKey(opts.title))
       return `same title as "${c.canonicalTitle}" (${c.status})`;
-    const s = Math.max(
-      isGuide ? similarity(subject, c.productName) : 0,
-      similarity(opts.title ?? subject, c.canonicalTitle),
-    );
-    if (isGuide && s >= SIMILARITY_THRESHOLD)
-      return `overlaps "${c.canonicalTitle}" (${Math.round(s * 100)}% shared terms, ${c.status})`;
   }
   for (const q of queued.filter((q) => typeOfKey(q.key) === type))
     if (
-      subjectKey(q.topic) === key ||
-      similarity(subject, q.topic) >= SIMILARITY_THRESHOLD
+      subjectKey(q.topic) === key
     )
       return `already ${q.status.toLowerCase()} in the queue: "${q.topic}"`;
   return null;

@@ -98,8 +98,11 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
   const host = hostOf(v.canonicalUrl ?? v.url);
   const titleProduct = productFromTitle(v.title);
   const productIdentity = v.productName ?? titleProduct ?? cleanText(v.title).slice(0, 80);
-  const title = canonicalTitle(v, host);
-  const summary = v.summary ? truncateWords(cleanText(v.summary), 320) : firstSentences(v.body, 280);
+  // Keyword-to-Blog posts keep their title and summary exactly as returned, and are de-duplicated
+  // on the exact title only (a guide and an article on one subject are different posts).
+  const ai = v.contentKind === "AI_GUIDE";
+  const title = ai ? v.title.trim() : canonicalTitle(v, host);
+  const summary = ai ? v.summary?.trim() || firstSentences(v.body, 280) : v.summary ? truncateWords(cleanText(v.summary), 320) : firstSentences(v.body, 280);
   return {
     source: opts.source,
     sourceId: v.sourceId,
@@ -115,6 +118,6 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
     publisher: v.publisher,
     publishedAt: v.publishedAt,
     contentHash: contentHash(v),
-    dedupeKey: dedupeKey({ productIdentity, brand: v.brand, publisherKey: host ?? v.publisher ?? opts.source, date: v.publishedAt ?? opts.fetchedAt }),
+    dedupeKey: ai ? `ai|${slugify(title, 150) || v.sourceId}` : dedupeKey({ productIdentity, brand: v.brand, publisherKey: host ?? v.publisher ?? opts.source, date: v.publishedAt ?? opts.fetchedAt }),
   };
 }

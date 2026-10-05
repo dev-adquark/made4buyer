@@ -30,7 +30,7 @@ export async function startStubServer(opts: StubOptions = {}) {
   const pexels = { broken: false, rateLimited: false };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
-  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[] };
+  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[], tinyPost: false, fixedTitle: "" };
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
 
   const server = http.createServer((req, res) => {
@@ -103,6 +103,8 @@ export async function startStubServer(opts: StubOptions = {}) {
         if (!["professional", "friendly", "bold"].includes(body.tone ?? "") || (body.factualityMode && !["standard", "verified"].includes(body.factualityMode)) || (body.constraints?.maxWords ?? 0) > 1500 || !req.headers["idempotency-key"]) {
           return send(400, { error: { code: "VALIDATION_ERROR", message: "Invalid request body." } });
         }
+        if (ktb.tinyPost)
+          return send(200, { requestId: `req_tiny_${ktb.requests}`, post: { title: "Tiny", sections: [{ type: "body", heading: "", contentMarkdown: "One short sentence." }] }, quality: { status: "fail", score: 12 } });
         // Daily-article topics ("How to choose …") get a full-length SAMPLE article.
         if (/^(How to choose|What to know before buying) /.test(body.topic ?? "")) {
           const article = /^What to know/.test(body.topic ?? "");
@@ -116,7 +118,7 @@ export async function startStubServer(opts: StubOptions = {}) {
             send(200, {
               requestId: `req_daily_${subject.replace(/\W+/g, "_")}_${ktb.requests}`,
               post: {
-                title: article ? `What to know before buying ${subject}` : `How to choose ${subject}: a practical buying guide`,
+                title: ktb.fixedTitle || (article ? `What to know before buying ${subject}` : `How to choose ${subject}: a practical buying guide`),
                 meta: { description: `What actually matters when choosing ${subject}: size, everyday use, upkeep and warranty, explained without hype.` },
                 sections: [{ type: "introduction", contentMarkdown: para("the way you plan to use it") }, ...sections, { type: "conclusion", contentMarkdown: para("a short list of priorities") }],
                 faqs: [{ question: `What should I check first when choosing ${subject}?`, answer: "Start with the space you have and how often you will use it, then compare the options that fit." }],
