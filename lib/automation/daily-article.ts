@@ -608,18 +608,22 @@ export async function runDailyArticle(
     });
     item = out.item;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    // The provider failed, not the topic: back to the queue (EXHAUSTED after 3 tries).
-    const exhausted = topic.attempts + 1 >= 3;
+    const message = (error instanceof Error ? error.message : String(error)).replace(/^Keyword-to-Blog:\s*/, "");
+    // The provider's daily quota is spent: the topic did nothing wrong (its attempt is not
+    // counted), and further calls today would only fail, so the slot stops for today.
+    const quota = /daily (api )?request limit|quota/i.test(message);
+    const exhausted = !quota && topic.attempts + 1 >= 3;
     await db.contentQueueItem.update({
       where: { id: topic.id },
       data: {
         status: exhausted ? "EXHAUSTED" : "QUEUED",
         lockedAt: null,
         failureReason: message.slice(0, 500),
+        ...(quota ? { attempts: { decrement: 1 } } : {}),
       },
     });
-    return fail(`Keyword-to-Blog: ${message}`, true);
+    // The provider failed, not the topic: back to the queue (EXHAUSTED after 3 tries).
+    return fail(`Keyword-to-Blog: ${message}`, !quota);
   }
 
   // Duplicate agent, again: the generated title against everything that exists.

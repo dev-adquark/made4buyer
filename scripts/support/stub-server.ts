@@ -30,7 +30,7 @@ export async function startStubServer(opts: StubOptions = {}) {
   const pexels = { broken: false, rateLimited: false };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
-  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0 };
+  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false };
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
 
   const server = http.createServer((req, res) => {
@@ -92,6 +92,7 @@ export async function startStubServer(opts: StubOptions = {}) {
         const body = JSON.parse(raw || "{}") as { keywords?: string[]; topic?: string; tone?: string; factualityMode?: string; constraints?: { maxWords?: number } };
         // Mirror the real API's validation of enums and plan caps.
         ktb.requests++;
+        if (ktb.quotaReached) return send(429, { error: { code: "RATE_LIMITED", message: "Daily API request limit reached." } });
         if (ktb.unavailable > 0) {
           ktb.unavailable--;
           return send(503, { error: { code: "SERVICE_UNAVAILABLE", message: "Content generation is temporarily unavailable. Please try again shortly." } });

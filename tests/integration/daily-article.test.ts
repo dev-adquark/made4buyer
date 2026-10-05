@@ -47,6 +47,7 @@ beforeEach(async () => {
     handsOn: false,
     delayMs: 0,
     requests: 0,
+    quotaReached: false,
   });
 });
 
@@ -182,6 +183,20 @@ describe("daily article automation", () => {
       stub.ktb.delayMs = 0;
     }
   }, 20_000);
+
+  it("stops the slot for the day when the provider's daily quota is spent, without burning the topic", async () => {
+    stub.ktb.quotaReached = true;
+    const r = await runDailyArticle("test", { now: MORNING });
+    expect(r).toMatchObject({ status: "BLOCKED", slot: "MORNING" });
+    expect(r.reason).toMatch(/Daily API request limit reached/);
+    expect(r.reason).not.toMatch(/Keyword-to-Blog: Keyword-to-Blog/);
+    const calls = stub.ktb.requests;
+    // Later runs today make no further calls for this slot.
+    expect(await runDailyArticle("test", { now: at("2026-10-06T05:00:00Z") })).toMatchObject({ status: "NOT_DUE" });
+    expect(stub.ktb.requests).toBe(calls);
+    const topic = await db.contentQueueItem.findFirstOrThrow({ where: { failureReason: { contains: "limit" } } });
+    expect(topic).toMatchObject({ status: "QUEUED", attempts: 0 });
+  });
 
   it("does not publish an article that claims hands-on testing", async () => {
     stub.ktb.handsOn = true;
