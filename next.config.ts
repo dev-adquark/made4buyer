@@ -4,8 +4,11 @@ const isProd = process.env.NODE_ENV === "production";
 const analyticsHost = process.env.NEXT_PUBLIC_ANALYTICS_HOST; // optional external analytics origin
 // Sovrn Commerce (VigLink) script, only when explicitly enabled (needed for Sovrn site approval).
 const sovrnCommerce = ["1", "true", "yes", "on"].includes((process.env.SOVRN_COMMERCE_SCRIPT ?? "").toLowerCase());
-const extraScript = [analyticsHost, sovrnCommerce && "https://cdn.viglink.com"].filter(Boolean).join(" ");
-const extraConnect = [analyticsHost, sovrnCommerce && "https://*.viglink.com"].filter(Boolean).join(" ");
+// Sovrn Commerce link rewriting: vglnk.js loads Sovrn's commerce-js runtime, which calls *.sovrn.co.
+// Sovrn's browser-side price-comparison widget (comparisons.sovrn.com/js) stays blocked: offers are
+// shown only from the server-side verified-offer pipeline.
+const extraScript = [analyticsHost, sovrnCommerce && "https://cdn.viglink.com https://commerce-js.sovrn.co"].filter(Boolean).join(" ");
+const extraConnect = [analyticsHost, sovrnCommerce && "https://*.viglink.com https://*.sovrn.co"].filter(Boolean).join(" ");
 
 // Next.js injects inline bootstrap scripts, so script-src needs 'unsafe-inline' without nonces;
 // everything else is locked to self. Images may be remote (licensed merchant/CDN images).
