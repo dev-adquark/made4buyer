@@ -30,15 +30,19 @@ export function aiGuidesConfigured(): boolean {
   return Boolean(config.aiGuides.url() && config.aiGuides.keys().length);
 }
 
-/** Markdown → the plain-text paragraph format the review body uses ("## " marks a heading). */
+/**
+ * Markdown → the plain-text paragraph format the review body uses ("## " marks a heading).
+ * Only markup is removed; every word the provider wrote is kept (code blocks become plain text,
+ * and underscores inside words such as snake_case are left alone).
+ */
 export function markdownToPlain(md: string): string {
   return md
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/```[^\n]*\n?([\s\S]*?)```/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\{\{[^}]*\}\}|\[\[[^\]]*\]\]/g, "")
     .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)\*(?!\w)/g, "$1$2")
+    .replace(/(^|[^\w_])_(?!\s)([^_\n]+?)_(?!\w)/g, "$1$2")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/^#{1,6}[ \t]*/gm, "")
     .replace(/^[ \t]*[-*+][ \t]+/gm, "• ")
@@ -51,19 +55,23 @@ export function markdownToPlain(md: string): string {
 /** Maps a Keyword-to-Blog response onto the Content API item shape consumed by validation. */
 export function guideToContentItem(res: KtbResponse, req: GuideRequest, now = new Date()) {
   const post = res.post;
-  if (!post?.title || !post.sections?.length) throw new PipelineError("CONTENT_API_RESPONSE_INVALID", "Keyword-to-Blog response has no post title or sections");
+  // Everything the provider returned is kept: headings, sections (including intro/conclusion and
+  // FAQ sections), the conclusion field and FAQs. Refused only when there is no title or no text.
   const parts: string[] = [];
-  for (const s of post.sections) {
-    if (s.type === "faq") continue; // rendered from post.faqs below
-    if (s.heading && s.type !== "introduction" && s.type !== "conclusion") parts.push(`## ${cleanText(s.heading)}`);
+  for (const s of post?.sections ?? []) {
+    // An empty FAQ section is just the slot for post.faqs (rendered below); no double heading.
+    if (s.type === "faq" && !s.contentMarkdown?.trim() && post?.faqs?.length) continue;
+    if (s.heading?.trim()) parts.push(`## ${cleanText(s.heading)}`);
     if (s.contentMarkdown?.trim()) parts.push(markdownToPlain(s.contentMarkdown));
     if (s.callout?.text) parts.push(`${s.callout.label ? `${cleanText(s.callout.label)}: ` : ""}${markdownToPlain(s.callout.text)}`);
   }
-  const faqs = (post.faqs ?? []).filter((f) => f.question && f.answer);
+  if (post?.conclusion?.trim()) parts.push(markdownToPlain(post.conclusion));
+  const faqs = (post?.faqs ?? []).filter((f) => f.question && f.answer);
   if (faqs.length) {
     parts.push("## Frequently asked questions");
     for (const f of faqs) parts.push(`${cleanText(f.question!)}\n${markdownToPlain(f.answer!)}`);
   }
+  if (!post?.title?.trim() || !parts.join("").trim()) throw new PipelineError("CONTENT_API_RESPONSE_INVALID", "Keyword-to-Blog returned no title or no text");
   return {
     id: `ktb:${res.requestId ?? now.getTime()}`,
     title: post.title,

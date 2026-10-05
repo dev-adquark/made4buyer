@@ -55,6 +55,23 @@ describe("Sovrn adapter", () => {
   });
 });
 
+describe("Sovrn refusal (401) never invents offers", () => {
+  it("ingested reviews get no offer matches and no affiliate links, only an honest FAILED deal state", async () => {
+    const r = withEnv({ SOVRN_API_KEY: "rejected-secret" });
+    try {
+      await runIngestion({ trigger: "test" });
+    } finally {
+      r();
+    }
+    const reviews = await db.normalizedReview.findMany({ where: { kind: "REVIEW" } });
+    expect(reviews.length).toBeGreaterThan(0);
+    expect(await db.sovrnOfferMatch.count({ where: { matchStatus: "MATCHED" } })).toBe(0);
+    expect(await db.affiliateLink.count({ where: { isActive: true } })).toBe(0);
+    expect(reviews.every((x) => x.dealStatus === "FAILED")).toBe(true);
+    expect(await db.pipelineFailure.count({ where: { errorCode: "SOVRN_AUTH_FAILED" } })).toBeGreaterThan(0);
+  });
+});
+
 describe("offer matching → affiliate links → verification (full ingestion)", () => {
   it("matches, scores, links and verifies; unmatched and failing links stay honest", async () => {
     await runIngestion({ trigger: "test" });

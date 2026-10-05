@@ -20,7 +20,7 @@ import { validateContentItem } from "@/lib/pipeline/validate";
 import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
 import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
 
-export type LiveCheckStatus = "OK" | "BLOCKED_BY_ENVIRONMENT" | "AUTH_FAILED" | "PROVIDER_ERROR" | "INVALID_RESPONSE" | "EMPTY" | "FAIL";
+export type LiveCheckStatus = "OK" | "BLOCKED_BY_ENVIRONMENT" | "AUTH_FAILED" | "RATE_LIMITED" | "PROVIDER_ERROR" | "INVALID_RESPONSE" | "EMPTY" | "FAIL";
 export type LiveCheckResult = { integration: string; status: LiveCheckStatus; detail: Record<string, unknown> };
 export type LiveCheckOptions = { product?: string; brand?: string };
 
@@ -28,10 +28,10 @@ let opts: LiveCheckOptions = {};
 const arg = (name: "product" | "brand") => opts[name];
 let results: LiveCheckResult[] = [];
 const add = (integration: string, status: LiveCheckStatus, detail: Record<string, unknown> = {}) => results.push({ integration, status, detail });
-const httpStatus = (s: number): LiveCheckStatus => (s === 401 || s === 403 ? "AUTH_FAILED" : "PROVIDER_ERROR");
+const httpStatus = (s: number): LiveCheckStatus => (s === 401 || s === 403 ? "AUTH_FAILED" : s === 429 ? "RATE_LIMITED" : "PROVIDER_ERROR");
 
 function environment() {
-  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "SOVRN_API_URL", "SOVRN_API_KEY", "SOVRN_SITE_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON", "APIFY_API_TOKEN", "KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY", "SOVRN_SITE_STATUS"];
+  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "SOVRN_API_URL", "SOVRN_API_KEY", "SOVRN_SITE_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON", "APIFY_API_TOKEN", "KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY", "KEYWORD_TO_BLOG_API_KEY_SECONDARY", "SOVRN_SITE_STATUS"];
   const set = Object.fromEntries(names.map((n) => [n, Boolean(process.env[n])]));
   const problems: string[] = [];
   const secret = process.env.SOVRN_API_KEY;

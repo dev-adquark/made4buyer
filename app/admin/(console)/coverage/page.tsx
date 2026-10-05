@@ -67,15 +67,14 @@ export default async function CoveragePage({
       <p className="small muted">
         Ranked from real gaps (nothing published, or no guide yet), balanced one
         per category at the top, non-tech first, with a seasonal nudge. The{" "}
-        <code>generate-guides</code> job drafts the top ones each day within the
-        Keyword-to-Blog quota ({config.aiGuides.dailyLimit()}/day). A topic is
-        never drafted twice, and a rejected topic is never retried.
+        <code>daily-article</code> job publishes from this queue twice a day (guide at 08:00, article at 19:00 IST) within the
+        Keyword-to-Blog quota ({config.aiGuides.dailyLimit()}/day), published as returned. The same exact topic is never sent twice for the same post type.
       </p>
       <div className="btnrow">
         <ActionForm
           action="/api/admin/jobs"
-          fields={{ job: "generate-guides" }}
-          label="Draft the next guides now"
+          fields={{ job: "daily-article" }}
+          label="Run the due article slot now"
           returnTo="/admin/coverage"
           disabledReason={generateBlocked}
         />

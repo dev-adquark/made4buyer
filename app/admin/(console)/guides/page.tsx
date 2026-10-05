@@ -46,7 +46,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
         <div className="field">
           <label htmlFor="g-kw">Keywords</label>
           <input id="g-kw" name="keywords" required placeholder="macbook air m4, best laptop for students" />
-          <div className="field-hint">1–8, comma-separated.</div>
+          <div className="field-hint">The first keyword is sent to Keyword-to-Blog (the request is kept to one keyword so generation stays fast).</div>
         </div>
         <div className="form-grid">
           <div className="field">
@@ -63,7 +63,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
         </button>
         <p className="field-hint">Takes up to a minute. Uses one Keyword-to-Blog generation from your plan.</p>
       </form>
-      <h2>Drafts and published guides</h2>
+      <h2>Generated guides</h2>
       <div className="table-wrap">
         <table className="table responsive">
           <thead>
@@ -87,7 +87,7 @@ export default async function GuidesPage({ searchParams }: { searchParams: Searc
                   <td data-label="Status">
                     <Badge value={g.status} />
                   </td>
-                  <td data-label="Editor approval">{g.editorApprovedAt ? `${g.editorApprovedBy} · ${when(g.editorApprovedAt)}` : <Badge value="NOT APPROVED" tone="warn" />}</td>
+                  <td data-label="Editor approval">{g.editorApprovedAt ? `${g.editorApprovedBy === "automation:direct-publish" ? "Direct publish" : g.editorApprovedBy} · ${when(g.editorApprovedAt)}` : <Badge value={g.status} />}</td>
                   <td data-label="Generator quality" className="small">
                     {meta.qualityStatus ?? "—"}
                     {meta.qualityScore != null ? ` (${meta.qualityScore})` : ""}

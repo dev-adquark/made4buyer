@@ -71,19 +71,25 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
             const g = (r.generationMeta ?? {}) as { model?: string; qualityStatus?: string; qualityScore?: number; requestId?: string };
             return ` (${[g.model, g.qualityStatus && `quality ${g.qualityStatus}${g.qualityScore != null ? ` ${g.qualityScore}` : ""}`, g.requestId].filter(Boolean).join(", ")})`;
           })()}
-          . Check every factual claim (specs, prices, availability, comparisons) before approving; the site labels it as AI-assisted and never as a hands-on review.
-          <div className="btnrow">
-            {r.editorApprovedAt ? (
-              <>
-                <span>
-                  Approved by {r.editorApprovedBy} on {when(r.editorApprovedAt)}
-                </span>
-                <ActionForm action="/api/admin/reviews" fields={{ id, action: "revoke-guide-approval" }} label="Revoke approval" returnTo={self} confirm="Revoke editor approval? A published guide will be unpublished." className="btn small danger" />
-              </>
-            ) : (
-              <ActionForm action="/api/admin/reviews" fields={{ id, action: "approve-guide" }} label="I’ve checked this guide — approve" returnTo={self} className="btn small primary" />
-            )}
-          </div>
+          {r.source === "keyword-to-blog" ? (
+            <>. Published as returned by Keyword-to-Blog (direct-publish mode: no approval or QA step). The site labels it AI-assisted and says no editor reviewed it. To take it down, use Unpublish.</>
+          ) : (
+            <>
+              . Check every factual claim (specs, prices, availability, comparisons) before approving; the site labels it as AI-assisted and never as a hands-on review.
+              <div className="btnrow">
+                {r.editorApprovedAt ? (
+                  <>
+                    <span>
+                      Approved by {r.editorApprovedBy} on {when(r.editorApprovedAt)}
+                    </span>
+                    <ActionForm action="/api/admin/reviews" fields={{ id, action: "revoke-guide-approval" }} label="Revoke approval" returnTo={self} confirm="Revoke editor approval? A published guide will be unpublished." className="btn small danger" />
+                  </>
+                ) : (
+                  <ActionForm action="/api/admin/reviews" fields={{ id, action: "approve-guide" }} label="I’ve checked this guide — approve" returnTo={self} className="btn small primary" />
+                )}
+              </div>
+            </>
+          )}
         </section>
       )}
       <section aria-labelledby="qa-h">

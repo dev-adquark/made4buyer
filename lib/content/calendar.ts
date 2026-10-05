@@ -211,6 +211,9 @@ export async function contentOpportunities(
         kind: "REVIEW",
         status: { in: ["PUBLISHED", "QUEUED", "NEEDS_REVIEW"] },
         categorySlug: { not: null },
+        // Only reviews whose product was identified with confidence (a PRIMARY product link),
+        // so a headline fragment is never sent as a "product" topic.
+        contentEntities: { some: { role: "PRIMARY" } },
       },
       orderBy: [
         { sourcePublishedAt: { sort: "desc", nulls: "last" } },

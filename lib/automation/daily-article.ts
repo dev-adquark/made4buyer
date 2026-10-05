@@ -14,21 +14,21 @@ import {
 } from "@/lib/pipeline/ai-guides";
 import { recordFailure } from "@/lib/pipeline/failures";
 import { guideRequestFor } from "@/lib/pipeline/guide-ideas";
-import { runIngestion } from "@/lib/pipeline/ingest";
+import { ingestGeneratedPost } from "@/lib/pipeline/ingest";
 import { publishReview } from "@/lib/pipeline/publish";
 import { audit, SYSTEM_ACTOR } from "@/lib/security/audit";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 
 /**
- * Daily article automation: one article in the MORNING slot (08:00 Asia/Kolkata) and one in the
- * EVENING slot (19:00), published without a human only after every automated gate passes:
+ * Daily article automation: a buying GUIDE in the MORNING slot (08:00 Asia/Kolkata) and an
+ * informational ARTICLE in the EVENING slot (19:00). Direct publish (owner's rule):
  *
- *   Topic → Duplicate check → Entity → Keyword-to-Blog → Duplicate check (generated) →
- *   Pipeline (entities, taxonomy, unique image, offers) → Content QA → SEO QA → Publish
+ *   Relevant topic → exact-duplicate check (same topic + type; no API call on a repeat) →
+ *   Keyword-to-Blog → exact-title check (same title + type) → store → publish as returned
  *
- * Any failed gate: nothing is published, the reason is recorded, the next run moves on.
- * Runs are idempotent (one article per slot per day), serialised by a job lock, and bounded
- * by the provider's daily quota and a per-slot attempt cap.
+ * No quality, SEO or approval gate. Sovrn/images are optional enrichment and never block.
+ * Runs are idempotent (one post per slot per day), serialised by a job lock, and bounded by the
+ * provider's daily quota and a per-slot attempt cap.
  */
 
 export type Slot = "MORNING" | "EVENING";
@@ -108,12 +108,12 @@ export async function findDuplicate(
     const cType =
       (c.generationMeta as { articleType?: ArticleType } | null)?.articleType ??
       "GUIDE";
-    const isGuide =
-      (c.kind === "AI_GUIDE" && cType === type) ||
-      (c.kind === "BUYING_GUIDE" && type === "GUIDE");
+    // Our own posts only: a publisher's guide on the same subject is not a repeat of ours.
+    const isGuide = c.kind === "AI_GUIDE" && cType === type;
     if (isGuide && subjectKey(c.productName) === key)
       return `already covered by "${c.canonicalTitle}" (${c.status})`;
-    if (opts.title && subjectKey(c.canonicalTitle) === subjectKey(opts.title))
+    // Exact returned title (case and punctuation aside) of an AI post of the same type.
+    if (opts.title && c.kind === "AI_GUIDE" && cType === type && subjectKey(c.canonicalTitle) === subjectKey(opts.title))
       return `same title as "${c.canonicalTitle}" (${c.status})`;
   }
   for (const q of queued.filter((q) => typeOfKey(q.key) === type))
@@ -161,7 +161,8 @@ export async function refreshQueue(now = new Date()) {
 export async function recoverStuck(now = new Date()) {
   const r = await db.contentQueueItem.updateMany({
     where: {
-      status: { in: ["LOCKED", "GENERATING", "QA"] },
+      // A QA item that already has its stored post is published by the recovery step instead.
+      OR: [{ status: { in: ["LOCKED", "GENERATING"] } }, { status: "QA", normalizedReviewId: null }],
       lockedAt: { lt: new Date(now.getTime() - STUCK_MS) },
     },
     data: {
@@ -406,8 +407,22 @@ export async function runDailyArticle(
     };
   };
 
-  // Topic agent + duplicate agent: free checks first, so no API call is spent on a duplicate.
   const type = SLOT_TYPE[slot];
+  // Recovery: a post generated earlier but not yet published (e.g. a publish error) is published
+  // now, with no new API call.
+  const pending = await db.contentQueueItem.findFirst({ where: { status: "QA", normalizedReviewId: { not: null }, key: type === "ARTICLE" ? { startsWith: "article:" } : { not: { startsWith: "article:" } } } });
+  if (pending?.normalizedReviewId) {
+    const rev = await db.normalizedReview.findUnique({ where: { id: pending.normalizedReviewId }, select: { id: true, slug: true, status: true } });
+    if (rev && rev.status !== "PUBLISHED" && rev.status !== "REJECTED") {
+      const ok = await publishReview(rev.id, { ...SYSTEM_ACTOR, actor: AUTOMATION_APPROVER }, "auto", { skipQa: true }).catch(() => null);
+      if (ok?.ok) {
+        await db.contentQueueItem.update({ where: { id: pending.id }, data: { status: "PUBLISHED", publishedAt: now, failureReason: null } });
+        await db.automationSlot.update({ where: { id: row.id }, data: { status: "PUBLISHED", normalizedReviewId: rev.id, publishedAt: now, lastError: null, queueItemId: pending.id } });
+        return { status: "PUBLISHED", slot, day, topic: pending.topic, reviewSlug: rev.slug, attempts: attemptNo };
+      }
+    }
+  }
+  // Topic agent + duplicate agent: free checks first, so no API call is spent on a duplicate.
   let topic: ContentQueueItem | null = null;
   for (let i = 0; i < 25; i++) {
     const next = await pickNextTopic(now, type);
@@ -515,25 +530,20 @@ export async function runDailyArticle(
     where: { id: topic.id },
     data: { status: "QA" },
   });
-  await runIngestion({
-    trigger: `daily-article:${trigger}`,
-    items: [item],
-    source: AI_GUIDE_SOURCE,
-  });
-  const review = await db.normalizedReview.findUnique({
-    where: { source_sourceId: { source: AI_GUIDE_SOURCE, sourceId: item.id } },
-  });
+  // Store and process this one post only: no global ingestion lock, no backlog processing.
+  const stored = await ingestGeneratedPost(item, AI_GUIDE_SOURCE, `daily-article:${trigger}`);
+  const review = stored.reviewId ? await db.normalizedReview.findUnique({ where: { id: stored.reviewId } }) : null;
   if (!review) {
+    const duplicate = /duplicate/i.test(stored.reason ?? "");
     await db.contentQueueItem.update({
       where: { id: topic.id },
       data: {
-        status: "FAILED",
+        status: duplicate ? "REJECTED" : "FAILED",
         lockedAt: null,
-        failureReason:
-          "ingestion did not store the article (see Ingestion → failures)",
+        failureReason: (stored.reason ?? "the generated post was not stored").slice(0, 500),
       },
     });
-    return fail("ingestion did not store the generated article", true);
+    return fail(duplicate ? `duplicate prevented: ${stored.reason}` : `the generated post was not stored: ${stored.reason}`, true);
   }
   await db.contentQueueItem.update({
     where: { id: topic.id },
@@ -555,12 +565,14 @@ export async function runDailyArticle(
       metadata: { day, slot, topic: topic.key },
     },
   );
-  const published = await publishReview(
-    review.id,
-    { ...SYSTEM_ACTOR, actor: AUTOMATION_APPROVER },
-    "auto",
-    { skipQa: true },
-  );
+  let published: Awaited<ReturnType<typeof publishReview>>;
+  try {
+    published = await publishReview(review.id, { ...SYSTEM_ACTOR, actor: AUTOMATION_APPROVER }, "auto", { skipQa: true });
+  } catch (error) {
+    // Keep the stored post linked to its queue item so the next run publishes it, not regenerates.
+    await db.contentQueueItem.update({ where: { id: topic.id }, data: { status: "QA", lockedAt: null, failureReason: `publish error: ${String(error).slice(0, 300)}` } });
+    return fail(`publishing the stored post failed: ${String(error).slice(0, 200)}`, true);
+  }
   if (!published.ok) {
     await db.contentQueueItem.update({
       where: { id: topic.id },
@@ -616,28 +628,11 @@ export async function runDailyArticle(
  * can never bill or generate twice. Slow failures (timeouts) are not retried in-run: the next
  * scheduled run retries with backoff, within the 5-minute function limit.
  */
-async function generateWithRetry(
-  req: ReturnType<typeof guideRequestFor>,
-  onCall: () => Promise<void>,
-) {
-  const started = Date.now();
-  for (let attempt = 1; ; attempt++) {
-    await onCall();
-    try {
-      return await generateGuide(req);
-    } catch (error) {
-      const retryable =
-        (error as { retryable?: boolean }).retryable === true ||
-        /temporarily unavailable|try again/i.test(
-          String((error as Error).message),
-        );
-      if (attempt >= 2 || !retryable || Date.now() - started > 60_000)
-        throw error;
-      await new Promise((r) =>
-        setTimeout(r, Number(process.env.KTB_RETRY_DELAY_MS ?? 20_000)),
-      );
-    }
-  }
+async function generateWithRetry(req: ReturnType<typeof guideRequestFor>, onCall: () => Promise<void>) {
+  // One call per run: a generation can take up to ~4 minutes and the function limit is 5, so a
+  // second in-run call could be killed mid-flight. The next scheduled/hourly run retries.
+  await onCall();
+  return generateGuide(req);
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────────
@@ -660,7 +655,7 @@ export async function automationHealth(
   if (!aiGuidesConfigured()) problems.push("Keyword-to-Blog is not configured");
   if (!config.images.pexelsKey())
     problems.push(
-      "PEXELS_API_KEY missing: articles cannot get a unique image, so none will publish",
+      "PEXELS_API_KEY missing: articles still publish, but with the category placeholder image",
     );
   const [last, recent, stuck, queued, lastAttempt] = await Promise.all([
     db.automationSlot.findFirst({

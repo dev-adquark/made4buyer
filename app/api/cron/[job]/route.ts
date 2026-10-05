@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { LockHeldError } from "@/lib/jobs/lock";
 import { isJobName, jobOutcome, runJob, type JobName } from "@/lib/jobs/registry";
-import { log } from "@/lib/log";
+import { log, redactString } from "@/lib/log";
 import { audit, SYSTEM_ACTOR } from "@/lib/security/audit";
 import { cronAuthorized } from "@/lib/security/request";
 
@@ -31,6 +31,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ job: str
   } catch (error) {
     if (error instanceof LockHeldError) return NextResponse.json({ ok: false, error: error.message, results }, { status: 409 });
     log.error("cron job failed", { job, error });
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : String(error), results }, { status: 500 });
+    return NextResponse.json({ ok: false, error: redactString(error instanceof Error ? error.message : String(error)), results }, { status: 500 });
   }
 }

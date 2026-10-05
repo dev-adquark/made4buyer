@@ -80,7 +80,9 @@ export const config = {
     /** Price-comparison URL. "{siteKey}" is filled from SOVRN_SITE_KEY, so a key change needs one variable. */
     apiUrl: () => {
       const url = str("SOVRN_API_URL");
-      const site = str("SOVRN_SITE_KEY");
+      // The guarded public key: a site key equal to the secret never goes into a URL.
+      const raw = str("SOVRN_SITE_KEY");
+      const site = raw && raw !== str("SOVRN_API_KEY") ? raw : undefined;
       return url && url.includes("{siteKey}") ? (site ? url.replace("{siteKey}", encodeURIComponent(site)) : undefined) : url;
     },
     apiKey: () => str("SOVRN_API_KEY"),

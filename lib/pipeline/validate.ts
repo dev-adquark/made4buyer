@@ -183,10 +183,14 @@ export function validateContentItem(input: unknown): ValidationResult {
   const priceParsed = parsePrice(pick(raw, ["price", "product.price", "msrp"]));
   const ratingRaw = pick(raw, ["rating", "score", "review.rating"]);
 
+  // Keyword-to-Blog posts are already plain text (converted from Markdown): no HTML stripping,
+  // which would delete real wording such as "under <$500".
+  const aiPost = pick(raw, ["contentKind", "kind"]) === "AI_GUIDE";
+  const titleRaw = asString(pick(raw, ["title", "headline", "name"]));
   const candidate = {
     sourceId: sourceIdRaw,
-    title: asString(pick(raw, ["title", "headline", "name"])) ? cleanText(htmlToPlainText(asString(pick(raw, ["title", "headline", "name"]))!)) : undefined,
-    body: bodyRaw ? htmlToPlainText(bodyRaw) : undefined,
+    title: titleRaw ? (aiPost ? titleRaw.trim() : cleanText(htmlToPlainText(titleRaw))) : undefined,
+    body: bodyRaw ? (aiPost ? bodyRaw : htmlToPlainText(bodyRaw)) : undefined,
     summary: asString(pick(raw, ["summary", "excerpt", "description", "dek", "subtitle"])),
     url: asString(pick(raw, ["url", "sourceUrl", "source_url", "link", "permalink"])),
     canonicalUrl: asString(pick(raw, ["canonicalUrl", "canonical_url", "canonical"])),

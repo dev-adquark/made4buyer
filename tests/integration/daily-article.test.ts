@@ -146,42 +146,19 @@ describe("daily article automation", () => {
   });
 
   it("retries a provider outage with backoff, then recovers without duplicating", async () => {
-    stub.ktb.unavailable = 2; // the in-run retry also fails
+    stub.ktb.unavailable = 1;
     const r1 = await runDailyArticle("test", { now: MORNING });
     expect(r1).toMatchObject({ status: "RETRYING", attempts: 1 });
     expect(r1.reason).toMatch(/temporarily unavailable/);
-    const slot = await db.automationSlot.findUniqueOrThrow({
-      where: { day_slot: { day: "2026-10-06", slot: "MORNING" } },
-    });
-    expect(slot.apiCalls).toBe(2);
-    expect(
-      await db.contentQueueItem.count({
-        where: {
-          status: "QUEUED",
-          failureReason: { contains: "temporarily unavailable" },
-        },
-      }),
-    ).toBe(1);
+    // One API call per run (no in-run retry that could outlast the function limit).
+    expect((await db.automationSlot.findUniqueOrThrow({ where: { day_slot: { day: "2026-10-06", slot: "MORNING" } } })).apiCalls).toBe(1);
     // Inside the backoff window: no call.
-    expect(
-      await runDailyArticle("test", { now: at("2026-10-06T03:00:00Z") }),
-    ).toMatchObject({ status: "RETRYING" });
-    expect(stub.ktb.requests).toBe(2);
-    // After backoff the provider is back, but the morning has spent its share (1 kept for the evening).
-    expect(
-      await runDailyArticle("test", { now: at("2026-10-06T03:40:00Z") }),
-    ).toMatchObject({
-      status: "BLOCKED",
-      reason: expect.stringMatching(/quota/),
-    });
-    // The evening still publishes with the reserved request.
-    expect(await runDailyArticle("test", { now: EVENING })).toMatchObject({
-      status: "PUBLISHED",
-      slot: "EVENING",
-    });
-    expect(
-      await db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
-    ).toBe(1);
+    expect(await runDailyArticle("test", { now: at("2026-10-06T03:00:00Z") })).toMatchObject({ status: "RETRYING" });
+    expect(stub.ktb.requests).toBe(1);
+    // After backoff the provider is back: the same slot publishes, once.
+    expect(await runDailyArticle("test", { now: at("2026-10-06T03:40:00Z") })).toMatchObject({ status: "PUBLISHED", slot: "MORNING" });
+    expect(await runDailyArticle("test", { now: at("2026-10-06T04:40:00Z") })).toMatchObject({ status: "NOT_DUE" });
+    expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(1);
   });
 
   it("treats a provider timeout as a failed attempt, never a published article", async () => {
@@ -237,13 +214,23 @@ describe("daily article automation", () => {
     expect(p.body).toContain("One short sentence.");
   });
 
-  it("only stops an exact repeat: the same returned title is not published twice", async () => {
+  it("only stops an exact repeat: the same returned title is not published twice as the same type", async () => {
     stub.ktb.fixedTitle = "The one guide you need";
     expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
-    const r = await runDailyArticle("test", { now: EVENING });
+    const r = await runDailyArticle("test", { now: at("2026-10-07T02:40:00Z") });
     expect(r.status).not.toBe("PUBLISHED");
     expect(r.reason).toMatch(/same title/);
     expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(1);
+  });
+
+  it("publishes even while Sovrn rejects every request (Sovrn never blocks content)", async () => {
+    const r = withEnv({ SOVRN_API_URL: `${stub.base}/sovrn`, SOVRN_API_KEY: "rejected-secret" });
+    try {
+      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+    } finally {
+      r();
+    }
+    expect(await db.affiliateLink.count()).toBe(0);
   });
 
   it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {
@@ -320,6 +307,22 @@ describe("daily article automation", () => {
     await db.imageAsset.create({
       data: { ...img, normalizedReviewId: b.id, isPrimary: false },
     });
+  });
+
+  it("lets an Article and a Guide share a title, but never two posts of the same type", async () => {
+    const mk = (n: number, type: string) => db.normalizedReview.create({ data: { source: "keyword-to-blog", sourceId: `pt${n}`, dedupeKey: `pt${n}`, canonicalTitle: "Coffee machines: what matters", slug: `pt-${n}`, productName: "Coffee machines", summary: "s", body: "b", kind: "AI_GUIDE", generationMeta: { articleType: type } } });
+    await mk(1, "GUIDE");
+    await mk(2, "ARTICLE");
+    await expect(mk(3, "ARTICLE")).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("publishes an Article and a Guide on the same subject; only an exact same-type repeat is stopped", async () => {
+    stub.ktb.fixedTitle = "Coffee machines: the essentials";
+    expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+    expect(await runDailyArticle("test", { now: EVENING })).toMatchObject({ status: "PUBLISHED" });
+    const posts = await db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, select: { canonicalTitle: true, generationMeta: true } });
+    expect(posts.map((p) => (p.generationMeta as { articleType: string }).articleType).sort()).toEqual(["ARTICLE", "GUIDE"]);
+    expect(new Set(posts.map((p) => p.canonicalTitle)).size).toBe(1);
   });
 
   it("enforces unique AI guide titles at the database level", async () => {

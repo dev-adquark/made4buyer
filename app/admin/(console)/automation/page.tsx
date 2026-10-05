@@ -81,14 +81,7 @@ export default async function AutomationPage({
       <h1>Daily articles</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        One AI-assisted article at 08:00 and one at 19:00 (Asia/Kolkata),
-        published without an editor only after every automated gate passes: new
-        topic, no duplicate, Keyword-to-Blog, content QA (length, structure, no
-        hands-on, price or statistic claims), unique image, SEO QA and the
-        standard publish QA. Up to {MAX_SLOT_ATTEMPTS} attempts per slot with
-        backoff, within the Keyword-to-Blog quota of{" "}
-        {config.aiGuides.dailyLimit()} requests/day. A failed gate never
-        publishes; the reason is shown below.
+        A buying guide at 08:00 and an informational article at 19:00 (Asia/Kolkata): relevant topic from the queue → exact-duplicate check (no API call is spent on a repeat) → Keyword-to-Blog → published exactly as returned. No quality, SEO or approval gate; only an exact repeat (same topic or same title, same post type) is stopped. Up to {MAX_SLOT_ATTEMPTS} attempts per slot with backoff, within the Keyword-to-Blog quota of {config.aiGuides.dailyLimit()} requests/day.
       </p>
       {!enabled && (
         <p className="notice warn">

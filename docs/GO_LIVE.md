@@ -10,7 +10,10 @@ wipes or replaces production data.
 |---|---|
 | `APIFY_API_TOKEN` | Reviews now come from sources in Admin → Sources, crawled by Apify (see [REVIEW_SOURCES.md](REVIEW_SOURCES.md)). The legacy `CONTENT_API_*` feed is optional. |
 | `SOVRN_SITE_STATUS` | Copy the site's approval status from the Sovrn dashboard (`PENDING`, `APPROVED`, `DENIED`). Never inferred. |
-| `SOVRN_API_URL`, `SOVRN_API_KEY` | `SOVRN_API_KEY` is the **secret** API key. The public site key (`SOVRN_SITE_KEY`, already set) is a different credential; the preflight fails if they are equal. |
+| `SOVRN_SITE_KEY` | The **public** site key from the Sovrn dashboard (safe in the browser). Used by the Commerce script, link wrapping, and to fill `{siteKey}` in `SOVRN_API_URL`. Never the website URL. |
+| `SOVRN_API_KEY` | The **secret** API key (Vercel Sensitive, server only). Must differ from the site key: if equal, the site key is withheld everywhere. |
+| `SOVRN_API_URL` | `https://comparisons.sovrn.com/api/affiliate/v3.5/sites/{siteKey}/compare/prices/usd_en/by/accuracy`; `{siteKey}` is filled from `SOVRN_SITE_KEY`, so changing keys needs one variable. |
+| `SOVRN_COMMERCE_SCRIPT` | `true` loads Sovrn Commerce (vglnk.js + commerce-js) on public pages with the public key. |
 | `GSC_SITE_URL`, `GSC_SERVICE_ACCOUNT_JSON` | Add the service account's `client_email` as a user on the Search Console property first. |
 | `PEXELS_API_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DIRECT_URL` | Already set. |
 
@@ -25,7 +28,7 @@ makes one request per provider. It writes nothing except an audit-log entry with
 |---|---|
 | `OK` | Authenticated, response parsed. Details show field coverage, dates, pagination, offer counts. |
 | `EMPTY` | Provider answered with no items/offers for that request (not an error). |
-| `AUTH_FAILED` | Credential rejected (401/403). For Sovrn this usually means the site key was used as the secret. |
+| `AUTH_FAILED` | Credential rejected. For Sovrn, 401 "Invalid Api Key" with the right key pair usually means the site is not yet approved for the Price Comparison API; 403 means the site key in the URL is not recognised. |
 | `INVALID_RESPONSE` | Response shape doesn't match what the adapter parses. **Do not ingest**: send the details to engineering so the adapter is fixed against the real contract. |
 | `BLOCKED_BY_ENVIRONMENT` | Not configured. |
 

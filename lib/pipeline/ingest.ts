@@ -296,3 +296,24 @@ export async function runIngestion(opts: { trigger: string; ctx?: AuditContext; 
     };
   });
 }
+
+/**
+ * Stores and processes ONE generated post (Keyword-to-Blog) without the global ingestion lock and
+ * without touching the backlog: a running Content API/Apify ingestion can never block, delay or be
+ * delayed by a generated post. Returns the stored review id, or the reason it was not stored.
+ */
+export async function ingestGeneratedPost(raw: unknown, source: string, trigger: string): Promise<{ reviewId?: string; reason?: string }> {
+  const run = await db.ingestionRun.create({ data: { source, trigger, status: "RUNNING" } });
+  const c = counters();
+  const item = await ingestRawItem(raw, source, run, c);
+  // Only a freshly stored item is processed (a FAILED/DUPLICATE one keeps its own reason).
+  if (item && item.processingStatus === "INGESTED") await processContentItem(item.id, c, run.id);
+  const stored = item ? await db.contentItem.findUnique({ where: { id: item.id }, select: { normalizedReviewId: true, processingStatus: true, statusReason: true } }) : null;
+  await db.ingestionRun.update({
+    where: { id: run.id },
+    data: { status: stored?.normalizedReviewId ? "COMPLETED" : "COMPLETED_WITH_ERRORS", completedAt: new Date(), totalFetched: 1, normalizedCount: c.normalized, duplicateCount: c.duplicate, queuedCount: c.queued, failureCount: c.failure, failureReasonSummary: c.reasons as Prisma.InputJsonValue },
+  });
+  // A DUPLICATE item points at the OTHER, pre-existing post: never return (and so never publish) it.
+  if (stored?.normalizedReviewId && stored.processingStatus !== "DUPLICATE") return { reviewId: stored.normalizedReviewId };
+  return { reason: stored?.processingStatus === "DUPLICATE" ? "duplicate prevented: an identical post already exists" : (stored?.statusReason ?? (Object.keys(c.reasons).join(", ") || "not stored")) };
+}

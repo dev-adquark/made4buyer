@@ -118,6 +118,7 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
     publisher: v.publisher,
     publishedAt: v.publishedAt,
     contentHash: contentHash(v),
-    dedupeKey: ai ? `ai|${slugify(title, 150) || v.sourceId}` : dedupeKey({ productIdentity, brand: v.brand, publisherKey: host ?? v.publisher ?? opts.source, date: v.publishedAt ?? opts.fetchedAt }),
+    // Exact title (case-insensitive, whole title) + post type: the only AI repeat rule.
+    dedupeKey: ai ? `ai|${(v.generation as { articleType?: string } | undefined)?.articleType ?? "GUIDE"}|${sha256(title.toLowerCase())}` : dedupeKey({ productIdentity, brand: v.brand, publisherKey: host ?? v.publisher ?? opts.source, date: v.publishedAt ?? opts.fetchedAt }),
   };
 }

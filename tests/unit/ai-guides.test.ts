@@ -46,6 +46,6 @@ describe("Keyword-to-Blog mapping", () => {
   });
 
   it("rejects responses without a post", () => {
-    expect(() => guideToContentItem({}, { productName: "X", keywords: ["x"] })).toThrow(/no post title/);
+    expect(() => guideToContentItem({}, { productName: "X", keywords: ["x"] })).toThrow(/no title or no text/);
   });
 });

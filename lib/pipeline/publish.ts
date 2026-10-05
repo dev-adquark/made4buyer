@@ -24,6 +24,9 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
       assignments: { where: { active: true, isPrimary: true, tagType: "CATEGORY" }, select: { confidence: true, isOverride: true, reviewState: true } },
     },
   });
+  // Keyword-to-Blog posts are published as returned (owner's rule): no QA gate on any path
+  // (Publish button, bulk publish, publish cycle, restore, reprocess).
+  if (review.source === "keyword-to-blog") return [];
   const failures: QaFailure[] = [];
   if (review.kind === "AI_GUIDE" && !review.editorApprovedAt) {
     failures.push({ code: "AI_GUIDE_NEEDS_EDITOR_APPROVAL", message: "AI-assisted guide must be read and approved by an editor before publishing" });
