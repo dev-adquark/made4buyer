@@ -105,20 +105,19 @@ export async function generateGuide(req: GuideRequest) {
   if (!url || !keys.length) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "KEYWORD_TO_BLOG_API_URL / KEYWORD_TO_BLOG_API_KEY are not configured");
   const endpoint = /\/v1\/generate\/?$/.test(url) ? url : `${url.replace(/\/+$/, "")}/v1/generate`;
   const topic = req.topic?.trim() || `A practical buying guide to the ${[req.brand, req.productName].filter(Boolean).join(" ")}`;
+  // Request shape verified against the live API on 2026-10-05. The extended shape (several
+  // keywords, audience/voice/industry, section/FAQ constraints, "verified" factuality) made every
+  // generation hit the provider's ~135 s internal limit and fail with INTERNAL_ERROR "temporarily
+  // unavailable"; this shape returned quality "pass" (95) in 44–84 s on three keys.
   const body = {
-    keywords: req.keywords,
-    topic,
+    keywords: req.keywords.slice(0, 1),
+    // The headline only: a subtitle after ":" lengthens generation without adding substance.
+    topic: topic.split(":")[0].trim(),
     language: "en",
-    region: "US",
     tone: "professional", // API enum: "professional" | "friendly" | "bold"
-    targetAudience: req.audience?.trim() || "shoppers comparing options before they purchase",
-    brandVoice: "clear, practical, honest about trade-offs; no invented specifications, prices or test results",
-    industry: req.industry?.trim() || "consumer products",
-    // maxWords stays under the smallest plan's 1,500 words/request cap.
-    constraints: { minWords: 600, maxWords: config.aiGuides.maxWords(), maxSections: 7, includeFAQs: true, includeInternalLinksPlaceholders: false, keywordUsageStrategy: "natural" },
+    constraints: { minWords: 600, maxWords: Math.min(900, config.aiGuides.maxWords()) },
     format: { responseTypes: ["json"] },
-    // Source-grounded factuality checks: prefer omission over unverifiable claims.
-    factualityMode: "verified",
+    factualityMode: "standard",
   };
   const idempotencyKey = idempotencyKeyFor(body);
   // Primary key, then the fallback key when the primary is refused (auth, quota, rate limit,
