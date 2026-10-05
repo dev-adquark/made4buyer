@@ -10,6 +10,7 @@ const LINKS: Array<[string, string]> = [
   ["/admin/entities", "Entities"],
   ["/admin/guides", "AI guides"],
   ["/admin/coverage", "Coverage & calendar"],
+  ["/admin/automation", "Daily articles"],
   ["/admin/sources", "Sources"],
   ["/admin/ingestion", "Ingestion"],
   ["/admin/categorization", "Categorization"],

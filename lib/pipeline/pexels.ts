@@ -194,7 +194,8 @@ export async function findPexelsImage(
   let requests = 0;
   let last: PexelsSearchResult | undefined;
   const search = async (q: string) => {
-    const r = await pexelsSearch(q, { cache: opts.cache });
+    // 30 results per query: a wider pool so every article can get its own photo.
+    const r = await pexelsSearch(q, { cache: opts.cache, perPage: 30 });
     if (!r.fromCache && r.status !== "NOT_CONFIGURED") requests++;
     last = r;
     return r;
@@ -208,24 +209,24 @@ export async function findPexelsImage(
     const r = await search(q);
     if (stop(r)) return { status: r.status, reason: r.reason, requests };
     const usable = r.photos.filter(wide);
-    const pick = pickRelevantPhoto(usable.filter(fresh), input.productName, input.brand) ?? pickRelevantPhoto(usable, input.productName, input.brand);
+    // Never another article's photo (1 article = 1 image; enforced by a unique index too).
+    const pick = pickRelevantPhoto(usable.filter(fresh), input.productName, input.brand);
     if (pick) return { image: toImage(pick.photo, "PRODUCT", r.query), status: "OK", requests };
   }
 
   // 2. An illustrative photo of the subject.
   const topic = imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug });
   if (!topic) return { status: "EMPTY", reason: "no product photo, and no image topic for this category", requests };
-  let fallback: { photo: PexelsPhoto; query: string } | undefined;
-  for (const q of topic.queries) {
+  // The topic's queries, then the subject itself ("office chairs"), still filtered by the topic.
+  const queries = [...topic.queries, ...(input.kind === "AI_GUIDE" || input.kind === "BUYING_GUIDE" ? [input.productName.toLowerCase()] : [])];
+  for (const q of [...new Set(queries)]) {
     const r = await search(q);
     if (stop(r)) return { status: r.status, reason: r.reason, requests };
     const onTopic = r.photos.filter((p) => wide(p) && photoMatchesTopic(p.alt ?? "", topic));
     const unused = onTopic.find(fresh);
     if (unused) return { image: toImage(unused, "ILLUSTRATIVE", r.query, topic), status: "OK", requests };
-    if (!fallback && onTopic[0]) fallback = { photo: onTopic[0], query: r.query };
   }
-  // Every on-topic photo is already used elsewhere: reuse beats an off-topic image.
-  if (fallback) return { image: toImage(fallback.photo, "ILLUSTRATIVE", fallback.query, topic), status: "OK", requests };
+  // Every on-topic photo is already another article's image: no reuse, the caller falls back.
   return { status: last?.status === "OK" ? "EMPTY" : (last?.status ?? "EMPTY"), reason: `no on-topic Pexels photo for ${topic.label} (${topic.queries.join(" / ")})`, requests };
 }
 

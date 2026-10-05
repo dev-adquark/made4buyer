@@ -228,7 +228,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
 });
 
 test("no dead links and no dead buttons", async () => {
-  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc", "/admin/go-live", "/admin/sources", "/admin/coverage"];
+  const pages = ["/", "/reviews", "/guides", "/match", "/match?category=laptops", "/deals", "/terms", "/contact", "/category/laptops", "/category/phones", `/search?q=laptop`, "/compare", "/about", "/disclosure", "/privacy", "/admin", "/admin/reviews", "/admin/entities", "/admin/qa", "/admin/ingestion", "/admin/categorization", "/admin/deals", "/admin/links", "/admin/images", "/admin/csv", "/admin/analytics", "/admin/sponsored", "/admin/reports", "/admin/jobs", "/admin/failures", "/admin/audit", "/admin/gsc", "/admin/go-live", "/admin/sources", "/admin/coverage", "/admin/automation"];
   const hrefs = new Set<string>();
   for (const p of pages) {
     const res = await page.goto(p);

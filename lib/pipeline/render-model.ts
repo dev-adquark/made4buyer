@@ -14,7 +14,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 4;
+export const RENDER_MODEL_VERSION = 5;
 
 export type PublicDeal = {
   linkId: string;
@@ -49,6 +49,8 @@ export type PageRenderModel = {
   /** subject ILLUSTRATIVE: a topic photo, captioned as such; never presented as the product. */
   image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean; subject: "PRODUCT" | "ILLUSTRATIVE" | null };
   keyEntities: Array<{ label: string; value: string }>;
+  /** For AI-assisted guides: who approved publication (an editor, or the automated QA gates). */
+  approval?: "EDITOR" | "AUTOMATED" | null;
   /** Products/services this content covers (one for a review, several for a comparison). */
   products: Array<{ name: string; slug: string; role: string; brand: string | null }>;
   rating: { value: number; scale: number } | null;
@@ -80,6 +82,7 @@ export async function verifiedDeals(reviewId: string): Promise<PublicDeal[]> {
 
 export type RenderInputs = {
   review: {
+    editorApprovedBy?: string | null;
     id: string;
     slug: string;
     canonicalTitle: string;
@@ -157,6 +160,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
       subject: pub.isFallback ? null : image?.subject === "ILLUSTRATIVE" ? "ILLUSTRATIVE" : "PRODUCT",
     },
     keyEntities,
+    approval: review.kind === "AI_GUIDE" ? (review.editorApprovedBy?.startsWith("automation:") ? "AUTOMATED" : review.editorApprovedBy ? "EDITOR" : null) : null,
     products,
     // A rating belongs to a single-product review; comparisons and guides never carry one.
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,

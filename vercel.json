@@ -42,16 +42,20 @@
       "schedule": "30 8 * * *"
     },
     {
-      "path": "/api/cron/generate-guides",
-      "schedule": "0 9 * * *"
-    },
-    {
       "path": "/api/cron/detect-stale",
       "schedule": "30 3 * * *"
     },
     {
       "path": "/api/cron/enrich-images",
       "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/daily-article?slot=morning",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/daily-article?slot=evening",
+      "schedule": "30 13 * * *"
     }
   ]
 }

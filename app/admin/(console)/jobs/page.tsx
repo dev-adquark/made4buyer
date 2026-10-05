@@ -20,6 +20,7 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "retry-failed": "Retry due retryable failures with bounded attempts.",
   "cleanup-cache": "Delete expired Sovrn cache rows, sessions, rate-limit buckets and stale locks.",
   "publish-cycle": "Publish QA-passing queued reviews (only when AUTO_PUBLISH_ENABLED=true).",
+  "daily-article": "Publish the scheduled article for the due slot (MORNING 08:00, EVENING 19:00 Asia/Kolkata): next topic from the queue, duplicate checks, Keyword-to-Blog, content and SEO QA, unique image, then publish. Does nothing when no slot is due or it is already published. See Admin → Daily articles.",
   "reclassify-content": "Re-run entity extraction, content-kind detection (review / comparison / buying guide), product linking and categorization for existing content after rule or taxonomy changes. Never changes publish state; rebuilds live pages.",
   "enrich-images": "Give published and QA reviews a real Pexels image: a photo of the product if one exists, otherwise a labelled illustrative photo of its topic. Replaces broken images, never downgrades a good one, stops on a Pexels rate limit.",
   "detect-stale": "Flag published reviews whose source article is older than STALE_REVIEW_MONTHS (default 18) and AI guides older than STALE_GUIDE_MONTHS (default 12) as CONTENT_STALE in Failures. Nothing is unpublished automatically.",

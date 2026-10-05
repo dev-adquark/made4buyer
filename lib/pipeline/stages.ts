@@ -90,7 +90,10 @@ export async function runEntityStage(review: NormalizedReview, content: Validate
     confidences.brand = 1;
     confidences.deviceType = Math.max(confidences.deviceType, 0.9);
   }
-  const notApplicable: EntityField[] = kind === "COMPARISON" || kind === "BUYING_GUIDE" ? ["productName", "brand", "deviceType"] : [];
+  // Not applicable: comparisons and guides cover several products, as does an AI guide about a
+  // whole category ("How to choose vacuum cleaners"), so a single brand or device isn't missing.
+  const categoryTopic = kind === "AI_GUIDE" && isTaxonomyName(String(values.productName ?? ""));
+  const notApplicable: EntityField[] = kind === "COMPARISON" || kind === "BUYING_GUIDE" || categoryTopic ? ["productName", "brand", "deviceType"] : [];
   const low = lowConfidenceFields({ confidences }, config.entities.lowConfidenceThreshold()).filter((f) => !notApplicable.includes(f));
   const core = { productName: 0.45, brand: 0.3, deviceType: 0.25 } as const;
   const overall = compared ? 0.9 : Math.round((confidences.productName * core.productName + confidences.brand * core.brand + confidences.deviceType * core.deviceType) * 100) / 100;
@@ -196,7 +199,7 @@ export function imageRank(a: { isFallback: boolean; subject?: string | null; lic
   return a.subject === "ILLUSTRATIVE" ? 1 : 2;
 }
 
-export type ImageStageOptions = { excludePhotoIds?: Set<string>; searchCache?: Map<string, PexelsSearchResult>; replaceExisting?: boolean };
+export type ImageStageOptions = { excludePhotoIds?: Set<string>; searchCache?: Map<string, PexelsSearchResult>; replaceExisting?: boolean; retried?: boolean };
 
 export async function runImageStage(review: NormalizedReview, content: ValidatedContent, opts: ImageStageOptions = {}) {
   const current = await db.normalizedReview.findUniqueOrThrow({ where: { id: review.id }, select: { categorySlug: true, subcategorySlug: true, productName: true, brand: true, canonicalTitle: true, kind: true } });
@@ -233,7 +236,16 @@ export async function runImageStage(review: NormalizedReview, content: Validated
     return Object.assign(existing, { providerStatus });
   }
   await db.imageAsset.updateMany({ where: { normalizedReviewId: review.id, isPrimary: true }, data: { isPrimary: false } });
-  const asset = await db.imageAsset.create({ data: { normalizedReviewId: review.id, ...data, isPrimary: true } });
+  let asset;
+  try {
+    asset = await db.imageAsset.create({ data: { normalizedReviewId: review.id, ...data, isPrimary: true } });
+  } catch (error) {
+    // Another article claimed this photo a moment ago (unique primary photo index): retry once
+    // with it excluded, else use the placeholder. A photo is never shared between articles.
+    if ((error as { code?: string }).code !== "P2002" || !data.providerPhotoId || opts.retried) throw error;
+    exclude.add(data.providerPhotoId);
+    return runImageStage(review, content, { ...opts, excludePhotoIds: exclude, replaceExisting: true, retried: true });
+  }
   // Keep history bounded: remove superseded non-primary assets beyond the latest 5.
   const old = await db.imageAsset.findMany({ where: { normalizedReviewId: review.id, isPrimary: false }, orderBy: { createdAt: "desc" }, skip: 5, select: { id: true } });
   if (old.length) await db.imageAsset.deleteMany({ where: { id: { in: old.map((o) => o.id) } } });

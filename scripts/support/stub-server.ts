@@ -28,6 +28,9 @@ export async function startStubServer(opts: StubOptions = {}) {
   const requests: Array<{ method: string; path: string }> = [];
   let base = "";
   const pexels = { broken: false, rateLimited: false };
+  // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
+  // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
+  const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0 };
   const fill = (v: unknown) => JSON.parse(JSON.stringify(v).split("{BASE}").join(base));
 
   const server = http.createServer((req, res) => {
@@ -88,8 +91,37 @@ export async function startStubServer(opts: StubOptions = {}) {
       req.on("end", () => {
         const body = JSON.parse(raw || "{}") as { keywords?: string[]; topic?: string; tone?: string; factualityMode?: string; constraints?: { maxWords?: number } };
         // Mirror the real API's validation of enums and plan caps.
+        ktb.requests++;
+        if (ktb.unavailable > 0) {
+          ktb.unavailable--;
+          return send(503, { error: { code: "SERVICE_UNAVAILABLE", message: "Content generation is temporarily unavailable. Please try again shortly." } });
+        }
         if (!["professional", "friendly", "bold"].includes(body.tone ?? "") || (body.factualityMode && !["standard", "verified"].includes(body.factualityMode)) || (body.constraints?.maxWords ?? 0) > 1500 || !req.headers["idempotency-key"]) {
           return send(400, { error: { code: "VALIDATION_ERROR", message: "Invalid request body." } });
+        }
+        // Daily-article topics ("How to choose …") get a full-length SAMPLE article.
+        if (/^How to choose /.test(body.topic ?? "")) {
+          const subject = (body.topic ?? "").replace(/^How to choose /, "").replace(/:.*$/, "");
+          const para = (angle: string) =>
+            `When you compare ${subject}, ${angle} matters more than the headline features. Think about how often you will use it, where it will live, and who else in the household will rely on it. ` +
+            `Read the manufacturer's specifications carefully, check what is included in the box, and look at how easy replacement parts are to find. A model that suits a small apartment can be the wrong choice for a large family home, and the reverse is also true. ` +
+            `Write down the two or three things you cannot compromise on before you look at any shortlist, and judge every option against that list rather than against marketing claims.`;
+          const sections = ["Size and space", "Everyday use", "Maintenance and running costs", "Build quality and warranty", "Who should choose what"].map((h, i) => ({ type: "body", heading: h, contentMarkdown: `${para(h.toLowerCase())}${ktb.handsOn && i === 1 ? " We tested each model for three weeks in our lab." : ""}` }));
+          const send200 = () =>
+            send(200, {
+              requestId: `req_daily_${subject.replace(/\W+/g, "_")}_${ktb.requests}`,
+              post: {
+                title: `How to choose ${subject}: a practical buying guide`,
+                meta: { description: `What actually matters when choosing ${subject}: size, everyday use, upkeep and warranty, explained without hype.` },
+                sections: [{ type: "introduction", contentMarkdown: para("the way you plan to use it") }, ...sections, { type: "conclusion", contentMarkdown: para("a short list of priorities") }],
+                faqs: [{ question: `What should I check first when choosing ${subject}?`, answer: "Start with the space you have and how often you will use it, then compare the options that fit." }],
+              },
+              debug: { generationModel: "stub-model" },
+              quality: { status: "pass", score: 90 },
+            });
+          if (ktb.delayMs) setTimeout(send200, ktb.delayMs);
+          else send200();
+          return;
         }
         send(200, {
           requestId: `req_stub_${(body.keywords ?? []).join("_").replace(/\W+/g, "").slice(0, 20)}`,
@@ -159,5 +191,5 @@ export async function startStubServer(opts: StubOptions = {}) {
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, pexels, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, ktb, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

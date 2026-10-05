@@ -13,7 +13,7 @@ export default function About() {
         <h2>How offers are verified</h2>
         <p>Offers come from our affiliate partner. Before an offer is shown, its link is followed to confirm it reaches the expected retailer. Links are re-checked regularly, and an offer that fails a check is hidden until it passes again. If no verified offer exists, the review says so.</p>
         <h2>How buying guides are written</h2>
-        <p>Buying guides are drafted with an AI writing tool, then read and approved by an editor before they are published. They are labelled as AI-assisted on every card and page, they never carry a rating, and they are not hands-on reviews.</p>
+        <p>Buying guides are drafted with an AI writing tool. Scheduled guides are published automatically only after passing quality checks: no duplicate topic or image, no claims of hands-on testing, no prices or statistics we cannot verify, and a correct category, image and page metadata. Some guides are also read by an editor, and each guide page says which. They are labelled as AI-assisted on every card and page, they never carry a rating, and they are not hands-on reviews.</p>
         <h2>What we never do</h2>
         <p>We do not invent prices, discounts, availability, ratings or merchants. Images whose licence we cannot confirm are replaced with our own illustrations.</p>
       </div>

@@ -12,6 +12,7 @@ export const ERROR_CODES = {
   PUBLICATION_DATE_INVALID: { retryable: false, message: "Publication date could not be parsed" },
   PUBLICATION_DATE_FUTURE: { retryable: false, message: "Publication date is more than 24 hours in the future" },
   PUBLICATION_DATE_TOO_OLD: { retryable: false, message: "Publication date is before 1990" },
+  DAILY_ARTICLE_NOT_PUBLISHED: { retryable: false, message: "A scheduled daily article could not be published (see the reason)" },
   CONTENT_STALE: { retryable: false, message: "Published content is past its freshness window and needs an editor check" },
   CONTENT_TOO_SHORT: { retryable: false, message: "Review text is too short to be a review" },
   SOURCE_NOT_ALLOWED: { retryable: false, message: "Page is not on an allowed domain for its source" },

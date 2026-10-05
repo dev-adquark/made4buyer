@@ -15,6 +15,7 @@ import { safeFetch } from "@/lib/net/safe-fetch";
 import { contentApiHeaders, extractContentItems, nextContentPage } from "@/lib/pipeline/content-source";
 import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
 import { runIntegrityChecks } from "./integrity";
+import { automationHealth } from "@/lib/automation/daily-article";
 import { validateContentItem } from "@/lib/pipeline/validate";
 import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
 import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
@@ -219,6 +220,17 @@ async function integrity() {
   }
 }
 
+/** Daily article automation: scheduler running, provider healthy, nothing stuck. */
+async function automation() {
+  if (!process.env.DATABASE_URL) return add("dailyArticles", "BLOCKED_BY_ENVIRONMENT", { missing: "DATABASE_URL" });
+  try {
+    const h = await automationHealth();
+    add("dailyArticles", h.ok ? "OK" : "FAIL", { problems: h.problems, lastPublished: h.lastPublished, queued: h.queued });
+  } catch (error) {
+    add("dailyArticles", "FAIL", { error: String(error).slice(0, 300) });
+  }
+}
+
 export async function runLiveCheck(options: LiveCheckOptions = {}) {
   opts = options;
   results = [];
@@ -232,6 +244,7 @@ export async function runLiveCheck(options: LiveCheckOptions = {}) {
   await keywordToBlog();
   sovrnSite();
   await integrity();
+  await automation();
   const failed = results.filter((r) => !["OK", "BLOCKED_BY_ENVIRONMENT", "EMPTY"].includes(r.status));
   return { checkedAt: new Date().toISOString(), ok: failed.length === 0, results };
 }

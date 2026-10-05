@@ -12,7 +12,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const { total } = await publishedGuides(1);
   return {
     title: "Buying guides",
-    description: "AI-assisted buying guides, each read and approved by a Made4Buyers editor.",
+    description: "Buying guides from named publishers and AI-assisted guides, each labelled with how it was written and checked.",
     alternates: { canonical: "/guides" },
     robots: total === 0 || (page && page !== "1") ? { index: false, follow: true } : undefined,
   };
@@ -36,14 +36,14 @@ export default async function GuidesIndex({ searchParams }: { searchParams: Prom
           <aside className="kind-banner ai" aria-label="How guides are written">
             <div>
               <strong>Two kinds of guide, each labelled.</strong>
-              Source buying guides are excerpts of guides from named publishers, linked to the original. AI-assisted guides are drafted with an AI writing tool, then read and approved by an editor. Neither is a hands-on review, and neither carries a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
+              Source buying guides are excerpts of guides from named publishers, linked to the original. AI-assisted guides are drafted with an AI writing tool and published only after passing automated quality checks; each guide says whether an editor also read it. Neither is a hands-on review, and neither carries a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
             </div>
           </aside>
           {rows.length ? (
             <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} />
           ) : (
             <EmptyState title="No buying guides are published yet." action={<Link className="btn" href="/reviews">Browse reviews</Link>}>
-              Guides appear here after an editor has read and approved them.
+              Guides appear here once they pass our quality checks.
             </EmptyState>
           )}
           {pages > 1 && (

@@ -922,3 +922,54 @@ model ContentEntity {
   @@index([productEntityId])
   @@map("content_entities")
 }
+
+// ─── Daily article automation ────────────────────────────────────────────────
+
+/// One candidate article topic. `key` is the topic's identity (never generated twice).
+/// Status: QUEUED → LOCKED → GENERATING → QA → PUBLISHED, or REJECTED / FAILED / EXHAUSTED.
+model ContentQueueItem {
+  id                 String    @id @default(cuid())
+  key                String    @unique
+  topic              String
+  keyword            String
+  kind               String
+  categorySlug       String
+  subcategorySlug    String?
+  productName        String?
+  brand              String?
+  priority           Int       @default(0)
+  status             String    @default("QUEUED")
+  attempts           Int       @default(0)
+  lastAttemptAt      DateTime?
+  lockedAt           DateTime?
+  failureReason      String?
+  normalizedReviewId String?
+  publishedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([status, priority])
+  @@map("content_queue")
+}
+
+/// One scheduled publishing slot per day (Asia/Kolkata date): MORNING or EVENING.
+model AutomationSlot {
+  id                 String    @id @default(cuid())
+  day                String
+  slot               String
+  /// PENDING, RUNNING, PUBLISHED, RETRYING, BLOCKED
+  status             String    @default("PENDING")
+  attempts           Int       @default(0)
+  /// Keyword-to-Blog requests spent on this slot (each one uses plan quota).
+  apiCalls           Int       @default(0)
+  queueItemId        String?
+  normalizedReviewId String?
+  lastError          String?
+  lastAttemptAt      DateTime?
+  publishedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([day, slot])
+  @@map("automation_slots")
+}
