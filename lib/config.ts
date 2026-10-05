@@ -77,7 +77,12 @@ export const config = {
   },
 
   sovrn: {
-    apiUrl: () => str("SOVRN_API_URL"),
+    /** Price-comparison URL. "{siteKey}" is filled from SOVRN_SITE_KEY, so a key change needs one variable. */
+    apiUrl: () => {
+      const url = str("SOVRN_API_URL");
+      const site = str("SOVRN_SITE_KEY");
+      return url && url.includes("{siteKey}") ? (site ? url.replace("{siteKey}", encodeURIComponent(site)) : undefined) : url;
+    },
     apiKey: () => str("SOVRN_API_KEY"),
     authScheme: () => str("SOVRN_AUTH_SCHEME") ?? "secret",
     queryParam: () => str("SOVRN_QUERY_PARAM") ?? "search-keywords",

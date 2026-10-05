@@ -61,3 +61,16 @@ describe("Sovrn key safety", () => {
     ok();
   });
 });
+
+describe("Sovrn API URL template", () => {
+  it("fills {siteKey} from SOVRN_SITE_KEY", async () => {
+    const { withEnv } = await import("../support/env");
+    const { config } = await import("@/lib/config");
+    const r = withEnv({ SOVRN_API_URL: "https://comparisons.sovrn.com/api/affiliate/v3.5/sites/{siteKey}/compare/prices/usd_en/by/accuracy", SOVRN_SITE_KEY: "publicsitekey123", SOVRN_API_KEY: "secret-x" });
+    try {
+      expect(config.sovrn.apiUrl()).toBe("https://comparisons.sovrn.com/api/affiliate/v3.5/sites/publicsitekey123/compare/prices/usd_en/by/accuracy");
+    } finally {
+      r();
+    }
+  });
+});
