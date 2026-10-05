@@ -2,7 +2,8 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { dbRateLimit } from "@/lib/security/rate-limit";
-import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import { contentOpportunities, isTechCategory, type Opportunity } from "@/lib/content/calendar";
+import { CATEGORY_BY_SLUG, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 import { AI_GUIDE_SOURCE, aiGuidesConfigured, generateGuide } from "./ai-guides";
 import { recordFailure } from "./failures";
 import { runIngestion } from "./ingest";
@@ -40,28 +41,41 @@ export async function guideCandidates(take: number) {
   return out;
 }
 
+/** What to ask Keyword-to-Blog for, per opportunity. Only names and intents: never source text. */
+export function guideRequestFor(o: Opportunity) {
+  const cat = CATEGORY_BY_SLUG.get(o.categorySlug);
+  const dept = cat ? DEPARTMENTS.find((d) => d.slug === cat.department)?.name : undefined;
+  const industry = cat ? (isTechCategory(cat) ? "consumer technology" : `consumer products: ${(dept ?? cat.name).toLowerCase()}`) : "consumer products";
+  const audience = `shoppers choosing ${cat ? cat.name.toLowerCase() : "products"} before they buy`;
+  if (o.kind === "CATEGORY_GUIDE") {
+    const s = o.subject.toLowerCase();
+    return { productName: o.subject, category: cat?.name, keywords: [`how to choose ${s}`, `${s} buying guide`, `best ${s}`], topic: `How to choose ${s}: what actually matters before you buy`, audience, industry };
+  }
+  return { productName: o.subject, brand: o.brand ?? undefined, category: cat?.name, keywords: guideKeywords(o.subject, cat?.name), audience, industry };
+}
+
 export async function runGuideGeneration(trigger: string) {
   if (!config.aiGuides.autoGenerate()) return { status: "DISABLED", reason: "GUIDE_AUTOGEN_ENABLED is not true" };
   if (!aiGuidesConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "Keyword-to-Blog is not configured" };
   const limit = config.aiGuides.dailyLimit();
-  const candidates = await guideCandidates(limit);
-  const results: Array<{ product: string; status: string; reason?: string }> = [];
+  // The content calendar: real gaps first, balanced across categories (non-tech prioritised).
+  const candidates = await contentOpportunities({ limit });
+  const results: Array<{ product: string; key: string; status: string; reason?: string }> = [];
   for (const c of candidates) {
     // Daily cap shared across runs (bounded by the provider's plan quota).
     const slot = await dbRateLimit("guides:auto", limit, 24 * 3_600_000);
     if (!slot.allowed) {
-      results.push({ product: c.productName, status: "DAILY_LIMIT" });
+      results.push({ product: c.subject, key: c.key, status: "DAILY_LIMIT" });
       break;
     }
-    const category = c.categorySlug ? CATEGORY_BY_SLUG.get(c.categorySlug)?.name : undefined;
     try {
-      const { item } = await generateGuide({ productName: c.productName, brand: c.brand ?? undefined, category, keywords: guideKeywords(c.productName, category) });
+      const { item } = await generateGuide(guideRequestFor(c));
       const run = await runIngestion({ trigger: `guides:${trigger}`, items: [item], source: AI_GUIDE_SOURCE });
-      results.push({ product: c.productName, status: run.normalized ? "DRAFTED" : run.status });
+      results.push({ product: c.subject, key: c.key, status: run.normalized ? "DRAFTED" : run.status });
     } catch (error) {
       const message = (error as Error).message;
-      await recordFailure({ stage: "CONTENT_FETCH", code: "CONTENT_API_HTTP_ERROR", message: `Keyword-to-Blog: ${message}`, entityType: "job", entityId: "guide-generation" });
-      results.push({ product: c.productName, status: "FAILED", reason: message });
+      await recordFailure({ stage: "CONTENT_FETCH", code: "CONTENT_API_HTTP_ERROR", message: `Keyword-to-Blog (${c.key}): ${message}`, entityType: "job", entityId: "guide-generation" });
+      results.push({ product: c.subject, key: c.key, status: "FAILED", reason: message });
       if (/limit|too many/i.test(message)) break;
     }
   }

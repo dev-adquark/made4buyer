@@ -6,6 +6,7 @@ import { fetchSovrnOffers } from "@/lib/sovrn/client";
 import { generateAffiliateUrl } from "@/lib/sovrn/affiliate";
 import { rankOffers, selectionReason, type RankedOffer } from "@/lib/sovrn/offers";
 import { classify } from "@/lib/taxonomy/classify";
+import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { ensureTaxonomySeeded, persistClassification } from "@/lib/taxonomy/persist";
 import { slugify } from "@/lib/util/text";
 import { detectContentKind, setAutoEntities } from "@/lib/entities/resolve";
@@ -55,6 +56,11 @@ export async function loadSourceContent(review: NormalizedReview): Promise<Valid
 }
 
 // ─── ENTITY_EXTRACTION ──────────────────────────────────────────────────────
+
+const TAXONOMY_NAMES = new Set(CATEGORIES.flatMap((c) => [c.name, ...c.subcategories.map((s) => s.name)]).map((n) => n.toLowerCase()));
+function isTaxonomyName(name: string): boolean {
+  return TAXONOMY_NAMES.has(name.trim().toLowerCase());
+}
 
 export async function runEntityStage(review: NormalizedReview, content: ValidatedContent) {
   const candidate = normalizeContent(content, { source: review.source, fetchedAt: review.createdAt });
@@ -121,7 +127,8 @@ export async function runEntityStage(review: NormalizedReview, content: Validate
   // automatically: their products are added by an editor.
   const threshold = config.entities.lowConfidenceThreshold();
   if (compared) await setAutoEntities(review.id, compared.map((name) => ({ name, role: "COMPARED" as const, confidence: 0.9 })));
-  else if ((kind === "REVIEW" || kind === "AI_GUIDE") && confidences.productName >= threshold)
+  // A category-topic guide ("How to choose robot vacuums") covers no single product.
+  else if ((kind === "REVIEW" || kind === "AI_GUIDE") && confidences.productName >= threshold && !(kind === "AI_GUIDE" && isTaxonomyName(entities.productName)))
     await setAutoEntities(review.id, [{ name: entities.productName, role: kind === "REVIEW" ? "PRIMARY" : "MENTIONED", confidence: confidences.productName, brand: entities.brand }]);
   else await setAutoEntities(review.id, []);
 

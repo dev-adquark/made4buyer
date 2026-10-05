@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "vercel-build": "node scripts/vercel-build.mjs",
+    "db:verify": "tsx scripts/verify-schema.ts",
     "build": "node scripts/generate-release-notes.mjs && tsx scripts/generate-placeholders.ts && prisma generate && next build",
     "start": "next start",
     "postinstall": "node scripts/generate-release-notes.mjs && prisma generate",

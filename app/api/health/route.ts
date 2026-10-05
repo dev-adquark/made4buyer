@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { integrationStatus, releaseInfo } from "@/lib/config";
 import { db } from "@/lib/db";
+import { checkSchema } from "@/lib/ops/schema-check";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,14 @@ export async function GET() {
   } catch {
     database = "unavailable";
   }
+  // Whether the database has everything this build needs (names stay in the build log/admin).
+  let schema: "ok" | "mismatch" | "unknown" = "unknown";
+  if (database === "ok") schema = await checkSchema(db).then((r) => (r.ok ? "ok" : "mismatch")).catch(() => "unknown" as const);
   const body = {
-    status: database === "ok" ? "ok" : "degraded",
+    status: database === "ok" && schema === "ok" ? "ok" : "degraded",
     application: "ok",
     database,
+    schema,
     databaseLatencyMs: latencyMs,
     timestamp,
     version: release.version,

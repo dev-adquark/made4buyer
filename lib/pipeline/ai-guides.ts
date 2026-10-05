@@ -16,7 +16,7 @@ import { cleanText, sha256, stableStringify } from "@/lib/util/text";
 
 export const AI_GUIDE_SOURCE = "keyword-to-blog";
 
-export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string };
+export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string; industry?: string };
 
 type Section = { type?: string; heading?: string; contentMarkdown?: string; callout?: { label?: string; text?: string } };
 type KtbResponse = {
@@ -110,9 +110,9 @@ export async function generateGuide(req: GuideRequest) {
     language: "en",
     region: "US",
     tone: "professional", // API enum: "professional" | "friendly" | "bold"
-    targetAudience: req.audience?.trim() || "technology buyers comparing options before they purchase",
+    targetAudience: req.audience?.trim() || "shoppers comparing options before they purchase",
     brandVoice: "clear, practical, honest about trade-offs; no invented specifications, prices or test results",
-    industry: "consumer technology",
+    industry: req.industry?.trim() || "consumer products",
     // maxWords stays under the smallest plan's 1,500 words/request cap.
     constraints: { minWords: 600, maxWords: config.aiGuides.maxWords(), maxSections: 7, includeFAQs: true, includeInternalLinksPlaceholders: false, keywordUsageStrategy: "natural" },
     format: { responseTypes: ["json"] },
