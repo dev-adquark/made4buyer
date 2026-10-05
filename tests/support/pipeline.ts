@@ -12,7 +12,8 @@ export async function sampleEnvironment(extra: Record<string, string | undefined
     SOVRN_API_KEY: "sovrn-test",
     KEYWORD_TO_BLOG_API_URL: `${stub.base}/ktb/v1/generate`,
     KEYWORD_TO_BLOG_API_KEY: "test-ktb-key",
-    AUTO_PUBLISH_ENABLED: undefined,
+    // Manual-flow tests: the automatic publish cycle is off unless a test turns it on.
+    AUTO_PUBLISH_ENABLED: "false",
     ...extra,
   });
   return {

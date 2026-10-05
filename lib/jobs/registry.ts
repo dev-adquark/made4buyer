@@ -6,6 +6,7 @@ import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
 import { withLock } from "./lock";
+import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfill } from "./image-backfill";
 import { runReclassify } from "./reclassify";
@@ -68,7 +69,20 @@ export function isJobName(name: string): name is JobName {
   return Object.prototype.hasOwnProperty.call(JOBS, name);
 }
 
-const DID_NOT_RUN = new Set(["BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED"]);
+/** Admin switches that govern each scheduled job (the master switch always applies). */
+const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
+  ingest: ["external_ingestion"],
+  "scrape-sources": ["external_ingestion"],
+  "collect-scrapes": ["external_ingestion"],
+  "daily-article": ["keyword_to_blog", "scheduled_publishing"],
+  "publish-cycle": ["scheduled_publishing"],
+  "enrich-images": ["image_enrichment"],
+  "revalidate-offers": ["affiliate_enrichment"],
+  "verify-links": ["affiliate_enrichment"],
+  "retry-failed": ["retries"],
+};
+
+const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED"]);
 
 /** Whether a job's result means it actually did its work, so callers never report a no-op as success. */
 export function jobOutcome(result: unknown): { ran: boolean; status: string; reason?: string } {
@@ -79,6 +93,11 @@ export function jobOutcome(result: unknown): { ran: boolean; status: string; rea
 
 /** Runs a job under its lock. Ingestion manages its own lock inside runIngestion. */
 export async function runJob(name: JobName, trigger: string): Promise<unknown> {
+  // Scheduled runs respect the admin switches; a manual "Run now" from Admin always runs.
+  if (!trigger.startsWith("admin:")) {
+    const gate = await allowed(...(JOB_SWITCHES[name] ?? []));
+    if (!gate.ok) return { status: "PAUSED", reason: gate.reason };
+  }
   const job = JOBS[name];
   const run = job.run as (trigger: string) => Promise<unknown>;
   if (!job.locked) return run(trigger);

@@ -5,11 +5,15 @@ import { log } from "@/lib/log";
 import { audit, type AuditContext } from "@/lib/security/audit";
 import { recordEvent } from "@/lib/analytics/events";
 import { recordFailure, resolveFailures } from "./failures";
+import { allowed } from "@/lib/automation/settings";
+import { evaluateFreshness, freshnessExempt, freshnessMaxDays } from "./freshness";
 import { persistPageRenderModel } from "./render-model";
 import { revalidateReviewPaths } from "./revalidate-paths";
 
 /**
- * Stage PUBLISH. QA gates decide whether a review can go live. Every publish/unpublish
+ * Stage PUBLISH. Automatic QA rules decide whether a review can go live; none of them waits for a
+ * person. Hard rules: rejected, too short, no category, no entities, no source date, or not fresh
+ * (source date older than FRESHNESS_MAX_DAYS, for content never published before). Every publish/unpublish
  * attempt writes a PublishJob row (used for the page-error-rate metric) and an audit entry.
  */
 
@@ -19,9 +23,9 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   const review = await db.normalizedReview.findUniqueOrThrow({
     where: { id: reviewId },
     include: {
-      entities: { select: { lowConfidenceFields: true } },
+      entities: { select: { id: true } },
       _count: { select: { contentEntities: true } },
-      assignments: { where: { active: true, isPrimary: true, tagType: "CATEGORY" }, select: { confidence: true, isOverride: true, reviewState: true } },
+      assignments: { where: { active: true, isPrimary: true, tagType: "CATEGORY" }, select: { id: true } },
     },
   });
   // Keyword-to-Blog posts are published as returned (owner's rule): no QA gate on any path
@@ -33,6 +37,10 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   }
   if (review.kind !== "AI_GUIDE" && !review.sourcePublishedAt) {
     failures.push({ code: "PUBLICATION_DATE_MISSING", message: "The source did not supply a publication date. Fix it in the Content API: we never guess a date" });
+  } else if (review.kind !== "AI_GUIDE" && !review.publishedAt && !freshnessExempt(review.source)) {
+    // New external content only: something already live is never pulled for ageing.
+    const f = evaluateFreshness({ publishedAt: review.sourcePublishedAt, updatedAt: review.sourceUpdatedAt });
+    if (f.status !== "FRESH") failures.push({ code: "FRESHNESS_STALE", message: `The source's newest date is ${f.ageDays ?? "?"} days old; only content at most ${freshnessMaxDays()} days old is published automatically` });
   }
   if (review.status === "REJECTED") failures.push({ code: "REVIEW_REJECTED", message: "Review is rejected; restore it first" });
   if (review.canonicalTitle.length < 8) failures.push({ code: "TITLE_TOO_SHORT", message: "Title must be at least 8 characters" });
@@ -40,15 +48,11 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   if (review.body.length < 120) failures.push({ code: "BODY_TOO_SHORT", message: "Body must be at least 120 characters" });
   const primary = review.assignments[0];
   if (!primary || !review.categorySlug) failures.push({ code: "NO_PRIMARY_CATEGORY", message: "Review has no primary category" });
-  else if (!primary.isOverride && primary.reviewState !== "ACCEPTED" && primary.confidence < config.taxonomy.autoAcceptThreshold()) {
-    failures.push({ code: "CATEGORY_NEEDS_REVIEW", message: `Category confidence ${primary.confidence} is below ${config.taxonomy.autoAcceptThreshold()} and has not been accepted` });
-  }
   if (review.kind === "COMPARISON" && review._count.contentEntities < 2) {
     failures.push({ code: "COMPARISON_ENTITIES_MISSING", message: `A comparison needs at least two products; ${review._count.contentEntities} resolved. Add them under Products in this article` });
   }
-  const low = review.entities?.lowConfidenceFields ?? [];
+  // Low category/entity confidence is shown in Admin as information only; it never holds a review.
   if (!review.entities) failures.push({ code: "ENTITIES_MISSING", message: "Entity extraction has not run" });
-  else if (low.length) failures.push({ code: "ENTITIES_NEED_REVIEW", message: `Low-confidence entities need confirmation: ${low.join(", ")}` });
   return failures;
 }
 
@@ -143,9 +147,17 @@ export async function restoreReview(reviewId: string, ctx: AuditContext) {
   return db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId } });
 }
 
-/** Publish cycle: publishes QA-passing QUEUED reviews when AUTO_PUBLISH_ENABLED is on. */
+/**
+ * Publish cycle: re-checks parked reviews (so a review held by a rule that no longer applies moves
+ * on by itself), then publishes every QA-passing QUEUED review. On unless AUTO_PUBLISH_ENABLED=false
+ * or Admin → Automation pauses scheduled publishing.
+ */
 export async function runPublishCycle(ctx: AuditContext, limit = 100) {
-  if (!config.ingest.autoPublish()) return { enabled: false, attempted: 0, published: 0, failed: 0 };
+  if (!config.ingest.autoPublish() || !(await allowed("scheduled_publishing")).ok) return { enabled: false, attempted: 0, published: 0, failed: 0, ready: 0 };
+  let ready = 0;
+  const parked = await db.normalizedReview.findMany({ where: { status: { in: ["NEEDS_REVIEW", "QUEUED"] }, source: { not: "keyword-to-blog" } }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: 200 });
+  // Re-check QUEUED too, so one that has since aged out is parked quietly instead of failing a publish every cycle.
+  for (const p of parked) if ((await refreshQueueStatus(p.id).catch(() => "NEEDS_REVIEW")) === "QUEUED") ready++;
   const queued = await db.normalizedReview.findMany({ where: { status: "QUEUED" }, select: { id: true }, orderBy: { createdAt: "asc" }, take: limit });
   let published = 0;
   let failed = 0;
@@ -158,5 +170,5 @@ export async function runPublishCycle(ctx: AuditContext, limit = 100) {
       failed++;
     }
   }
-  return { enabled: true, attempted: queued.length, published, failed };
+  return { enabled: true, attempted: queued.length, published, failed, ready };
 }

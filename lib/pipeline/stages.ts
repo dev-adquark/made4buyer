@@ -10,6 +10,7 @@ import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { ensureTaxonomySeeded, persistClassification } from "@/lib/taxonomy/persist";
 import { slugify } from "@/lib/util/text";
 import { detectContentKind, setAutoEntities } from "@/lib/entities/resolve";
+import { getSwitches } from "@/lib/automation/settings";
 import { extractEntities, lowConfidenceFields, type EntityField } from "./entities";
 import { recordFailure, resolveFailures } from "./failures";
 import { enrichImage, probeImage } from "./images";
@@ -207,6 +208,8 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   const exclude =
     opts.excludePhotoIds ??
     new Set((await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true } })).map((a) => a.providerPhotoId!));
+  // Admin switch: image enrichment paused → no provider call; existing images are kept.
+  if (!(await getSwitches()).image_enrichment && !content.imageUrl) return db.imageAsset.findFirst({ where: { normalizedReviewId: review.id, isPrimary: true } });
   let decision;
   try {
     decision = await enrichImage({
@@ -279,6 +282,11 @@ export async function runOfferStage(reviewId: string, opts: { bypassCache?: bool
   const setDeal = (status: NormalizedReview["dealStatus"], reason: string) =>
     db.normalizedReview.update({ where: { id: reviewId }, data: { dealStatus: status, dealStatusReason: reason.slice(0, 500), dealCheckedAt: now } });
 
+  // Admin switch: affiliate enrichment paused → no Sovrn call, an honest "unavailable" state.
+  if (!(await getSwitches()).affiliate_enrichment) {
+    await setDeal("UNAVAILABLE", "affiliate enrichment is paused in Admin → Automation");
+    return { status: "UNAVAILABLE", reason: "affiliate enrichment paused", selected: [] };
+  }
   // Offers attach to one product. A comparison or guide covers several, so a single offer
   // would be wrong for the page: no Sovrn query, and any previous links are retired.
   if (review.kind !== "REVIEW") {

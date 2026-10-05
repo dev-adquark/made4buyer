@@ -9,7 +9,7 @@ export default function About() {
         <h1>About Made4Buyers</h1>
         <p className="lede">Made4Buyers is a buying guide: it organises reviews around what buyers need, and shows offers only after they have been verified.</p>
         <h2>How reviews are processed</h2>
-        <p>Reviews arrive from our content partners. Each one is checked for completeness, de-duplicated, and classified by category, use case, platform and price tier. When the automatic classification is uncertain, an editor reviews it before publication.</p>
+        <p>Reviews arrive from our content partners. Each one is checked for completeness, de-duplicated, and classified by category, use case, platform and price tier. Only recent source reviews (published or updated within the last 7 days) are published automatically, and every page credits its source.</p>
         <h2>How offers are verified</h2>
         <p>Offers come from our affiliate partner. Before an offer is shown, its link is followed to confirm it reaches the expected retailer. Links are re-checked regularly, and an offer that fails a check is hidden until it passes again. If no verified offer exists, the review says so.</p>
         <h2>How buying guides are written</h2>

@@ -233,6 +233,21 @@ describe("daily article automation", () => {
     expect(await db.affiliateLink.count()).toBe(0);
   });
 
+  it("publishes when Sovrn answers 403 or marks every offer affiliatable:false", async () => {
+    const r = withEnv({ SOVRN_API_URL: `${stub.base}/sovrn`, SOVRN_API_KEY: "test-sovrn-key" });
+    try {
+      stub.sovrn.status = 403;
+      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+      stub.sovrn.status = 0;
+      stub.sovrn.notAffiliatable = true;
+      expect(await runDailyArticle("test", { now: EVENING })).toMatchObject({ status: "PUBLISHED" });
+    } finally {
+      stub.sovrn.status = 0;
+      stub.sovrn.notAffiliatable = false;
+      r();
+    }
+  });
+
   it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {
     const k = withEnv({ KEYWORD_TO_BLOG_API_KEY_SECONDARY: "test-ktb-key-2" });
     stub.ktb.rejectPrimary = true;

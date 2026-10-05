@@ -18,6 +18,7 @@ import { ingestGeneratedPost } from "@/lib/pipeline/ingest";
 import { publishReview } from "@/lib/pipeline/publish";
 import { audit, SYSTEM_ACTOR } from "@/lib/security/audit";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import { allowed } from "./settings";
 
 /**
  * Daily article automation: a buying GUIDE in the MORNING slot (08:00 Asia/Kolkata) and an
@@ -226,6 +227,7 @@ async function claim(id: string, now: Date): Promise<boolean> {
 
 export type DailyArticleResult = {
   status:
+    | "PAUSED"
     | "PUBLISHED"
     | "SKIPPED"
     | "NOT_DUE"
@@ -278,6 +280,11 @@ export async function runDailyArticle(
     };
 
   // Concurrent first runs of the day may both try to create the slot row: the loser reads it.
+  // Per-type switches (morning guides / evening articles) apply to scheduled runs.
+  if (!trigger.startsWith("admin:")) {
+    const gate = await allowed(SLOT_TYPE[slot] === "GUIDE" ? "guides" : "articles");
+    if (!gate.ok) return { status: "PAUSED", slot, day, reason: gate.reason };
+  }
   const row = await db.automationSlot
     .upsert({
       where: { day_slot: { day, slot } },

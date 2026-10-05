@@ -10,10 +10,10 @@ const TONE: Record<string, "ok" | "warn" | "error"> = { OK: "ok", EMPTY: "warn",
 
 const STEPS = [
   "Run these checks. Every configured integration must be OK (EMPTY means the provider answered with nothing for that product).",
-  "Run ingestion once from Overview with AUTO_PUBLISH_ENABLED off, then review the QA queue.",
-  "Publish a small batch by hand and open the public pages.",
+  "Publishing is automatic: fresh, QA-passing content goes live with no approval step. Pause it any time in Admin → Automation.",
+  "Open a few recently published pages after the first runs.",
   "Check Link health and Deals: every shown offer must be VERIFIED_OK.",
-  "Only then set AUTO_PUBLISH_ENABLED=true and let the scheduled jobs run.",
+  "Watch Admin → Automation for freshness, source health and the run timeline.",
 ];
 
 export default async function GoLivePage() {

@@ -46,7 +46,7 @@ describe("Apify scrape → collect → ingestion", () => {
 
     const reviews = await db.normalizedReview.findMany({ where: { source: sourceKey("example") } });
     expect(reviews).toHaveLength(1);
-    expect(reviews[0]).toMatchObject({ kind: "REVIEW", canonicalUrl: "https://reviews.example.test/reviews/framework-laptop-13", status: expect.not.stringMatching("PUBLISHED") });
+    expect(reviews[0]).toMatchObject({ kind: "REVIEW", canonicalUrl: "https://reviews.example.test/reviews/framework-laptop-13", status: "PUBLISHED" }); // fresh, QA-passing: published with no manual step
     expect(reviews[0].sourcePublishedAt?.toISOString()).toBe("2026-09-20T08:00:00.000Z");
     const failures = await db.contentItem.findMany({ where: { source: sourceKey("example"), processingStatus: "FAILED" }, select: { errorCode: true } });
     expect(failures.map((f) => f.errorCode).sort()).toEqual(["CONTENT_TOO_SHORT", "PUBLICATION_DATE_FUTURE"]);

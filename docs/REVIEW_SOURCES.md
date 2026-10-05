@@ -24,7 +24,9 @@ applies (publication date, category confidence, entities, editor actions).
 | robots.txt | Checked for every start URL before a run (unreadable robots.txt = no crawl, `ROBOTS_DISALLOWED`); the actor runs with `respectRobotsTxtFile: true` |
 | No access-control bypass | No proxy rotation, no login, cookies or CAPTCHA handling; depth 1, concurrency 2 |
 | Nothing guessed | Extraction order JSON-LD → semantic HTML → OpenGraph/meta; missing fields stay empty. A rating needs both value and scale |
-| Dates | Source date only. Future (> 24 h), pre-1990 and unparseable dates are rejected with their own codes; a missing date holds the review in QA (`PUBLICATION_DATE_MISSING`) |
+| Dates | Source date only. Future (> 24 h), pre-1990 and unparseable dates are rejected with their own codes; a missing date holds the review (`PUBLICATION_DATE_MISSING`) |
+| Freshness | The newer of the source's published and updated dates must be at most `FRESHNESS_MAX_DAYS` (7) days old. Crawl and ingest dates never count. Stale, undated or badly dated items are held with `FRESHNESS_STALE`, `FRESHNESS_UNKNOWN` or `FRESHNESS_INVALID_DATE`; already-published reviews are never rewritten or removed for ageing. Keyword-to-Blog output is exempt |
+| Source health | Three runs in a row with nothing fresh, or three failures, lower the source's priority and pause it with backoff (1, 2, 4 … days, at most 7). It is retried automatically and restored on its first fresh result; never disabled or deleted automatically |
 | Dedupe | Normalised canonical URL is the item id (tracking parameters, hash and trailing slash removed); repeats within a run count as `DUPLICATE_REVIEW`; the existing canonical-URL and product/publisher/month dedupe still apply |
 | Images | Source images are never marked licensed, so they are not shown; Pexels (attributed) or our placeholder is used |
 

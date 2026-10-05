@@ -281,7 +281,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
               <ReviewGrid reviews={reviews} eagerCount={3} headingLevel={3} />
             ) : (
               <EmptyState title={anyFilter ? "No reviews match these filters." : "We’re waiting for the next published review."} headingLevel={3} action={anyFilter ? <Link className="btn" href={`/category/${slug}`}>Clear filters</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
-                {anyFilter ? "Try removing a filter." : "Reviews appear here once they pass editorial QA."}
+                {anyFilter ? "Try removing a filter." : "Reviews appear here once they pass our automatic checks."}
               </EmptyState>
             )}
             {pages > 1 && (

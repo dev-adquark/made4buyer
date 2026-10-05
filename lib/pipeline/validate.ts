@@ -15,6 +15,8 @@ export type ValidatedContent = {
   url?: string;
   canonicalUrl?: string;
   publishedAt?: Date;
+  /** The source's own updated/modified date, when it gave one (freshness basis). */
+  updatedAt?: Date;
   productName?: string;
   brand?: string;
   category?: string;
@@ -121,6 +123,7 @@ const schema = z.object({
   url: httpUrl.optional(),
   canonicalUrl: httpUrl.optional(),
   publishedAt: z.date().optional(),
+  updatedAt: z.date().optional(),
   productName: z.string().min(2).max(160).optional(),
   brand: z.string().min(1).max(80).optional(),
   category: z.string().max(120).optional(),
@@ -175,6 +178,15 @@ export function publicationDateIssues(parsed: Date | undefined, raw: unknown, no
   return [];
 }
 
+const PUBLISHED_KEYS = ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"];
+export const UPDATED_KEYS = ["updatedAt", "updated_at", "dateModified", "modifiedAt", "modified", "lastModified", "sourceMeta.dateModified"];
+
+/** The raw (unparsed) source dates of an item, for the freshness check. */
+export function rawSourceDates(input: unknown): { publishedAt?: unknown; updatedAt?: unknown } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return { publishedAt: pick(input as Raw, PUBLISHED_KEYS), updatedAt: pick(input as Raw, UPDATED_KEYS) };
+}
+
 export function validateContentItem(input: unknown): ValidationResult {
   if (!input || typeof input !== "object" || Array.isArray(input)) return { ok: false, issues: ["item must be a JSON object"], code: "CONTENT_SCHEMA_INVALID" };
   const raw = input as Raw;
@@ -194,7 +206,12 @@ export function validateContentItem(input: unknown): ValidationResult {
     summary: asString(pick(raw, ["summary", "excerpt", "description", "dek", "subtitle"])),
     url: asString(pick(raw, ["url", "sourceUrl", "source_url", "link", "permalink"])),
     canonicalUrl: asString(pick(raw, ["canonicalUrl", "canonical_url", "canonical"])),
-    publishedAt: asDate(pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"])),
+    publishedAt: asDate(pick(raw, PUBLISHED_KEYS)),
+    // An unparseable or implausible modified date is ignored (never trusted to make content look new).
+    updatedAt: (() => {
+      const d = asDate(pick(raw, UPDATED_KEYS));
+      return d && !publicationDateIssues(d, d).length ? d : undefined;
+    })(),
     productName: asString(pick(raw, ["productName", "product_name", "product.name", "product"])),
     brand: asString(pick(raw, ["brand", "product.brand", "manufacturer"])),
     category: asString(pick(raw, ["category", "section", "product.category"])),
@@ -226,7 +243,7 @@ export function validateContentItem(input: unknown): ValidationResult {
   }
   const ai = candidate.contentKind === "AI_GUIDE";
   const parsed = (ai ? aiSchema : schema).safeParse(candidate);
-  const dateIssues = ai ? [] : publicationDateIssues(candidate.publishedAt, pick(raw, ["publishedAt", "published_at", "datePublished", "pubDate", "date", "published"]));
+  const dateIssues = ai ? [] : publicationDateIssues(candidate.publishedAt, pick(raw, PUBLISHED_KEYS));
   if (!parsed.success || dateIssues.length) {
     const issues = [...(parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join(".") || "item"}: ${i.message}`)), ...dateIssues];
     return { ok: false, sourceId: sourceIdRaw, issues, code: validationCode(issues) };

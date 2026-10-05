@@ -28,6 +28,8 @@ export async function startStubServer(opts: StubOptions = {}) {
   const requests: Array<{ method: string; path: string }> = [];
   let base = "";
   const pexels = { broken: false, rateLimited: false };
+  // Sovrn stub controls: `status` forces that HTTP status (e.g. 403); `notAffiliatable` marks every offer affiliatable:false.
+  const sovrnCtl = { status: 0, notAffiliatable: false };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
   const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[], tinyPost: false, fixedTitle: "" };
@@ -47,10 +49,12 @@ export async function startStubServer(opts: StubOptions = {}) {
     }
     if (url.pathname === "/sovrn") {
       if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
+      if (sovrnCtl.status) return send(sovrnCtl.status, { error: "forbidden" });
       const q = (url.searchParams.get("search-keywords") ?? "").toLowerCase();
       if (q.includes("ratelimit")) return send(429, { error: "Too many requests" });
       const key = Object.keys(sovrn.responses).find((k) => k.toLowerCase() === q) ?? Object.keys(sovrn.responses).find((k) => q.includes(k.toLowerCase()) || k.toLowerCase().includes(q));
-      return send(200, fill({ offers: key ? sovrn.responses[key] : [] }));
+      const offers = (key ? sovrn.responses[key] : []) as Record<string, unknown>[];
+      return send(200, fill({ offers: sovrnCtl.notAffiliatable ? offers.map((o) => ({ ...o, affiliatable: false })) : offers }));
     }
     // Apify API (v2) — just enough of it for the scrape/collect jobs: runs, run status, dataset items.
     if (url.pathname.startsWith("/apify/v2/")) {
@@ -198,5 +202,5 @@ export async function startStubServer(opts: StubOptions = {}) {
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, pexels, ktb, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, ktb, sovrn: sovrnCtl, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

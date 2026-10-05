@@ -3,8 +3,7 @@ import { db } from "@/lib/db";
 import { successMetrics } from "@/lib/analytics/metrics";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { evaluateQa, publishReview, rejectReview, restoreReview, runPublishCycle, unpublishReview } from "@/lib/pipeline/publish";
-import { confirmEntities, setCategoryOverride } from "@/lib/admin/overrides";
-import { processReview } from "@/lib/pipeline/process";
+import { setSwitch } from "@/lib/automation/settings";
 import { reviewAssignment, seedTaxonomy } from "@/lib/taxonomy/persist";
 import { resetDb } from "../support/db";
 import { withEnv } from "../support/env";
@@ -41,21 +40,22 @@ describe("publishing", () => {
     expect(await db.contentItem.count({ where: { normalizedReviewId: r.id, processingStatus: "PUBLISHED" } })).toBe(1);
   });
 
-  it("blocks low-confidence reviews at the QA gate until an editor resolves them", async () => {
+  it("low-confidence category/entities never wait for an editor; hard rules still block", async () => {
     const r = await review("s-014");
-    const blocked = await publishReview(r.id, admin);
-    expect(blocked.ok).toBe(false);
-    expect(await db.publishJob.count({ where: { normalizedReviewId: r.id, status: "FAILED", errorCode: "PUBLISH_QA_FAILED" } })).toBe(1);
-    expect(await db.pipelineFailure.count({ where: { stage: "PUBLISH", errorCode: "PUBLISH_QA_FAILED", entityId: r.id } })).toBe(1);
+    const entities = await db.extractedEntities.findUniqueOrThrow({ where: { normalizedReviewId: r.id } });
+    expect(entities.lowConfidenceFields.length).toBeGreaterThan(0);
+    const codes = (await evaluateQa(r.id)).map((f) => f.code);
+    expect(codes).not.toContain("ENTITIES_NEED_REVIEW");
+    expect(codes).not.toContain("CATEGORY_NEEDS_REVIEW");
+    expect((await publishReview(r.id, admin)).ok).toBe(true);
 
-    await confirmEntities(r.id, admin);
-    await setCategoryOverride(r.id, "accessories", null, admin, "ADMIN");
-    await processReview(r.id, { from: "ENTITY_EXTRACTION", skipImage: true });
-    expect(await evaluateQa(r.id)).toEqual([]);
-    const ok = await publishReview(r.id, admin);
-    expect(ok.ok).toBe(true);
-    const metrics = await successMetrics();
-    const pageError = metrics.find((m) => m.key === "page_error_rate")!;
+    // A hard rule (rejected) still blocks, and the failed attempt is recorded.
+    const other = await review("s-002");
+    await rejectReview(other.id, admin, "test");
+    expect((await publishReview(other.id, admin)).ok).toBe(false);
+    expect(await db.publishJob.count({ where: { normalizedReviewId: other.id, status: "FAILED", errorCode: "PUBLISH_QA_FAILED" } })).toBe(1);
+    expect(await db.pipelineFailure.count({ where: { stage: "PUBLISH", errorCode: "PUBLISH_QA_FAILED", entityId: other.id } })).toBe(1);
+    const pageError = (await successMetrics()).find((m) => m.key === "page_error_rate")!;
     expect(pageError).toMatchObject({ numerator: 1, denominator: 2 });
   });
 
@@ -87,13 +87,20 @@ describe("publishing", () => {
     expect(actions).toEqual(["review.publish", "review.unpublish", "review.restore", "review.publish", "review.reject", "review.publish_failed", "review.restore"]);
   });
 
-  it("auto-publish cycle only runs when enabled", async () => {
-    expect((await runPublishCycle(admin)).enabled).toBe(false);
-    const r = withEnv({ AUTO_PUBLISH_ENABLED: "true" });
-    const res = await runPublishCycle({ actor: "system" });
-    r();
-    expect(res.enabled).toBe(true);
-    expect(res.published).toBe(12);
-    expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(12);
+  it("auto-publish cycle is on by default, off when disabled by env or paused in Admin", async () => {
+    expect((await runPublishCycle(admin)).enabled).toBe(false); // AUTO_PUBLISH_ENABLED=false here
+    const r = withEnv({ AUTO_PUBLISH_ENABLED: undefined });
+    try {
+      await setSwitch("scheduled_publishing", false, admin);
+      expect((await runPublishCycle(admin)).enabled).toBe(false);
+      await setSwitch("scheduled_publishing", true, admin);
+      const res = await runPublishCycle({ actor: "system" });
+      expect(res.enabled).toBe(true);
+      const total = await db.normalizedReview.count();
+      expect(res.published).toBe(total);
+      expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(total);
+    } finally {
+      r();
+    }
   });
 });

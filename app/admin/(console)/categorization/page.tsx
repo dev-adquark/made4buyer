@@ -31,7 +31,7 @@ export default async function CategorizationPage({ searchParams }: { searchParam
       <h1>Categorization</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        Assignments below {pct(threshold)} confidence need an editor decision before publishing. Accepted: {state("ACCEPTED")} · rejected: {state("REJECTED")} · unreviewed: {state("UNREVIEWED")}.
+        Assignments below {pct(threshold)} confidence are shown here for information; they do not hold publishing. Accepted: {state("ACCEPTED")} · rejected: {state("REJECTED")} · unreviewed: {state("UNREVIEWED")}.
       </p>
       <nav aria-label="View">
         <ul className="chips">

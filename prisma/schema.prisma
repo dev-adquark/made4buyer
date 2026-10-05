@@ -292,6 +292,12 @@ model ContentItem {
   ingestRun          IngestionRun?           @relation(fields: [ingestRunId], references: [id], onDelete: SetNull)
   normalizedReview   NormalizedReview?       @relation("ContentItemReview", fields: [normalizedReviewId], references: [id], onDelete: SetNull)
 
+  /// External-content freshness (source dates only; crawl/ingest dates never count).
+  sourceUpdatedAt    DateTime?
+  /// FRESH | STALE | UNKNOWN | INVALID_DATE (null for generated content, which is exempt)
+  freshnessStatus    String?
+  freshnessAgeDays   Int?
+  freshnessCheckedAt DateTime?
   @@unique([source, sourceId])
   @@index([processingStatus])
   @@index([contentHash])
@@ -354,6 +360,8 @@ model NormalizedReview {
   csvItems                 CsvImportItem[]
   indexChecks              SearchIndexCheck[]
 
+  sourceUpdatedAt          DateTime?
+  freshnessStatus          String?
   @@unique([source, sourceId])
   @@index([status, publishedAt])
   @@index([kind, status])
@@ -852,6 +860,17 @@ model ReviewSource {
   updatedAt           DateTime      @updatedAt
   runs                ApifyRun[]
 
+  /// Higher runs first. Lowered automatically while unhealthy, restored on recovery.
+  priority            Int       @default(100)
+  consecutiveFailures Int       @default(0)
+  consecutiveStale    Int       @default(0)
+  freshCount          Int       @default(0)
+  staleCount          Int       @default(0)
+  lastFreshAt         DateTime?
+  lastStaleAt         DateTime?
+  /// Skipped by the scheduler until this time (automatic, recovers on its own).
+  pausedUntil         DateTime?
+  healthNote          String?
   @@index([enabled, lastRunAt])
   @@map("review_sources")
 }
@@ -874,6 +893,9 @@ model ApifyRun {
   collectedAt DateTime?
   source      ReviewSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
+  freshCount            Int?
+  staleCount            Int?
+  unknownFreshnessCount Int?
   @@index([status, startedAt])
   @@index([sourceId, startedAt])
   @@map("apify_runs")
@@ -972,4 +994,14 @@ model AutomationSlot {
 
   @@unique([day, slot])
   @@map("automation_slots")
+}
+
+/// Admin automation switches (key → "on" | "off" | value). Missing keys use the coded default.
+model AutomationSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@map("automation_settings")
 }

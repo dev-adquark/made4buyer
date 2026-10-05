@@ -35,6 +35,15 @@ describe("Keyword-to-Blog content is kept as returned", () => {
     }
   });
 
+  it("a post with no FAQ, no meta description and no date is still accepted as returned", () => {
+    const item = guideToContentItem({ post: { title: "Choosing a kettle", sections: [{ type: "body", heading: "Capacity", contentMarkdown: "Pick 1.5 L for two people." }] } }, req);
+    expect(item.body).toContain("Pick 1.5 L for two people.");
+    const v = validateContentItem(item);
+    expect(v.ok).toBe(true);
+    // The response carried no date: the item is dated when it was generated, never refused.
+    if (v.ok) expect(Math.abs(v.value.publishedAt!.getTime() - Date.now())).toBeLessThan(60_000);
+  });
+
   it("accepts a response with no sections when it has other text, and refuses only an empty one", () => {
     expect(guideToContentItem({ post: { title: "Tiny", conclusion: "Just this." } }, req).body).toBe("Just this.");
     expect(() => guideToContentItem({ post: { title: "", sections: [] } }, req)).toThrow(/no title or no text/);

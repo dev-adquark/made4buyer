@@ -25,7 +25,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
     <>
       <h1>Entities</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
-      <p className="muted">Core entities (product, brand, device type) below {pct(config.entities.lowConfidenceThreshold())} confidence block publishing until an editor confirms or overrides them.</p>
+      <p className="muted">Core entities (product, brand, device type) below {pct(config.entities.lowConfidenceThreshold())} confidence are flagged here for information; they never hold publishing. Confirm or override to improve the record.</p>
       <nav aria-label="View">
         <ul className="chips">
           <li>

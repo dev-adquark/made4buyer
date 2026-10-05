@@ -6,6 +6,7 @@ import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { recordFailure, resolveFailures } from "./failures";
 import { runIngestion, type IngestSummary } from "./ingest";
+import { recordSourceFailure, recordSourceRun } from "./source-health";
 
 /**
  * Editorial review ingestion through the Apify Web Scraper (apify/web-scraper).
@@ -246,6 +247,7 @@ export function mapApifyItem(item: ApifyItem, source: Pick<ReviewSource, "slug" 
       url: canonical,
       canonicalUrl: canonical,
       publishedAt: str(item.datePublished),
+      updatedAt: str(item.dateModified),
       author: str(item.author),
       publisher: str(item.publisher) ?? source.name,
       // A rating only counts when the page published both a value and its scale.
@@ -353,10 +355,15 @@ export async function startSourceRun(source: ReviewSource, trigger: string): Pro
 /** Starts runs for enabled sources whose crawl interval has elapsed. */
 export async function runScrapeSources(trigger: string) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", started: 0 };
-  const sources = await db.reviewSource.findMany({ where: { enabled: true }, orderBy: { lastRunAt: { sort: "asc", nulls: "first" } } });
+  // Healthy, high-priority sources first; a source paused by source health waits out its backoff.
+  const sources = await db.reviewSource.findMany({ where: { enabled: true }, orderBy: [{ priority: "desc" }, { lastRunAt: { sort: "asc", nulls: "first" } }] });
   const now = Date.now();
   const results: Array<{ source: string; status: string; reason?: string }> = [];
   for (const s of sources) {
+    if (s.pausedUntil && s.pausedUntil.getTime() > now) {
+      results.push({ source: s.slug, status: "PAUSED", reason: s.healthNote ?? `paused until ${s.pausedUntil.toISOString()}` });
+      continue;
+    }
     if (s.lastRunAt && now - s.lastRunAt.getTime() < s.crawlFrequencyHours * 3_600_000) continue;
     const r = await startSourceRun(s, trigger);
     results.push({ source: s.slug, status: r.status, reason: r.reason });
@@ -403,8 +410,12 @@ export async function collectRun(run: ApifyRun, trigger: string): Promise<Collec
       await recordFailure({ stage: "CONTENT_FETCH", code: "APIFY_EMPTY_DATASET", message: `Run ${run.apifyRunId} for ${source.name} produced no review pages (${items.length} raw items). Check the start URLs and review URL patterns.`, entityType: "review_source", entityId: source.id });
     }
     const ingest = valid.length ? await runIngestion({ trigger: `apify:${trigger}`, items: valid, source: sourceKey(source.slug) }) : undefined;
-    const rejected = Object.values(rejections).reduce((n, x) => n + x, 0) + (ingest?.failedNormalization ?? 0);
-    await db.apifyRun.update({ where: { id: run.id }, data: { status: "COLLECTED", collectedAt: new Date(), itemCount: pages.length, accepted: ingest ? ingest.normalized : 0, rejected, ingestRunId: ingest?.runId ?? null } });
+    const f = ingest?.freshness;
+    const notFresh = f ? f.stale + f.unknown + f.invalidDate : 0;
+    const rejected = Object.values(rejections).reduce((n, x) => n + x, 0) + (ingest?.failedNormalization ?? 0) + notFresh;
+    await db.apifyRun.update({ where: { id: run.id }, data: { status: "COLLECTED", collectedAt: new Date(), itemCount: pages.length, accepted: ingest ? ingest.normalized : 0, rejected, ingestRunId: ingest?.runId ?? null, freshCount: f?.fresh ?? 0, staleCount: f?.stale ?? 0, unknownFreshnessCount: f ? f.unknown + f.invalidDate : 0 } });
+    if (pages.length) await recordSourceRun(source.id, f);
+    else await recordSourceFailure(source.id, "empty dataset");
     log.info("apify run collected", { stage: "CONTENT_FETCH", source: source.slug, runId: run.apifyRunId, items: pages.length, valid: valid.length });
     return {
       runId: run.apifyRunId,
@@ -419,6 +430,7 @@ export async function collectRun(run: ApifyRun, trigger: string): Promise<Collec
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
     // Release the claim so the next collect retries (ingestion itself is idempotent per URL).
     await db.apifyRun.update({ where: { id: run.id }, data: { status: e.retryable ? "SUCCEEDED" : "COLLECT_FAILED", error: e.message.slice(0, 500) } });
+    if (!e.retryable) await recordSourceFailure(source.id, e.code);
     await recordFailure({ stage: "CONTENT_FETCH", code: e.code, message: e.message, entityType: "apify_run", entityId: run.id, retryable: e.retryable });
     return { runId: run.apifyRunId, status: e.code, items: 0, accepted: 0, rejected: 0, rejections: { [e.code]: 1 } };
   }
@@ -442,6 +454,7 @@ export async function runCollectScrapes(trigger: string) {
       if (fresh.status === "SUCCEEDED") results.push(await collectRun(fresh, trigger));
       else if (FAILED.includes(fresh.status)) {
         await recordFailure({ stage: "CONTENT_FETCH", code: "APIFY_RUN_FAILED", message: `Apify run ${fresh.apifyRunId} ended ${fresh.status}: ${fresh.error ?? ""}`, entityType: "apify_run", entityId: fresh.id });
+        await recordSourceFailure(fresh.sourceId, `run ended ${fresh.status}`);
         results.push({ runId: fresh.apifyRunId, status: fresh.status, error: fresh.error ?? undefined });
       } else results.push({ runId: fresh.apifyRunId, status: fresh.status });
     } catch (error) {

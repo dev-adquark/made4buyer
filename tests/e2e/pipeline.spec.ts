@@ -49,11 +49,12 @@ test("2. ingestion from the admin UI", async () => {
   await expect(page.getByText("DUPLICATE_REVIEW").first()).toBeVisible();
 });
 
-test("3. QA queue shows gates and blocks low-confidence items", async () => {
+test("3. low-confidence items are not held for an editor", async () => {
   await page.goto("/admin/qa");
   const gear = page.getByRole("row").filter({ hasText: "Our favourite gear" });
-  await expect(gear).toContainText("ENTITIES_NEED_REVIEW");
-  await expect(gear.getByRole("button", { name: /^Publish/ })).toBeDisabled();
+  await expect(gear).toBeVisible();
+  await expect(gear).not.toContainText("ENTITIES_NEED_REVIEW");
+  await expect(gear.getByRole("button", { name: /^Publish/ })).toBeEnabled();
   await gear.getByRole("link", { name: /Our favourite gear/ }).click();
   await page.waitForURL(/\/admin\/reviews\/[a-z0-9]+$/);
   state.gearId = page.url().split("/").pop();

@@ -18,7 +18,7 @@
 import "./support/load-env";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { processContentItem } from "@/lib/pipeline/ingest";
+import { counters as newCounters, processContentItem } from "@/lib/pipeline/ingest";
 import { publishReview } from "@/lib/pipeline/publish";
 import { sha256, stableStringify } from "@/lib/util/text";
 
@@ -45,7 +45,7 @@ async function main() {
     console.log("Dry run. Re-run with --apply to import.");
     return;
   }
-  const counters = { totalFetched: 0, normalized: 0, duplicate: 0, unchanged: 0, updated: 0, failedNormalization: 0, queued: 0, failure: 0, reasons: {}, duplicates: [] };
+  const counters = newCounters();
   const report: Array<{ slug: string; result: string }> = [];
   for (const r of reviews) {
     const raw = { id: r.sourceId, title: r.title, summary: r.summary, body: r.body, productName: r.productName ?? undefined, brand: r.brand ?? undefined, category: r.category, subcategory: r.subcategory ?? undefined, url: r.sourceUrl ?? undefined, canonicalUrl: r.canonicalUrl ?? undefined, imageUrl: r.imageUrl ?? undefined, imageLicense: r.imageLicense ?? undefined, imageAttribution: r.imageAttribution ?? undefined, publishedAt: (r.publishedAt ?? r.createdAt).toISOString() };

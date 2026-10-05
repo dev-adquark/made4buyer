@@ -86,7 +86,7 @@ It prints a summary table and writes every stage's input and output to
 - **Output:** a CategoryTagSet containing a primary category, optional subcategory, intents, platforms and a price tier. Each assignment carries `confidence`, `reason`, `source` and an override flag.
 - **Records:** `category_tags` (seeded from `lib/taxonomy/definitions.ts`) and `review_category_assignments`.
 - **Rules:** weighted keyword signals by field (product name ×4, title ×3, source category ×3, summary ×1.5, body ×0.5 capped at 3 hits), negative signals for accessories, and a +24 bonus when the source category matches an alias. Confidence = `0.2 + 0.45·strength + 0.35·margin`, capped at 0.99. Price tier comes from the extracted price against per-category bands, otherwise from keyword evidence.
-- **QA:** a confidence at or above `TAXONOMY_AUTO_ACCEPT_THRESHOLD` (0.8) skips manual review. Below it the review stays `NEEDS_REVIEW` until an editor accepts the assignment or overrides it.
+- **QA:** there is no manual review. A confidence below `TAXONOMY_AUTO_ACCEPT_THRESHOLD` (0.8) is shown in Admin as information; an editor may still accept or override an assignment, but publishing never waits for it.
 - **Idempotency:** re-classification updates matching assignments in place (admin accept/reject state is kept) and never touches overrides.
 - **Failure states:** `NO_CATEGORY_MATCH`, `CATEGORY_LOW_CONFIDENCE`.
 

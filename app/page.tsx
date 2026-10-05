@@ -413,7 +413,7 @@ export default async function Home() {
             <li>
               <div>
                 <h3>We identify the product</h3>
-                <p>Brand, model, platform and use case are extracted. Anything uncertain goes to an editor.</p>
+                <p>Brand, model, platform and use case are extracted. Low-confidence matches are flagged on the record, never guessed.</p>
               </div>
             </li>
             <li>

@@ -9,10 +9,12 @@ import {
   type Slot,
 } from "@/lib/automation/daily-article";
 import { config } from "@/lib/config";
+import { getSwitches, SWITCHES, type SwitchKey } from "@/lib/automation/settings";
 import { db } from "@/lib/db";
+import EngineSections from "./engine";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Daily articles" };
+export const metadata = { title: "Automation" };
 
 const TONE: Record<string, "ok" | "warn" | "error"> = {
   PUBLISHED: "ok",
@@ -51,6 +53,7 @@ export default async function AutomationPage({
     db.contentQueueItem.groupBy({ by: ["status"], _count: { _all: true } }),
     automationHealth(now),
   ]);
+  const switches = await getSwitches();
   const ids = [...slots, ...recent]
     .map((s) => s.normalizedReviewId)
     .filter(Boolean) as string[];
@@ -78,7 +81,8 @@ export default async function AutomationPage({
   const enabled = config.aiGuides.autoGenerate();
   return (
     <>
-      <h1>Daily articles</h1>
+      <h1>Automation control centre</h1>
+      <p className="notice ok">Everything below publishes automatically. There is no approval queue: you can pause, resume or narrow the engine here, and every change is audited.</p>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
         A buying guide at 08:00 and an informational article at 19:00 (Asia/Kolkata): relevant topic from the queue → exact-duplicate check (no API call is spent on a repeat) → Keyword-to-Blog → published exactly as returned. No quality, SEO or approval gate; only an exact repeat (same topic or same title, same post type) is stopped. Up to {MAX_SLOT_ATTEMPTS} attempts per slot with backoff, within the Keyword-to-Blog quota of {config.aiGuides.dailyLimit()} requests/day.
@@ -89,6 +93,37 @@ export default async function AutomationPage({
           anything.
         </p>
       )}
+
+      <h2>Automation switches</h2>
+      <p className="small muted">The engine publishes on its own. These only pause or narrow what it does; nothing here is needed for normal publishing. Scheduled runs respect them; a manual “Run now” always runs.</p>
+      {!switches.automation && <p className="notice warn">Automation is paused: no scheduled job will act until the master switch is on.</p>}
+      <div className="table-wrap">
+        <table className="table responsive">
+          <thead>
+            <tr>
+              <th scope="col">Capability</th>
+              <th scope="col">State</th>
+              <th scope="col">Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(Object.keys(SWITCHES) as SwitchKey[]).map((k) => (
+              <tr key={k}>
+                <td data-label="Capability">
+                  <strong>{SWITCHES[k].label}</strong>
+                  <div className="small muted">{SWITCHES[k].help}</div>
+                </td>
+                <td data-label="State">
+                  <Badge value={switches[k] ? "ON" : "OFF"} tone={switches[k] ? "ok" : "warn"} />
+                </td>
+                <td data-label="Change">
+                  <ActionForm action="/api/admin/automation" fields={{ key: k, on: switches[k] ? "off" : "on" }} label={switches[k] ? (k === "automation" ? "Pause everything" : "Turn off") : "Turn on"} returnTo="/admin/automation" className={switches[k] && k === "automation" ? "btn small danger" : "btn small"} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h2>Today ({day})</h2>
       <div className="table-wrap">
@@ -204,6 +239,8 @@ export default async function AutomationPage({
           ))}
         </ul>
       )}
+
+      <EngineSections now={now} />
 
       <h2>Recent slots</h2>
       <div className="table-wrap">

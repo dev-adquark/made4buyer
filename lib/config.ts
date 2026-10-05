@@ -58,7 +58,7 @@ export const config = {
 
   ingest: {
     maxItemsPerRun: () => num("INGEST_MAX_ITEMS_PER_RUN", 50, 1, 1000),
-    autoPublish: () => bool("AUTO_PUBLISH_ENABLED", false),
+    autoPublish: () => bool("AUTO_PUBLISH_ENABLED", true),
   },
 
   freshness: {

@@ -69,8 +69,8 @@ describe("Day-30 report", () => {
     for (const rev of await db.normalizedReview.findMany({ where: { status: "QUEUED" } })) await publishReview(rev.id, { actor: "t" });
     const report = await buildDay30Report();
     r();
-    expect(report.ingestion).toMatchObject({ totalFetched: 15, duplicates: 1, published: 12, normalized: 13 });
-    expect(report.dealCoverage.publishedReviews).toBe(12);
+    expect(report.ingestion).toMatchObject({ totalFetched: 15, duplicates: 1, published: 13, normalized: 13 }); // none waits for an editor
+    expect(report.dealCoverage.publishedReviews).toBe(13);
     expect(report.dealCoverage.reviewsWithVerifiedDeal).toBeGreaterThan(0);
     expect(report.linkHealth.checked).toBeGreaterThan(0);
     expect(report.seoIndexing).toMatchObject({ status: "NOT_AVAILABLE_IN_ENVIRONMENT", indexed: "NOT_AVAILABLE_IN_ENVIRONMENT" });

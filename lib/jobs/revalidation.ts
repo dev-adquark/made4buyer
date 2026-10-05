@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { recordEvent } from "@/lib/analytics/events";
 import { SYSTEM_ACTOR, type AuditContext } from "@/lib/security/audit";
-import { processContentItem, type IngestCounters } from "@/lib/pipeline/ingest";
+import { counters as newCounters, processContentItem } from "@/lib/pipeline/ingest";
 import { processReview, REVIEW_STAGES, type ReviewStage } from "@/lib/pipeline/process";
 import { runPublishCycle } from "@/lib/pipeline/publish";
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
@@ -163,7 +163,7 @@ export async function runFailedRetry(opts: { trigger: string; ctx?: AuditContext
           const item = await db.contentItem.findUnique({ where: { id: f.entityId }, select: { id: true, processingStatus: true } });
           if (item?.processingStatus === "FAILED") {
             await db.contentItem.update({ where: { id: item.id }, data: { processingStatus: "INGESTED" } });
-            await processContentItem(item.id, { totalFetched: 0, normalized: 0, duplicate: 0, unchanged: 0, updated: 0, failedNormalization: 0, queued: 0, failure: 0, reasons: {}, duplicates: [] } as IngestCounters);
+            await processContentItem(item.id, newCounters());
           }
         } else if (f.normalizedReviewId && (REVIEW_STAGES as readonly string[]).includes(f.stage)) {
           await processReview(f.normalizedReviewId, { from: f.stage as ReviewStage });

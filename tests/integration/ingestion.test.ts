@@ -13,7 +13,7 @@ let override: (() => unknown) | undefined;
 beforeAll(async () => {
   await seedTaxonomy();
   stub = await startStubServer({ contentKey: "content-key", contentOverride: () => override?.() ?? undefined });
-  restore = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_KEY: "content-key", CONTENT_API_SOURCE_NAME: "sample-fixture", SOVRN_API_URL: undefined, SOVRN_API_KEY: undefined, AUTO_PUBLISH_ENABLED: undefined });
+  restore = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_KEY: "content-key", CONTENT_API_SOURCE_NAME: "sample-fixture", SOVRN_API_URL: undefined, SOVRN_API_KEY: undefined, AUTO_PUBLISH_ENABLED: "false" });
 });
 afterAll(async () => {
   restore();
@@ -66,7 +66,8 @@ describe("Content API ingestion", () => {
     const categories = new Set(reviews.map((r) => r.categorySlug));
     expect(categories.size).toBeGreaterThanOrEqual(3);
     const ambiguous = reviews.find((r) => r.sourceId === "s-014")!;
-    expect(ambiguous.status).toBe("NEEDS_REVIEW");
+    // Low confidence is recorded as information only; it never parks a review for a person.
+    expect(ambiguous.status).toBe("QUEUED");
     expect(ambiguous.entities?.lowConfidenceFields).toEqual(expect.arrayContaining(["productName", "brand"]));
     const mba = reviews.find((r) => r.sourceId === "s-001")!;
     expect(mba.status).toBe("QUEUED");

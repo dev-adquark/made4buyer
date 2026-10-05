@@ -12,7 +12,8 @@ import { recordFailure, resolveFailures } from "./failures";
 import { contentHash, normalizeContent } from "./normalize";
 import { processReview } from "./process";
 import { runPublishCycle } from "./publish";
-import { validateContentItem } from "./validate";
+import { evaluateFreshness, FRESHNESS_CODES, freshnessExempt, freshnessReason, type Freshness } from "./freshness";
+import { rawSourceDates, validateContentItem } from "./validate";
 
 /**
  * Ingestion run orchestration:
@@ -33,14 +34,27 @@ export type IngestCounters = {
   failure: number;
   reasons: Record<string, number>;
   duplicates: Array<{ sourceId: string; duplicateOf: string; reason: string }>;
+  /** Freshness of this run's fetched items (external sources only). */
+  freshness: { fresh: number; stale: number; unknown: number; invalidDate: number };
 };
 
-function counters(): IngestCounters {
-  return { totalFetched: 0, normalized: 0, duplicate: 0, unchanged: 0, updated: 0, failedNormalization: 0, queued: 0, failure: 0, reasons: {}, duplicates: [] };
+export function counters(): IngestCounters {
+  return { totalFetched: 0, normalized: 0, duplicate: 0, unchanged: 0, updated: 0, failedNormalization: 0, queued: 0, failure: 0, reasons: {}, duplicates: [], freshness: { fresh: 0, stale: 0, unknown: 0, invalidDate: 0 } };
 }
 
 function bump(c: IngestCounters, code: string) {
   c.reasons[code] = (c.reasons[code] ?? 0) + 1;
+}
+
+function countFreshness(c: IngestCounters, f: Freshness) {
+  if (f.status === "FRESH") c.freshness.fresh++;
+  else if (f.status === "STALE") c.freshness.stale++;
+  else if (f.status === "UNKNOWN") c.freshness.unknown++;
+  else c.freshness.invalidDate++;
+}
+
+function freshnessFields(f: Freshness | null, updatedAt: Date | undefined) {
+  return { sourceUpdatedAt: updatedAt ?? null, freshnessStatus: f?.status ?? null, freshnessAgeDays: f?.ageDays ?? null, freshnessCheckedAt: f ? new Date() : null };
 }
 
 /** Stage VALIDATION + raw snapshot persistence for one fetched item. Never throws. */
@@ -64,12 +78,32 @@ export async function ingestRawItem(raw: unknown, source: string, run: Pick<Inge
     }
     const hash = contentHash(v.value);
     const existing = await db.contentItem.findUnique({ where: { source_sourceId: { source, sourceId: v.value.sourceId } } });
-    if (existing && existing.contentHash === hash && existing.processingStatus !== "FAILED") {
+    const sameUpdated = (existing?.sourceUpdatedAt?.getTime() ?? null) === (v.value.updatedAt?.getTime() ?? null);
+    if (existing && existing.contentHash === hash && sameUpdated && existing.processingStatus !== "FAILED") {
       await db.contentItem.update({ where: { id: existing.id }, data: { lastSeenAt: new Date() } });
       c.unchanged++;
       return existing;
     }
+    // FRESHNESS (external sources only): the source's own published/updated date must be at most
+    // FRESHNESS_MAX_DAYS old. Stale, undated or badly dated items never enter automated publishing.
+    const freshness = freshnessExempt(source) ? null : evaluateFreshness({ publishedAt: v.value.publishedAt, updatedAt: v.value.updatedAt ?? rawSourceDates(raw).updatedAt });
+    if (freshness) countFreshness(c, freshness);
+    if (freshness && freshness.status !== "FRESH") {
+      const code = FRESHNESS_CODES[freshness.status];
+      bump(c, code);
+      // Already processed earlier (e.g. a published review re-crawled later): record the
+      // freshness only; the existing article is never rewritten or removed.
+      if (existing?.normalizedReviewId) {
+        await db.contentItem.update({ where: { id: existing.id }, data: { lastSeenAt: new Date(), ...freshnessFields(freshness, v.value.updatedAt) } });
+        return existing;
+      }
+      const reject = { sourceUrl: v.value.url ?? null, rawPayload: rawJson, contentHash: hash, publishedAt: v.value.publishedAt ?? null, lastSeenAt: new Date(), processingStatus: "REJECTED" as const, errorCode: code, statusReason: freshnessReason(freshness), ingestRunId: run.id, ...freshnessFields(freshness, v.value.updatedAt) };
+      const item = existing ? await db.contentItem.update({ where: { id: existing.id }, data: reject }) : await db.contentItem.create({ data: { source, sourceId: v.value.sourceId, fetchedAt: new Date(), ...reject } });
+      log.info("content item not fresh", { stage: "VALIDATION", sourceId: v.value.sourceId, status: freshness.status, ageDays: freshness.ageDays });
+      return item;
+    }
     const data = {
+      ...freshnessFields(freshness, v.value.updatedAt),
       sourceUrl: v.value.url ?? null,
       rawPayload: rawJson,
       contentHash: hash,
@@ -108,13 +142,23 @@ export async function processContentItem(itemId: string, c: IngestCounters, runI
   try {
     const v = validateContentItem(item.rawPayload);
     if (!v.ok) {
-      await db.contentItem.update({ where: { id: item.id }, data: { processingStatus: "FAILED", errorCode: "CONTENT_SCHEMA_INVALID", statusReason: v.issues.join("; ").slice(0, 1000) } });
+      await db.contentItem.update({ where: { id: item.id }, data: { processingStatus: "FAILED", errorCode: v.code, statusReason: v.issues.join("; ").slice(0, 1000) } });
       c.failedNormalization++;
-      bump(c, "CONTENT_SCHEMA_INVALID");
+      bump(c, v.code);
       return;
     }
     const cand = normalizeContent(v.value, { source: item.source, fetchedAt: item.fetchedAt });
     const own = await db.normalizedReview.findUnique({ where: { source_sourceId: { source: item.source, sourceId: item.sourceId } } });
+    // Backlog items can age past the window while waiting: re-check before creating new content.
+    if (!own && !freshnessExempt(item.source)) {
+      const f = evaluateFreshness({ publishedAt: v.value.publishedAt, updatedAt: v.value.updatedAt });
+      if (f.status !== "FRESH") {
+        const code = FRESHNESS_CODES[f.status];
+        await db.contentItem.update({ where: { id: item.id }, data: { processingStatus: "REJECTED", errorCode: code, statusReason: freshnessReason(f), ...freshnessFields(f, v.value.updatedAt) } });
+        bump(c, code);
+        return;
+      }
+    }
 
     // DEDUPE — deterministic key first, then canonical URL.
     const dup = await db.normalizedReview.findFirst({
@@ -148,6 +192,8 @@ export async function processContentItem(itemId: string, c: IngestCounters, runI
       dedupeKey: own && dup ? own.dedupeKey : cand.dedupeKey,
       author: cand.author ?? null,
       sourcePublishedAt: cand.publishedAt ?? null,
+      sourceUpdatedAt: v.value.updatedAt ?? null,
+      freshnessStatus: freshnessExempt(item.source) ? null : evaluateFreshness({ publishedAt: v.value.publishedAt, updatedAt: v.value.updatedAt }).status,
     };
     const review = own
       ? await db.normalizedReview.update({ where: { id: own.id }, data: { ...base, ...textFields } })
@@ -207,6 +253,7 @@ export type IngestSummary = {
   failures: number;
   reasons: Record<string, number>;
   pendingRemaining: number;
+  freshness?: IngestCounters["freshness"];
   publishCycle?: Awaited<ReturnType<typeof runPublishCycle>>;
 };
 
@@ -292,6 +339,7 @@ export async function runIngestion(opts: { trigger: string; ctx?: AuditContext; 
       failures: c.failure,
       reasons: c.reasons,
       pendingRemaining,
+      freshness: c.freshness,
       publishCycle,
     };
   });

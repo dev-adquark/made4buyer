@@ -62,7 +62,7 @@ export default async function ReviewsIndex({ searchParams }: { searchParams: Pro
       </section>
       <section className="section">
         <div className="wrap">
-          {rows.length ? <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} /> : <EmptyState title="We’re waiting for the next published review.">Reviews appear here once they pass editorial QA.</EmptyState>}
+          {rows.length ? <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} /> : <EmptyState title="We’re waiting for the next published review.">Reviews appear here once they pass our automatic checks.</EmptyState>}
           {pages > 1 && (
             <nav className="pagination" aria-label="Pagination">
               {page > 1 && (
