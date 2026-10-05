@@ -24,8 +24,9 @@ beforeEach(() => resetDb());
 describe("topic-only guide generation", () => {
   it("drafts original AI guides for reviewed products, within the daily cap, never approved or published", async () => {
     await runIngestion({ trigger: "test" });
-    const first = await runGuideGeneration("test");
-    expect(first).toMatchObject({ status: "OK", drafted: 2 });
+    // One guide per run; the daily cap (2 here) holds across runs.
+    expect(await runGuideGeneration("test")).toMatchObject({ status: "OK", drafted: 1 });
+    expect(await runGuideGeneration("test")).toMatchObject({ status: "OK", drafted: 1 });
     const guides = await db.normalizedReview.findMany({ where: { kind: "AI_GUIDE" } });
     expect(guides).toHaveLength(2);
     for (const g of guides) {

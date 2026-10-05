@@ -58,8 +58,11 @@ export async function runGuideGeneration(trigger: string) {
   if (!config.aiGuides.autoGenerate()) return { status: "DISABLED", reason: "GUIDE_AUTOGEN_ENABLED is not true" };
   if (!aiGuidesConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "Keyword-to-Blog is not configured" };
   const limit = config.aiGuides.dailyLimit();
+  // One guide per run: a generation takes 2–4 minutes and the function limit is 5. The hourly
+  // schedule spreads the daily quota (enforced below across runs) over the day.
+  const perRun = Math.min(limit, Number(process.env.GUIDE_GENERATION_PER_RUN ?? 1) || 1);
   // The content calendar: real gaps first, balanced across categories (non-tech prioritised).
-  const candidates = await contentOpportunities({ limit });
+  const candidates = await contentOpportunities({ limit: perRun });
   const results: Array<{ product: string; key: string; status: string; reason?: string }> = [];
   for (const c of candidates) {
     // Daily cap shared across runs (bounded by the provider's plan quota).

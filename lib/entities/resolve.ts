@@ -119,17 +119,41 @@ export async function resolveEntity(
   let slug = slugify(clean, 80) || key;
   if (await client.productEntity.findUnique({ where: { slug } }))
     slug = `${slug}-${key.slice(0, 6)}`;
-  return client.productEntity.create({
-    data: {
-      slug,
-      name: clean,
-      matchKey: key,
-      brand: hints.brand ?? null,
-      brandSlug: hints.brand ? slugify(hints.brand, 60) : null,
-      categorySlug: hints.categorySlug ?? null,
-      subcategorySlug: hints.subcategorySlug ?? null,
-    },
-  });
+  try {
+    return await client.productEntity.create({
+      data: {
+        slug,
+        name: clean,
+        matchKey: key,
+        brand: hints.brand ?? null,
+        brandSlug: hints.brand ? slugify(hints.brand, 60) : null,
+        categorySlug: hints.categorySlug ?? null,
+        subcategorySlug: hints.subcategorySlug ?? null,
+      },
+    });
+  } catch (error) {
+    // Ingestion runs items concurrently: another worker may have created this product a moment
+    // ago (unique matchKey/slug). Use that record instead of failing the article.
+    if ((error as { code?: string }).code !== "P2002") throw error;
+    const raced =
+      (await client.productEntity.findUnique({ where: { matchKey: key } })) ??
+      (await client.productEntity.findFirst({
+        where: { aliasKeys: { has: key } },
+      }));
+    if (raced) return raced;
+    // A different product took the slug: retry once with a key suffix.
+    return client.productEntity.create({
+      data: {
+        slug: `${slugify(clean, 70) || key}-${key.slice(0, 8)}`,
+        name: clean,
+        matchKey: key,
+        brand: hints.brand ?? null,
+        brandSlug: hints.brand ? slugify(hints.brand, 60) : null,
+        categorySlug: hints.categorySlug ?? null,
+        subcategorySlug: hints.subcategorySlug ?? null,
+      },
+    });
+  }
 }
 
 /**

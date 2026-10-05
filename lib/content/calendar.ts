@@ -1,5 +1,9 @@
 import { db } from "@/lib/db";
-import { CATEGORIES, DEPARTMENTS, type CategoryDef } from "@/lib/taxonomy/definitions";
+import {
+  CATEGORIES,
+  DEPARTMENTS,
+  type CategoryDef,
+} from "@/lib/taxonomy/definitions";
 
 /**
  * Content coverage and the content calendar.
@@ -11,7 +15,20 @@ import { CATEGORIES, DEPARTMENTS, type CategoryDef } from "@/lib/taxonomy/defini
  * product opportunities exist only for products a real source reviewed.
  */
 
-const TECH_DEPARTMENTS = new Set(["computing", "mobile", "audio-video", "home", "gaming", "software", "accessories", "gadgets", "security", "business", "web", "creative"]);
+const TECH_DEPARTMENTS = new Set([
+  "computing",
+  "mobile",
+  "audio-video",
+  "home",
+  "gaming",
+  "software",
+  "accessories",
+  "gadgets",
+  "security",
+  "business",
+  "web",
+  "creative",
+]);
 
 export function isTechCategory(c: Pick<CategoryDef, "department">): boolean {
   return TECH_DEPARTMENTS.has(c.department);
@@ -54,34 +71,83 @@ export type CategoryCoverage = {
 };
 
 export async function categoryCoverage(): Promise<CategoryCoverage[]> {
-  const [byKind, qa, products, deals, images, sources, sourceCats] = await Promise.all([
-    db.normalizedReview.groupBy({ by: ["categorySlug", "kind"], where: { status: "PUBLISHED" }, _count: { _all: true } }),
-    db.normalizedReview.groupBy({ by: ["categorySlug"], where: { status: { in: ["NEEDS_REVIEW", "QUEUED"] } }, _count: { _all: true } }),
-    db.productEntity.groupBy({ by: ["categorySlug"], where: { content: { some: { review: { status: "PUBLISHED" } } } }, _count: { _all: true } }),
-    db.affiliateLink.findMany({ where: { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" }, review: { status: "PUBLISHED" } }, select: { review: { select: { categorySlug: true } } } }),
-    db.imageAsset.findMany({ where: { isPrimary: true, isFallback: false, review: { status: "PUBLISHED" } }, select: { review: { select: { categorySlug: true } } } }),
-    db.reviewSource.findMany({ where: { enabled: true }, select: { slug: true, categoryHint: true } }),
-    // Which categories each enabled source has actually produced content for.
-    db.normalizedReview.groupBy({ by: ["source", "categorySlug"], where: { source: { startsWith: "apify:" } }, _count: { _all: true } }),
-  ]);
+  const [byKind, qa, products, deals, images, sources, sourceCats] =
+    await Promise.all([
+      db.normalizedReview.groupBy({
+        by: ["categorySlug", "kind"],
+        where: { status: "PUBLISHED" },
+        _count: { _all: true },
+      }),
+      db.normalizedReview.groupBy({
+        by: ["categorySlug"],
+        where: { status: { in: ["NEEDS_REVIEW", "QUEUED"] } },
+        _count: { _all: true },
+      }),
+      db.productEntity.groupBy({
+        by: ["categorySlug"],
+        where: { content: { some: { review: { status: "PUBLISHED" } } } },
+        _count: { _all: true },
+      }),
+      db.affiliateLink.findMany({
+        where: {
+          isActive: true,
+          verificationStatus: "VERIFIED_OK",
+          offerMatch: { matchStatus: "MATCHED" },
+          review: { status: "PUBLISHED" },
+        },
+        select: { review: { select: { categorySlug: true } } },
+      }),
+      db.imageAsset.findMany({
+        where: {
+          isPrimary: true,
+          isFallback: false,
+          review: { status: "PUBLISHED" },
+        },
+        select: { review: { select: { categorySlug: true } } },
+      }),
+      db.reviewSource.findMany({
+        where: { enabled: true },
+        select: { slug: true, categoryHint: true },
+      }),
+      // Which categories each enabled source has actually produced content for.
+      db.normalizedReview.groupBy({
+        by: ["source", "categorySlug"],
+        where: { source: { startsWith: "apify:" } },
+        _count: { _all: true },
+      }),
+    ]);
   const enabledKeys = new Set(sources.map((s) => `apify:${s.slug}`));
   return CATEGORIES.map((c) => {
-    const n = (kind: string) => byKind.find((r) => r.categorySlug === c.slug && r.kind === kind)?._count._all ?? 0;
+    const n = (kind: string) =>
+      byKind.find((r) => r.categorySlug === c.slug && r.kind === kind)?._count
+        ._all ?? 0;
     const reviews = n("REVIEW");
     const comparisons = n("COMPARISON");
     const guides = n("BUYING_GUIDE");
     const aiGuides = n("AI_GUIDE");
     const published = reviews + comparisons + guides + aiGuides;
-    const sourcesCovering = new Set([...sources.filter((s) => s.categoryHint === c.slug).map((s) => s.slug), ...sourceCats.filter((r) => r.categorySlug === c.slug && enabledKeys.has(r.source)).map((r) => r.source)]).size;
-    const verifiedDeals = deals.filter((d) => d.review.categorySlug === c.slug).length;
+    const sourcesCovering = new Set([
+      ...sources.filter((s) => s.categoryHint === c.slug).map((s) => s.slug),
+      ...sourceCats
+        .filter((r) => r.categorySlug === c.slug && enabledKeys.has(r.source))
+        .map((r) => r.source),
+    ]).size;
+    const verifiedDeals = deals.filter(
+      (d) => d.review.categorySlug === c.slug,
+    ).length;
     const blockers: string[] = [];
-    if (!sourcesCovering) blockers.push("No enabled source covers this category: reviews need a publisher whose terms allow it");
-    if (published > 0 && verifiedDeals === 0) blockers.push("No verified offers (Sovrn price comparison not approved)");
+    if (!sourcesCovering)
+      blockers.push(
+        "No enabled source covers this category: reviews need a publisher whose terms allow it",
+      );
+    if (published > 0 && verifiedDeals === 0)
+      blockers.push("No verified offers (Sovrn price comparison not approved)");
     return {
       slug: c.slug,
       name: c.name,
       department: c.department,
-      departmentName: DEPARTMENTS.find((d) => d.slug === c.department)?.name ?? c.department,
+      departmentName:
+        DEPARTMENTS.find((d) => d.slug === c.department)?.name ?? c.department,
       tech: isTechCategory(c),
       reviews,
       comparisons,
@@ -89,11 +155,17 @@ export async function categoryCoverage(): Promise<CategoryCoverage[]> {
       aiGuides,
       published,
       inQa: qa.find((q) => q.categorySlug === c.slug)?._count._all ?? 0,
-      products: products.find((p) => p.categorySlug === c.slug)?._count._all ?? 0,
+      products:
+        products.find((p) => p.categorySlug === c.slug)?._count._all ?? 0,
       verifiedDeals,
       realImages: images.filter((i) => i.review.categorySlug === c.slug).length,
       sourcesCovering,
-      level: published >= 5 && reviews + comparisons > 0 && guides + aiGuides > 0 ? "STRONG" : published > 0 ? "WEAK" : "MISSING",
+      level:
+        published >= 5 && reviews + comparisons > 0 && guides + aiGuides > 0
+          ? "STRONG"
+          : published > 0
+            ? "WEAK"
+            : "MISSING",
       blockers,
     };
   });
@@ -113,22 +185,37 @@ export type Opportunity = {
 
 /** Normalised subject used for de-duplication against existing guides. */
 export function subjectKey(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 /**
  * The next best legitimate content opportunities, highest score first, at most one per category
  * in the top of the list so no single category (or tech overall) dominates the queue.
  */
-export async function contentOpportunities(opts: { now?: Date; limit?: number } = {}): Promise<Opportunity[]> {
+export async function contentOpportunities(
+  opts: { now?: Date; limit?: number } = {},
+): Promise<Opportunity[]> {
   const month = (opts.now ?? new Date()).getUTCMonth() + 1;
   const [coverage, guides, reviewed] = await Promise.all([
     categoryCoverage(),
     // Every guide ever drafted, including rejected ones: a rejected topic is never regenerated.
-    db.normalizedReview.findMany({ where: { kind: { in: ["AI_GUIDE", "BUYING_GUIDE"] } }, select: { productName: true } }),
     db.normalizedReview.findMany({
-      where: { kind: "REVIEW", status: { in: ["PUBLISHED", "QUEUED", "NEEDS_REVIEW"] }, categorySlug: { not: null } },
-      orderBy: [{ sourcePublishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      where: { kind: { in: ["AI_GUIDE", "BUYING_GUIDE"] } },
+      select: { productName: true },
+    }),
+    db.normalizedReview.findMany({
+      where: {
+        kind: "REVIEW",
+        status: { in: ["PUBLISHED", "QUEUED", "NEEDS_REVIEW"] },
+        categorySlug: { not: null },
+      },
+      orderBy: [
+        { sourcePublishedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
       take: 300,
       select: { productName: true, brand: true, categorySlug: true },
     }),
@@ -140,27 +227,47 @@ export async function contentOpportunities(opts: { now?: Date; limit?: number } 
 
   for (const c of CATEGORIES) {
     const cov = byCat.get(c.slug)!;
-    const gap = cov.published === 0 ? 40 : cov.guides + cov.aiGuides === 0 ? 25 : 5;
+    const gap =
+      cov.published === 0 ? 40 : cov.guides + cov.aiGuides === 0 ? 25 : 5;
     // Under-covered non-tech categories first; tech keeps a healthy share.
     const balance = cov.tech ? 0 : 20;
     const subs = c.subcategories.filter((s) => !s.legacy);
     for (const [i, s] of subs.entries()) {
       const subject = s.name;
       if (covered.has(subjectKey(subject))) continue;
-      out.push({ key: `guide:${c.slug}:${s.slug}`, kind: "CATEGORY_GUIDE", subject, categorySlug: c.slug, subcategorySlug: s.slug, score: gap + balance + seasonal(c.slug) - i * 2, why: `${cov.published ? `${cov.published} published, ${cov.guides + cov.aiGuides} guides` : "nothing published yet"} in ${c.name}${seasonal(c.slug) ? "; in season" : ""}` });
+      out.push({
+        key: `guide:${c.slug}:${s.slug}`,
+        kind: "CATEGORY_GUIDE",
+        subject,
+        categorySlug: c.slug,
+        subcategorySlug: s.slug,
+        score: gap + balance + seasonal(c.slug) - i * 2,
+        why: `${cov.published ? `${cov.published} published, ${cov.guides + cov.aiGuides} guides` : "nothing published yet"} in ${c.name}${seasonal(c.slug) ? "; in season" : ""}`,
+      });
     }
   }
   for (const r of reviewed) {
     if (!r.categorySlug || covered.has(subjectKey(r.productName))) continue;
     covered.add(subjectKey(r.productName));
     const cov = byCat.get(r.categorySlug);
-    out.push({ key: `product:${subjectKey(r.productName)}`, kind: "PRODUCT_GUIDE", subject: r.productName, brand: r.brand, categorySlug: r.categorySlug, score: 30 + (cov && !cov.tech ? 20 : 0) + seasonal(r.categorySlug), why: `reviewed by a source, no guide yet` });
+    out.push({
+      key: `product:${subjectKey(r.productName)}`,
+      kind: "PRODUCT_GUIDE",
+      subject: r.productName,
+      brand: r.brand,
+      categorySlug: r.categorySlug,
+      score: 30 + (cov && !cov.tech ? 20 : 0) + seasonal(r.categorySlug),
+      why: `reviewed by a source, no guide yet`,
+    });
   }
   out.sort((a, b) => b.score - a.score || a.key.localeCompare(b.key));
   // Round-robin by category so the head of the queue is diverse.
   const seen = new Set<string>();
   const head: Opportunity[] = [];
   const tail: Opportunity[] = [];
-  for (const o of out) (seen.has(o.categorySlug) ? tail : (seen.add(o.categorySlug), head)).push(o);
+  for (const o of out)
+    (seen.has(o.categorySlug) ? tail : (seen.add(o.categorySlug), head)).push(
+      o,
+    );
   return [...head, ...tail].slice(0, opts.limit ?? 50);
 }

@@ -13,12 +13,21 @@ checkSchema(db)
       console.log("schema check: OK (database matches this build)");
       return;
     }
-    console.error("schema check FAILED: the database is missing what this build needs");
-    for (const [label, list] of [["tables", r.missingTables], ["columns", r.missingColumns], ["enum values", r.missingEnumValues]] as const) if (list.length) console.error(`  missing ${label}: ${list.join(", ")}`);
+    console.error(
+      "schema check FAILED: the database is missing what this build needs",
+    );
+    for (const [label, list] of [
+      ["tables", r.missingTables],
+      ["columns", r.missingColumns],
+      ["enum values", r.missingEnumValues],
+    ] as const)
+      if (list.length) console.error(`  missing ${label}: ${list.join(", ")}`);
     process.exitCode = 1;
   })
   .catch((e) => {
-    console.error(`schema check FAILED: could not query the database (${e instanceof Error ? e.message.split("\n")[0] : "error"})`);
+    console.error(
+      `schema check FAILED: could not query the database (${e instanceof Error ? e.message.split("\n")[0] : "error"})`,
+    );
     process.exitCode = 1;
   })
   .finally(() => db.$disconnect());

@@ -190,12 +190,23 @@ describe("multi-product content", () => {
 
 describe("reclassify-content", () => {
   it("re-runs classification without changing publish state, and is repeatable", async () => {
-    await ingest([item("r1", "Neon vs Supabase Postgres 2026: Which Should You Choose?"), item("r2", "NordVPN review: fast, private and easy to use", { productName: "NordVPN" })]);
-    await db.normalizedReview.updateMany({ data: { status: "PUBLISHED", publishedAt: new Date() } });
+    await ingest([
+      item("r1", "Neon vs Supabase Postgres 2026: Which Should You Choose?"),
+      item("r2", "NordVPN review: fast, private and easy to use", {
+        productName: "NordVPN",
+      }),
+    ]);
+    await db.normalizedReview.updateMany({
+      data: { status: "PUBLISHED", publishedAt: new Date() },
+    });
     const first = await runReclassify("test");
     expect(first).toMatchObject({ status: "OK", checked: 2, failed: 0 });
-    expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(2);
-    const vpn = await db.normalizedReview.findFirstOrThrow({ where: { productName: "NordVPN" } });
+    expect(
+      await db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
+    ).toBe(2);
+    const vpn = await db.normalizedReview.findFirstOrThrow({
+      where: { productName: "NordVPN" },
+    });
     expect(vpn.categorySlug).toBe("security-software");
     const second = await runReclassify("test");
     expect(second).toMatchObject({ checked: 2, changed: 0, failed: 0 });
@@ -227,5 +238,18 @@ describe("source health counts and integrity", () => {
     const integrity = await runIntegrityChecks();
     expect(integrity.checks.duplicateSourceUrls.count).toBe(0);
     expect(integrity.checks.publishedInvalidCategory.count).toBe(0);
+  });
+});
+
+describe("entity resolution under concurrency", () => {
+  it("resolves the same product from parallel workers to one record", async () => {
+    const { resolveEntity } = await import("@/lib/entities/resolve");
+    const results = await Promise.all(
+      ["NordVPN", "Nord VPN", "nordvpn", "NORD VPN", "Nord-VPN", "NordVPN"].map(
+        (n) => resolveEntity(n),
+      ),
+    );
+    expect(new Set(results.map((r) => r.id)).size).toBe(1);
+    expect(await db.productEntity.count()).toBe(1);
   });
 });
