@@ -15,12 +15,14 @@ import TrustLabel from "@/components/trust-label";
 import { config } from "@/lib/config";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryPhotos } from "@/lib/public/category-images";
+import { prerenderNeedsDatabase } from "@/lib/public/isr";
 import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, verifiedDealRows } from "@/lib/public/queries";
 import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, money } from "@/lib/util/format";
 
-export const dynamic = "force-dynamic";
+/** Cached home page: regenerated at most every 5 minutes and purged whenever content is published or changes. */
+export const revalidate = 300;
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const style = (slug: string | null | undefined) => themeStyle(slug) as React.CSSProperties;
@@ -45,6 +47,7 @@ function SpecRows({ rows }: { rows: Array<[string, string | null | undefined]> }
 }
 
 export default async function Home() {
+  await prerenderNeedsDatabase();
   // Photos depend only on the static taxonomy, so they load alongside the database queries.
   const [reviews, guides, comparisons, ledger, deals, trending, pair, stats, photos] = await Promise.all([
     latestByKind("REVIEW", 6),

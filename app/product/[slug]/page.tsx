@@ -13,7 +13,15 @@ import { cardSelect, LATEST_FIRST } from "@/lib/public/queries";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
-export const dynamic = "force-dynamic";
+/**
+ * Cached on first request (nothing is prebuilt, so builds never need the database); regenerated
+ * at most every 5 minutes and purged when linked content is published or changes.
+ */
+export const revalidate = 300;
+
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
+}
 
 /** Product/service hub: everything published about one entity, built from content ↔ entity links. */
 const load = cache(async (slug: string) => {
