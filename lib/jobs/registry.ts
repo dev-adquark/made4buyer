@@ -11,7 +11,7 @@ import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfill } from "./image-backfill";
 import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
-import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob, runCouponRefresh } from "./revalidation";
+import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob, runCouponRefresh, runProductEnrichment } from "./revalidation";
 
 /**
  * Scheduled jobs exposed at /api/cron/<name>. Every job runs under a DB lock (concurrent
@@ -62,6 +62,7 @@ export const JOBS = {
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
   "refresh-coupons": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCouponRefresh({ trigger }), locked: true },
+  "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -82,6 +83,7 @@ const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "verify-links": ["affiliate_enrichment"],
   "retry-failed": ["retries"],
   "refresh-coupons": ["coupons", "affiliate_enrichment"],
+  "enrich-products": ["product_enrichment"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED"]);

@@ -2,6 +2,7 @@
 -- provenance, extra normalized source data, and source-health run history. Additive and idempotent.
 
 ALTER TYPE "revalidation_type" ADD VALUE IF NOT EXISTS 'COUPON_REFRESH';
+ALTER TYPE "revalidation_type" ADD VALUE IF NOT EXISTS 'PRODUCT_ENRICHMENT';
 
 CREATE TABLE IF NOT EXISTS "sovrn_coupons" (
   "id" TEXT NOT NULL,
@@ -54,4 +55,41 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL ON "sovrn_coupons" FROM anon; END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL ON "sovrn_coupons" FROM authenticated; END IF;
+END $$;
+
+-- Product data enrichment: field-level facts with provenance, and a resolved snapshot per product.
+ALTER TABLE "product_entities" ADD COLUMN IF NOT EXISTS "enrichmentStatus" TEXT;
+ALTER TABLE "product_entities" ADD COLUMN IF NOT EXISTS "enrichedAt" TIMESTAMP(3);
+ALTER TABLE "product_entities" ADD COLUMN IF NOT EXISTS "factSummary" JSONB;
+
+CREATE TABLE IF NOT EXISTS "product_facts" (
+  "id" TEXT NOT NULL,
+  "productEntityId" TEXT NOT NULL,
+  "field" TEXT NOT NULL,
+  "value" JSONB NOT NULL,
+  "unit" TEXT,
+  "source" TEXT NOT NULL,
+  "sourceName" TEXT NOT NULL,
+  "sourceKey" TEXT NOT NULL,
+  "sourceUrl" TEXT,
+  "observedAt" TIMESTAMP(3) NOT NULL,
+  "matchBasis" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "product_facts_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "product_facts_productEntityId_field_source_sourceKey_key" ON "product_facts"("productEntityId", "field", "source", "sourceKey");
+CREATE INDEX IF NOT EXISTS "product_facts_productEntityId_idx" ON "product_facts"("productEntityId");
+CREATE INDEX IF NOT EXISTS "product_facts_field_observedAt_idx" ON "product_facts"("field", "observedAt");
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'product_facts_productEntityId_fkey') THEN
+    ALTER TABLE "product_facts" ADD CONSTRAINT "product_facts_productEntityId_fkey" FOREIGN KEY ("productEntityId") REFERENCES "product_entities"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+ALTER TABLE "product_facts" ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN REVOKE ALL ON "product_facts" FROM anon; END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN REVOKE ALL ON "product_facts" FROM authenticated; END IF;
 END $$;

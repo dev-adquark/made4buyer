@@ -16,6 +16,7 @@ export const SWITCHES = {
   external_ingestion: { label: "External source ingestion", help: "Apify crawls, collection and the Content API feed.", default: true },
   image_enrichment: { label: "Image enrichment", help: "Daily Pexels image backfill.", default: true },
   affiliate_enrichment: { label: "Affiliate enrichment", help: "Sovrn offer refresh and link verification.", default: true },
+  product_enrichment: { label: "Product data enrichment", help: "Field-level product facts from the review source, known product pages and Sovrn offers, with provenance.", default: true },
   coupons: { label: "Coupon enrichment", help: "Sovrn promo-code lookups for products with a real retailer URL.", default: true },
   retries: { label: "Automatic retries", help: "Retry of failed pipeline stages.", default: true },
 } as const;

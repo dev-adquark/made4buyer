@@ -132,7 +132,7 @@ export function robotsPatternMatches(pattern: string, path: string): boolean {
   return i === p.length;
 }
 
-async function checkRobots(url: string): Promise<{ allowed: boolean; reason?: string }> {
+export async function checkRobots(url: string): Promise<{ allowed: boolean; reason?: string }> {
   const u = new URL(url);
   const res = await safeFetch(`${u.origin}/robots.txt`, { timeoutMs: 8000, maxRedirects: 3, readBody: true, maxBytes: 500_000, standardPortsOnly: true });
   // 4xx: the site publishes no rules. Unreachable or 5xx: don't crawl until it can be read.

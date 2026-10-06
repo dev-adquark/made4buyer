@@ -51,6 +51,22 @@ export async function activeCoupons(reviewId: string): Promise<PublicCoupon[]> {
     .filter((c) => couponIsCurrent(c));
 }
 
+/** The public subset of a product's resolved facts: values with their source, never internal scores. */
+export type ProductData = {
+  fields: Record<string, { value: string | number | string[] | null; unit?: string | null; status: string; sourceName: string | null; source: string | null; observedAt: string | null }>;
+  priceTier: { tier: string; methodology: string } | null;
+  platform: "NOT_APPLICABLE" | null;
+};
+
+function productDataOf(summary: unknown): ProductData | null {
+  const s = summary as { fields?: Record<string, { value: unknown; unit?: string | null; status: string; sourceName: string | null; source: string | null; observedAt: string | null }>; priceTier?: ProductData["priceTier"]; platform?: ProductData["platform"] } | null;
+  if (!s?.fields) return null;
+  const fields: ProductData["fields"] = {};
+  // Only values a source stated and that are current and undisputed reach the page.
+  for (const [k, f] of Object.entries(s.fields)) if ((f.status === "VERIFIED" || f.status === "SUPPORTED") && f.value != null) fields[k] = { value: f.value as ProductData["fields"][string]["value"], unit: f.unit ?? null, status: f.status, sourceName: f.sourceName, source: f.source, observedAt: f.observedAt };
+  return { fields, priceTier: s.priceTier ?? null, platform: s.platform ?? null };
+}
+
 export type PageRenderModel = {
   version: number;
   reviewId: string;
@@ -82,6 +98,8 @@ export type PageRenderModel = {
   articleType?: "ARTICLE" | "GUIDE" | null;
   /** Products/services this content covers (one for a review, several for a comparison). */
   products: Array<{ name: string; slug: string; role: string; brand: string | null }>;
+  /** Resolved, provenance-carrying facts for the single product a review covers (lib/products). */
+  productData?: ProductData | null;
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
   coupons?: PublicCoupon[];
@@ -141,6 +159,7 @@ export type RenderInputs = {
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
   products?: PageRenderModel["products"];
+  productData?: ProductData | null;
 };
 
 /** Pure composition of the PageRenderModel (shared by the DB builder and the dry-run). */
@@ -152,7 +171,7 @@ function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | n
   return pros.length || cons.length ? { pros, cons } : null;
 }
 
-export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [] }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [], productData = null }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   const pub = publicImageUrl(image, review.categorySlug);
@@ -205,6 +224,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     articleType: review.kind === "AI_GUIDE" ? ((review.generationMeta as { articleType?: string } | null)?.articleType === "ARTICLE" ? "ARTICLE" : "GUIDE") : null,
     approval: review.kind === "AI_GUIDE" ? (review.editorApprovedBy?.startsWith("automation:") ? "AUTOMATED" : review.editorApprovedBy ? "EDITOR" : null) : null,
     products,
+    productData,
     // A rating belongs to a single-product review; comparisons and guides never carry one.
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     deals,
@@ -226,7 +246,9 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
     },
   });
   const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products });
+  const primary = review.contentEntities.find((c) => c.role === "PRIMARY");
+  const productData = primary ? productDataOf((await db.productEntity.findUnique({ where: { id: primary.productEntityId }, select: { factSummary: true } }))?.factSummary) : null;
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products, productData });
 }
 
 /**

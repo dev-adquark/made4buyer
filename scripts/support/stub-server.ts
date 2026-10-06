@@ -31,6 +31,8 @@ export async function startStubServer(opts: StubOptions = {}) {
   // Sovrn stub controls: `status` forces that HTTP status (e.g. 403); `notAffiliatable` marks every offer affiliatable:false.
   const sovrnCtl = { status: 0, notAffiliatable: false };
   // Sovrn Product Promo Codes stub (documented response shape). `coupons` is returned for any product_url.
+  // Product pages for enrichment tests: GET /pages/<name> serves pages[name] as HTML.
+  const pages: Record<string, string> = {};
   const couponCtl = { status: 0, coupons: [] as Array<Record<string, unknown>>, verificationActive: false, requests: [] as string[] };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
@@ -48,6 +50,10 @@ export async function startStubServer(opts: StubOptions = {}) {
     if (url.pathname === "/content") {
       if (opts.contentKey && req.headers.authorization !== `Bearer ${opts.contentKey}`) return send(401, { error: "unauthorized" });
       return send(200, fill(opts.contentOverride?.() ?? { items: content.items }));
+    }
+    if (url.pathname.startsWith("/pages/")) {
+      const html = pages[decodeURIComponent(url.pathname.slice(7))];
+      return html ? send(200, html, { "content-type": "text/html; charset=utf-8" }) : send(404, "not found");
     }
     if (url.pathname === "/coupons/product") {
       if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
@@ -210,5 +216,5 @@ export async function startStubServer(opts: StubOptions = {}) {
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, pexels, ktb, sovrn: sovrnCtl, coupons: couponCtl, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, ktb, sovrn: sovrnCtl, coupons: couponCtl, pages, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

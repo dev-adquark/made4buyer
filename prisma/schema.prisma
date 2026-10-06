@@ -222,6 +222,7 @@ enum RevalidationType {
   PUBLISH_CYCLE
   INDEX_INSPECTION
   COUPON_REFRESH
+  PRODUCT_ENRICHMENT
 
   @@map("revalidation_type")
 }
@@ -956,25 +957,55 @@ model ApifyRun {
 
 /// One product or service ("NordVPN", "Cursor"), shared by every review, comparison and guide that covers it.
 model ProductEntity {
-  id              String          @id @default(cuid())
-  slug            String          @unique
-  name            String
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
   /// Normalised identity: "Nord VPN", "NordVPN" and "nordvpn" share one key.
-  matchKey        String          @unique
-  aliases         String[]        @default([])
-  aliasKeys       String[]        @default([])
-  brand           String?
-  brandSlug       String?
-  categorySlug    String?
-  subcategorySlug String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  content         ContentEntity[]
+  matchKey         String          @unique
+  aliases          String[]        @default([])
+  aliasKeys        String[]        @default([])
+  brand            String?
+  brandSlug        String?
+  categorySlug     String?
+  subcategorySlug  String?
+  /// Field-level enrichment (see lib/products): resolved snapshot, completeness and last run.
+  enrichmentStatus String?
+  enrichedAt       DateTime?
+  factSummary      Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  content          ContentEntity[]
+  facts            ProductFact[]
 
   @@index([brandSlug])
   @@index([categorySlug])
   @@index([aliasKeys], type: Gin)
   @@map("product_entities")
+}
+
+/// One value for one product field as one source stated it (provenance). Never guessed; the
+/// resolver (lib/products/facts.ts) chooses per field by authority, identity match and freshness.
+model ProductFact {
+  id              String        @id @default(cuid())
+  productEntityId String
+  field           String
+  value           Json
+  unit            String?
+  source          String
+  sourceName      String
+  /// sourceUrl, or the source name when there is no URL (unique key part).
+  sourceKey       String
+  sourceUrl       String?
+  observedAt      DateTime
+  matchBasis      String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  entity          ProductEntity @relation(fields: [productEntityId], references: [id], onDelete: Cascade)
+
+  @@unique([productEntityId, field, source, sourceKey])
+  @@index([productEntityId])
+  @@index([field, observedAt])
+  @@map("product_facts")
 }
 
 /// Content ↔ product link. PRIMARY: the reviewed product; COMPARED: one side of a comparison; MENTIONED: covered in a guide.

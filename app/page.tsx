@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Collage from "@/components/collage";
@@ -23,7 +24,25 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const style = (slug: string | null | undefined) => themeStyle(slug) as React.CSSProperties;
-const NA = <span className="na">Not available</span>;
+/** Spec rows a source stated; a row with nothing to say is left out rather than shown as "Not available". */
+function SpecRows({ rows }: { rows: Array<[string, string | null | undefined]> }) {
+  const known = rows.filter(([, v]) => v);
+  return known.length ? (
+    <>
+      {known.map(([label, value]) => (
+        <Fragment key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </Fragment>
+      ))}
+    </>
+  ) : (
+    <>
+      <dt>Details</dt>
+      <dd className="na">See the review</dd>
+    </>
+  );
+}
 
 export default async function Home() {
   // Photos depend only on the static taxonomy, so they load alongside the database queries.
@@ -142,14 +161,7 @@ export default async function Home() {
                   <span className="clip-body">
                     <span className="label">Spec sheet: {specSource.productName}</span>
                     <dl>
-                      <dt>Brand</dt>
-                      <dd>{specSource.brand ?? NA}</dd>
-                      <dt>Type</dt>
-                      <dd>{subcategoryName(specSource.categorySlug, specSource.subcategorySlug) ?? specSource.entities?.deviceType ?? NA}</dd>
-                      <dt>Platform</dt>
-                      <dd>{specSource.entities?.platform ?? NA}</dd>
-                      <dt>Price tier</dt>
-                      <dd>{specSource.assignments[0]?.categoryTag.name ?? NA}</dd>
+                      <SpecRows rows={[["Brand", specSource.brand], ["Type", subcategoryName(specSource.categorySlug, specSource.subcategorySlug) ?? specSource.entities?.deviceType], ["Platform", specSource.entities?.platform]]} />
                     </dl>
                   </span>
                 </Link>
@@ -328,14 +340,7 @@ export default async function Home() {
                         </Link>
                       </h3>
                       <dl className="facts">
-                        <dt>Brand</dt>
-                        <dd>{p.brand ?? NA}</dd>
-                        <dt>Type</dt>
-                        <dd>{subcategoryName(p.categorySlug, p.subcategorySlug) ?? p.entities?.deviceType ?? NA}</dd>
-                        <dt>Platform</dt>
-                        <dd>{p.entities?.platform ?? NA}</dd>
-                        <dt>Price tier</dt>
-                        <dd>{p.assignments[0]?.categoryTag.name ?? NA}</dd>
+                        <SpecRows rows={[["Brand", p.brand], ["Type", subcategoryName(p.categorySlug, p.subcategorySlug) ?? p.entities?.deviceType], ["Platform", p.entities?.platform]]} />
                       </dl>
                     </div>
                   </div>

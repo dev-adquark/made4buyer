@@ -11,6 +11,7 @@ import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { verifyLinkRecord } from "@/lib/pipeline/stages";
 import { config } from "@/lib/config";
 import { canonicalProductUrl, couponsConfigured, fetchSovrnCoupons } from "@/lib/sovrn/coupons";
+import { enrichProduct } from "@/lib/products/enrich";
 
 /**
  * Revalidation / maintenance jobs. Each run is recorded in revalidation_runs with checked,
@@ -165,6 +166,42 @@ export async function runCouponRefresh(opts: { trigger: string; ctx?: AuditConte
       if (changed) {
         await persistPageRenderModel(r.id);
         revalidateReviewPaths(r);
+      }
+    }
+  });
+}
+
+/**
+ * Product-data enrichment. Products on published pages are enriched oldest-first; a product is
+ * revisited after PRODUCT_ENRICH_INTERVAL_HOURS (fresh facts are not re-fetched, see refreshDue).
+ * Pages showing a product are rebuilt when its resolved data changed.
+ */
+export async function runProductEnrichment(opts: { trigger: string; ctx?: AuditContext; limit?: number }): Promise<RunResult> {
+  const interval = Math.max(1, Number(process.env.PRODUCT_ENRICH_INTERVAL_HOURS ?? 24) || 24) * 3_600_000;
+  return trackRun("PRODUCT_ENRICHMENT", opts.trigger, opts.ctx ?? SYSTEM_ACTOR, {}, async (tally) => {
+    const due = new Date(Date.now() - interval);
+    const entities = await db.productEntity.findMany({
+      where: { content: { some: { review: { status: "PUBLISHED" } } }, OR: [{ enrichedAt: null }, { enrichedAt: { lte: due } }] },
+      orderBy: { enrichedAt: { sort: "asc", nulls: "first" } },
+      take: opts.limit ?? 25,
+      select: { id: true, factSummary: true, content: { where: { review: { status: "PUBLISHED" } }, select: { review: { select: { id: true, slug: true, status: true, categorySlug: true, brandSlug: true } } } } },
+    });
+    for (const e of entities) {
+      try {
+        const before = JSON.stringify((e.factSummary as { fields?: unknown } | null)?.fields ?? null);
+        const r = await enrichProduct(e.id);
+        tally.add(true, r.status);
+        for (const o of r.outcomes) tally.reasons[o.split(" ")[0].split(":")[0]] = (tally.reasons[o.split(" ")[0].split(":")[0]] ?? 0) + 1;
+        const after = await db.productEntity.findUnique({ where: { id: e.id }, select: { factSummary: true } });
+        if (JSON.stringify((after?.factSummary as { fields?: unknown } | null)?.fields ?? null) !== before) {
+          for (const { review } of e.content) {
+            await persistPageRenderModel(review.id);
+            revalidateReviewPaths(review);
+          }
+        }
+      } catch (error) {
+        tally.add(false, "ERROR");
+        log.warn("product enrichment failed", { stage: "ENTITY_EXTRACTION", entityId: e.id, error: String(error).slice(0, 300) });
       }
     }
   });

@@ -135,17 +135,50 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const published = m.publishedAt ? new Date(m.publishedAt) : null;
   const sourceDate = m.source.publishedAt ? new Date(m.source.publishedAt) : null;
   const fact = (label: string) => m.keyEntities.find((e) => e.label === label)?.value ?? null;
-  const specs: Array<[string, string | null]> = [
-    ["Brand", m.brand ?? fact("Brand")],
-    ["Product", fact("Product") ?? m.productName],
-    ["Model", fact("Model")],
-    ["Type", m.subcategory?.name ?? fact("Type")],
-    ["Platform", m.platforms.map((p) => p.name).join(", ") || fact("Platform")],
-    ["Best for", m.intents.map((i) => i.name).join(", ") || fact("Best for")],
-    ["Price tier", m.priceTier?.name ?? null],
-  ];
-  // Device spec rows we don't extract yet are listed honestly as not available, never guessed.
-  if (m.category && ["laptops", "phones", "tablets"].includes(m.category.slug)) for (const label of ["Processor", "Memory", "Display", "Battery"]) specs.push([label, fact(label)]);
+  // Key facts: values a source stated (with provenance), never guessed. Rows that cannot apply
+  // (a platform for a kettle, a model for a category guide) are left out instead of "Not available".
+  const pd = m.productData ?? null;
+  const pv = (k: string) => {
+    const f = pd?.fields[k];
+    if (!f || f.value == null) return null;
+    const v = Array.isArray(f.value) ? f.value.join(", ") : String(f.value);
+    return f.unit && k !== "price" && !/^\//.test(f.unit) && !v.toLowerCase().endsWith(f.unit.toLowerCase()) ? `${v} ${f.unit}` : v;
+  };
+  const via = (k: string) => {
+    const f = pd?.fields[k];
+    return f?.sourceName ? `${f.source === "MANUFACTURER" ? "Manufacturer" : f.source === "RETAILER" ? "Retailer" : f.source === "STRUCTURED_FEED" ? "Product feed" : "Source"}: ${f.sourceName}${f.observedAt ? `, checked ${dateline(f.observedAt)}` : ""}` : null;
+  };
+  // Guides, roundups and comparisons cover several products: single-product rows don't apply.
+  const categoryLevel = (!m.products?.some((p) => p.role === "PRIMARY") && isGuide) || m.kind === "BUYING_GUIDE" || m.kind === "COMPARISON";
+  const compared = (m.products ?? []).filter((p) => p.role === "COMPARED" || p.role === "MENTIONED").map((p) => p.name);
+  const same = (a: string | null | undefined, b: string | null | undefined) => Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
+  const typeName = m.subcategory?.name ?? fact("Type");
+  const platformApplies = pd ? pd.platform !== "NOT_APPLICABLE" : Boolean(m.platforms.length || fact("Platform"));
+  const priceText = pd?.fields.price ? money(Number(pd.fields.price.value), pd.fields.price.unit ?? (pd.fields.currency?.value as string | undefined) ?? null) : null;
+  type Row = [label: string, value: string | null, note?: string | null];
+  const specs: Row[] = categoryLevel
+    ? [
+        [m.kind === "COMPARISON" ? "Compares" : "Covers", m.kind === "COMPARISON" && compared.length ? compared.join(" vs ") : m.productName],
+        ...(m.brand && m.kind === "BUYING_GUIDE" ? [["Brand", m.brand] as Row] : []),
+        ...(m.kind === "BUYING_GUIDE" && compared.length ? [["Products", compared.join(", ")] as Row] : []),
+        ...(m.category && !same(m.category.name, m.productName) ? [["Category", m.category.name] as Row] : []),
+        ...(typeName && !same(typeName, m.productName) && !same(typeName, m.category?.name) ? [["Type", typeName] as Row] : []),
+        ...(m.intents.length ? [["Best for", m.intents.map((i) => i.name).join(", ")] as Row] : []),
+      ]
+    : [
+        ["Brand", pv("brand") ?? m.brand ?? fact("Brand"), pv("brand") ? via("brand") : null],
+        ["Product", fact("Product") ?? m.productName],
+        ["Model", pv("model") ?? pv("mpn") ?? fact("Model"), pv("model") ? via("model") : pv("mpn") ? via("mpn") : null],
+        ...(typeName && !same(typeName, m.productName) ? [["Type", typeName] as Row] : []),
+        ...(platformApplies ? [["Platform", m.platforms.map((p) => p.name).join(", ") || fact("Platform")] as Row] : []),
+        ["Best for", m.intents.map((i) => i.name).join(", ") || fact("Best for")],
+        // Only from a current, verified price against the category's published bands (methodology in Admin).
+        ["Price tier", pd?.priceTier ? pd.priceTier.tier.charAt(0).toUpperCase() + pd.priceTier.tier.slice(1) : null, pd?.priceTier ? pd.priceTier.methodology : null],
+        ...(priceText ? [["Price", priceText, via("price")] as Row] : []),
+        ...(["availability", "capacity", "weight", "dimensions", "color", "material", "warranty"] as const).flatMap((k) => (pv(k) ? [[k[0].toUpperCase() + k.slice(1), pv(k), via(k)] as Row] : [])),
+      ];
+  // Device rows appear only when a source stated them.
+  if (!categoryLevel && m.category && ["laptops", "phones", "tablets"].includes(m.category.slug)) for (const label of ["Processor", "Memory", "Display", "Battery"]) if (fact(label)) specs.push([label, fact(label)]);
   const quote = pullQuote(m.bodyParagraphs);
   const considerations = m.category && (m.intents.length > 0 || m.platforms.length > 0 || m.priceTier);
   const sections = [
@@ -323,10 +356,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <table className="spec-table">
               <caption className="visually-hidden">Key facts about {m.productName}</caption>
               <tbody>
-                {specs.map(([label, value]) => (
+                {specs.map(([label, value, note]) => (
                   <tr key={label}>
                     <th scope="row">{label}</th>
-                    <td>{value || <span className="na">Not available</span>}</td>
+                    <td>
+                      {value || <span className="na">Not available</span>}
+                      {value && note && <div className="small muted">{note}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
