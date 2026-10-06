@@ -31,6 +31,12 @@ afterAll(async () => {
 });
 beforeEach(() => resetDb());
 
+/** Stock photos are for category-level content only: turn the SAMPLE reviews into buying guides. */
+async function asGuides() {
+  await db.contentEntity.deleteMany({ where: { role: "PRIMARY" } });
+  await db.normalizedReview.updateMany({ data: { kind: "BUYING_GUIDE" } });
+}
+
 describe("Pexels adapter", () => {
   it("parses a successful search, keeps only valid https Pexels photos and reports rate limits", async () => {
     const r = await pexelsSearch("cybersecurity network privacy");
@@ -71,7 +77,7 @@ describe("Pexels adapter", () => {
   it("falls back to the category placeholder (never a broken image) when the chosen URL does not load", async () => {
     stub.pexels.broken = true;
     try {
-      const d = await enrichImage({ productName: "NordVPN", title: "NordVPN Review", categorySlug: "productivity-software", subcategorySlug: "vpns" });
+      const d = await enrichImage({ productName: "NordVPN", title: "Best VPNs", categorySlug: "productivity-software", subcategorySlug: "vpns", kind: "BUYING_GUIDE" });
       expect(d).toMatchObject({ sourceType: "PLACEHOLDER", sourceUrl: "/placeholders/productivity-software.svg", isFallback: true, enrichmentStatus: "FAILED" });
       expect(d.issues[0].message).toMatch(/HTTP 404|content-type/);
     } finally {
@@ -79,9 +85,12 @@ describe("Pexels adapter", () => {
     }
   });
 
-  it("skips a publisher's unlicensed image and uses Pexels instead", async () => {
-    const d = await enrichImage({ productName: "NordVPN", title: "NordVPN Review", categorySlug: "productivity-software", subcategorySlug: "vpns", imageUrl: `${stub.base}/image/publisher.png` });
-    expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", licenseState: "VERIFIED", isFallback: false });
+  it("skips a publisher's unlicensed image and uses an illustrative Pexels photo for a guide", async () => {
+    const d = await enrichImage({ productName: "NordVPN", title: "Best VPNs", categorySlug: "productivity-software", subcategorySlug: "vpns", kind: "BUYING_GUIDE", imageUrl: `${stub.base}/image/publisher.png` });
+    expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", licenseState: "VERIFIED", isFallback: false });
+    // A single-product review never gets the stock photo: the neutral category image instead.
+    const review = await enrichImage({ productName: "NordVPN", title: "NordVPN Review", categorySlug: "productivity-software", subcategorySlug: "vpns", kind: "REVIEW", imageUrl: `${stub.base}/image/publisher.png` });
+    expect(review).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category", isFallback: true });
   });
 });
 
@@ -90,16 +99,26 @@ describe("image enrichment in the pipeline", () => {
     const restoreContent = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_SOURCE_NAME: "sample-fixture" });
     await runIngestion({ trigger: "test" });
     restoreContent();
-    const assets = await db.imageAsset.findMany({ where: { isPrimary: true } });
+    const assets = await db.imageAsset.findMany({ where: { isPrimary: true }, include: { review: { select: { kind: true } } } });
     expect(assets.length).toBeGreaterThan(0);
-    // Licensed feed images (SAMPLE fixture) win over Pexels; every other review gets a Pexels photo.
-    const real = assets.filter((a) => a.sourceType === "ENRICHMENT_SERVICE");
+    // The SAMPLE items are single-product reviews: never a stock photo; the source's licensed
+    // image or the neutral category image, each with its provenance.
+    for (const a of assets) {
+      expect(a.review.kind).toBe("REVIEW");
+      expect(a.sourceType).not.toBe("ENRICHMENT_SERVICE");
+      expect(a.imageType).toBe(a.sourceType === "PLACEHOLDER" ? "neutral-category" : "source-product");
+    }
+    // As category guides they get labelled illustrative Pexels photos, with attribution.
+    await asGuides();
+    await runImageBackfill("test");
+    const real = await db.imageAsset.findMany({ where: { isPrimary: true, sourceType: "ENRICHMENT_SERVICE" } });
     expect(real.length).toBeGreaterThan(0);
     for (const a of real) {
       expect(a.attribution).toMatch(/^Photo by .+ on Pexels$/);
       expect(a.attributionUrl).toMatch(/^https:\/\/www\.pexels\.com\//);
       expect(a.providerPhotoId).toMatch(/^pexels:\d+$/);
-      expect(["PRODUCT", "ILLUSTRATIVE"]).toContain(a.subject);
+      expect(a.subject).toBe("ILLUSTRATIVE");
+      expect(a.imageType).toBe("illustrative-category");
       expect(a.licenseState).toBe("VERIFIED");
     }
   });
@@ -109,6 +128,7 @@ describe("image enrichment in the pipeline", () => {
     await runIngestion({ trigger: "test" }); // no key: every review gets the placeholder
     restoreContent();
     expect(await db.imageAsset.count({ where: { isPrimary: true, sourceType: "ENRICHMENT_SERVICE" } })).toBe(0);
+    await asGuides();
 
     const first = await runImageBackfill("test");
     expect(first.status).toBe("OK");
@@ -132,6 +152,8 @@ describe("image enrichment in the pipeline", () => {
     const restoreContent = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_SOURCE_NAME: "sample-fixture" });
     await runIngestion({ trigger: "test" });
     restoreContent();
+    await asGuides();
+    await runImageBackfill("test");
     const a = await db.imageAsset.findFirstOrThrow({ where: { isPrimary: true, isFallback: false } });
     await db.imageAsset.update({ where: { id: a.id }, data: { sourceUrl: `${stub.base}/pexels-img/broken.jpeg` } });
     const r = await runImageBackfill("test");

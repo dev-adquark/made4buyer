@@ -2,13 +2,25 @@ import type { EnrichmentStatus, ImageSourceType, LicenseState } from "@prisma/cl
 import { config } from "@/lib/config";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import type { ImageType } from "@/lib/images/provenance";
+import { isCommonsFileUrl, isFreeLicence, type CommonsImage } from "@/lib/products/commons-image";
 import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
 
 /**
- * Stage IMAGE_ENRICHMENT. Priority: (1) Content API image, (2) configured image service,
- * (3) our own category placeholder. Never blocks publishing. License safety is only
- * VERIFIED when explicitly established (payload flag or operator-level assertion via
- * CONTENT_API_IMAGES_LICENSED); a license string from a provider is PROVIDER_ASSERTED.
+ * Stage IMAGE_ENRICHMENT. Never blocks publishing. A wrong image is worse than no image.
+ *
+ * Single-product content (a REVIEW, or anything with a PRIMARY product link):
+ *   (1) a licensed photo of the exact product (Wikimedia Commons via a Wikidata "image" fact,
+ *       identity-matched; see lib/products/commons-image.ts),
+ *   (2) the review source's own image when explicitly licensed (Content API),
+ *   (3) our neutral category placeholder. Never a keyword-matched stock photo (Pexels/service).
+ * Category-level content (comparisons, buying guides, AI guides):
+ *   (1) the source's licensed image, (2) a labelled ILLUSTRATIVE topic photo whose own
+ *   description is about the topic (Pexels), (3) the neutral category placeholder.
+ *
+ * License safety is only VERIFIED when explicitly established (payload flag, operator-level
+ * CONTENT_API_IMAGES_LICENSED, the Pexels License, or a free Commons licence); a license string
+ * from a provider is PROVIDER_ASSERTED. Every decision records its provenance (imageType).
  */
 
 export type ImageDecision = {
@@ -31,6 +43,12 @@ export type ImageDecision = {
   altText?: string;
   photographerUrl?: string;
   verifiedAt?: Date;
+  /** Provenance: what the image shows and how we know (lib/images/provenance.ts). */
+  imageType: ImageType;
+  /** How sure we are the image shows the content's product (0..1); omitted for category images. */
+  matchConfidence?: number;
+  /** The page describing the image (e.g. its Commons file page). */
+  sourcePageUrl?: string;
   /** Provider status when the provider stopped us (rate limit, auth): the caller should pause. */
   providerStatus?: PexelsSearchStatus;
   issues: Array<{ code: "IMAGE_ENRICHMENT_FAILED" | "LICENSE_UNVERIFIED"; message: string }>;
@@ -72,6 +90,13 @@ export type ImageInput = {
   title?: string;
   /** Content kind: only a single-product REVIEW may get a "product" photo. */
   kind?: string | null;
+  /**
+   * The content is about one product (a REVIEW, or it has a PRIMARY product link). Defaults to
+   * true unless `kind` names category-level content. Single-product content never gets a stock photo.
+   */
+  singleProduct?: boolean;
+  /** Validated, licensed photos of the exact product, best first (lib/products/commons-image.ts). */
+  productImages?: CommonsImage[];
   /** Provider photo ids already used by other reviews (avoided where an alternative exists). */
   excludePhotoIds?: Set<string>;
   /** Per-run search cache shared across reviews. */
@@ -97,7 +122,9 @@ type ServiceImage = {
 async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
   if (config.images.pexelsKey()) {
     const p = await findPexelsImage(
-      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: input.kind },
+      // Only category-level content reaches the stock-photo service, so the lookup is always for
+      // an ILLUSTRATIVE topic photo, never a keyword "product" photo.
+      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: input.kind && input.kind !== "REVIEW" ? input.kind : "BUYING_GUIDE" },
       { exclude: input.excludePhotoIds, cache: input.searchCache },
     );
     // Every photo served by the Pexels API is covered by the Pexels License.
@@ -150,14 +177,76 @@ function licenseStateOf(verified: boolean, license?: string): LicenseState {
   return "UNVERIFIED";
 }
 
+/** Whether content is about one product (so it may only show that exact product, or a neutral image). */
+export function isSingleProductContent(input: { kind?: string | null; singleProduct?: boolean }): boolean {
+  return input.singleProduct ?? (!input.kind || input.kind === "REVIEW");
+}
+
+/** Our neutral category image: names the category, shows no product. */
+export function neutralCategoryDecision(categorySlug: string | null | undefined, issues: ImageDecision["issues"], reason: string, providerStatus?: PexelsSearchStatus): ImageDecision {
+  return {
+    sourceType: "PLACEHOLDER",
+    sourceUrl: placeholderPath(categorySlug),
+    ...PLACEHOLDER_SIZE,
+    contentType: "image/svg+xml",
+    licenseState: "OWNED_PLACEHOLDER",
+    enrichmentStatus: issues.some((i) => i.code === "IMAGE_ENRICHMENT_FAILED") ? "FAILED" : "FALLBACK",
+    isFallback: true,
+    imageType: "neutral-category",
+    failureReason: issues.map((i) => i.message).join("; ") || reason,
+    providerStatus,
+    verifiedAt: new Date(),
+    issues,
+  };
+}
+
+/** A licensed Commons photo of the exact product, if one loads. */
+async function fromProductImages(images: CommonsImage[], issues: ImageDecision["issues"]): Promise<ImageDecision | null> {
+  for (const img of images) {
+    // Defence in depth: the lookup validated these, but never show an unlicensed or off-Commons file.
+    if (!isCommonsFileUrl(img.url) || !isFreeLicence(img.license)) continue;
+    const probe = await probeImage(img.url);
+    if (!probe.ok) {
+      issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Commons product image unusable: ${probe.reason}` });
+      continue;
+    }
+    return {
+      sourceType: "WIKIMEDIA_COMMONS",
+      sourceUrl: img.url,
+      cdnUrl: cdnUrlFor(img.url),
+      contentType: probe.contentType,
+      licenseState: "VERIFIED",
+      license: img.license,
+      attribution: img.attribution,
+      attributionUrl: img.filePageUrl,
+      sourcePageUrl: img.filePageUrl,
+      subject: "PRODUCT",
+      imageType: "commons-product",
+      matchConfidence: img.matchConfidence,
+      enrichmentStatus: "ENRICHED",
+      isFallback: false,
+      verifiedAt: new Date(),
+      issues,
+    };
+  }
+  return null;
+}
+
 export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   const issues: ImageDecision["issues"] = [];
   const now = new Date();
+  const single = isSingleProductContent(input);
+
+  // 1. Single-product content: a licensed photo of the exact product comes first.
+  if (single && input.productImages?.length) {
+    const product = await fromProductImages(input.productImages, issues);
+    if (product) return product;
+  }
 
   if (input.imageUrl) {
     const licenseState = licenseStateOf(Boolean(input.imageLicenseVerified) || config.contentApi.imagesLicensed(), input.imageLicense);
     // A source image we may not show (e.g. a scraped publisher's own image) is skipped, so the
-    // licensed image service gets its turn instead of the page falling back to a placeholder.
+    // next source gets its turn instead of the page falling back to a placeholder.
     const showable = licenseState !== "UNVERIFIED" || !config.images.requireLicense();
     const probe = showable ? await probeImage(input.imageUrl) : ({ ok: false, reason: "source image has no verified licence" } as const);
     if (probe.ok) {
@@ -165,7 +254,10 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
       return {
         sourceType: "CONTENT_API",
         sourceUrl: input.imageUrl,
-        subject: "PRODUCT",
+        // The review source's own image of the reviewed product; for category-level content it
+        // illustrates the topic and is labelled as such.
+        subject: single ? "PRODUCT" : "ILLUSTRATIVE",
+        imageType: single ? "source-product" : "illustrative-category",
         cdnUrl: cdnUrlFor(input.imageUrl),
         contentType: probe.contentType,
         licenseState,
@@ -180,6 +272,10 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     if (showable) issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Content API image unusable: ${probe.reason}` });
   }
 
+  // 2. Single-product content never gets a keyword-matched stock photo: neutral category image.
+  if (single) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this exact product");
+
+  // 3. Category-level content: a labelled illustrative topic photo.
   const service = await fromService(input);
   if (service.image) {
     const probe = await probeImage(service.image.url);
@@ -197,7 +293,9 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
         license: service.image.license,
         attribution: service.image.attribution,
         attributionUrl: service.image.attributionUrl,
-        subject: service.image.subject,
+        // A stock/service photo is never presented as a product.
+        subject: "ILLUSTRATIVE",
+        imageType: "illustrative-category",
         providerPhotoId: service.image.providerPhotoId,
         searchQuery: service.image.searchQuery,
         altText: service.image.altText,
@@ -213,19 +311,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: service.reason });
   }
 
-  return {
-    sourceType: "PLACEHOLDER",
-    sourceUrl: placeholderPath(input.categorySlug),
-    ...PLACEHOLDER_SIZE,
-    contentType: "image/svg+xml",
-    licenseState: "OWNED_PLACEHOLDER",
-    enrichmentStatus: issues.some((i) => i.code === "IMAGE_ENRICHMENT_FAILED") ? "FAILED" : "FALLBACK",
-    isFallback: true,
-    failureReason: issues.map((i) => i.message).join("; ") || (service.reason ?? "no image source available"),
-    providerStatus: service.providerStatus,
-    verifiedAt: now,
-    issues,
-  };
+  return neutralCategoryDecision(input.categorySlug, issues, service.reason ?? "no image source available", service.providerStatus);
 }
 
 /** Which image may be shown publicly. Unverified-license images are withheld when IMAGE_REQUIRE_LICENSE is on. */

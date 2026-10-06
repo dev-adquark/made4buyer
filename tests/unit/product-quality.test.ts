@@ -42,3 +42,13 @@ describe("Wikidata exact-item matching", () => {
     expect(wikidataMatch({ ...id, gtin: "0021614062130" }, { label: "Breville Barista Express", aliases: [], brands: ["Breville"], gtin: "0021614062888" }).match).toBe(false);
   });
 });
+
+describe("Wikidata image facts are accepted by the hero picker", () => {
+  it("reads the wikidata: prefix written by lib/products/wikidata.ts", async () => {
+    const { matchBasisConfidence } = await import("@/lib/products/commons-image");
+    expect(matchBasisConfidence("wikidata:gtin")).toBe(1);
+    expect(matchBasisConfidence("wikidata:brand+name")).toBe(0.9);
+    expect(matchBasisConfidence("wikidata:none")).toBeNull();
+    expect(matchBasisConfidence("review-source")).toBeNull();
+  });
+});

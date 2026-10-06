@@ -132,6 +132,8 @@ enum ImageSourceType {
   CONTENT_API
   ENRICHMENT_SERVICE
   PLACEHOLDER
+  /// A freely licensed photo of the exact product on Wikimedia Commons (via Wikidata P18).
+  WIKIMEDIA_COMMONS
 
   @@map("image_source_type")
 }
@@ -609,6 +611,13 @@ model ImageAsset {
   altText            String?
   photographerUrl    String?
   verifiedAt         DateTime?
+  /// What the image shows and how we know: official-product | retailer-product | commons-product |
+  /// source-product | illustrative-category | neutral-category (lib/images/provenance.ts).
+  imageType          String?
+  /// How sure we are the image shows this content's product (0..1); null for category images.
+  matchConfidence    Float?
+  /// The page the image is described on / taken from (e.g. its Wikimedia Commons file page).
+  sourcePageUrl      String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
@@ -617,6 +626,7 @@ model ImageAsset {
   @@index([providerPhotoId])
   @@index([enrichmentStatus])
   @@index([licenseState])
+  @@index([imageType])
   @@map("image_assets")
 }
 
