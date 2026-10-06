@@ -636,8 +636,44 @@ function offerList(nodes: Array<Record<string, unknown>>, pageUrl: string): Json
   return out;
 }
 
+/**
+ * schema.org ProductGroup (a product sold in variants, e.g. sizes or colours) as one Product:
+ *  - one variant: that variant, with the group's brand/description/images where it states none;
+ *  - several variants: the group's own identity (name, brand, description, images), never a
+ *    variant's SKU/GTIN; an offer only when every variant states the same price and currency
+ *    (otherwise the price depends on the variant and stays unknown).
+ */
+function productFromGroup(g: Record<string, unknown>): Record<string, unknown> {
+  const variants = asArray(g.hasVariant).filter(isObj);
+  const inherit = ["brand", "description", "image", "category", "manufacturer", "aggregateRating"];
+  if (variants.length === 1) {
+    const v = { ...variants[0], "@type": "Product" } as Record<string, unknown>;
+    for (const k of inherit) if (v[k] == null && g[k] != null) v[k] = g[k];
+    if (v.name == null) v.name = g.name;
+    return v;
+  }
+  const p: Record<string, unknown> = { "@type": "Product" };
+  for (const k of ["name", "url", "@id", ...inherit]) if (g[k] != null) p[k] = g[k];
+  const offers = variants.flatMap((v) => asArray(v.offers).filter(isObj));
+  const key = (o: Record<string, unknown>) => `${String(o.price ?? "")}|${String(o.priceCurrency ?? "")}`;
+  if (offers.length && offers.length >= variants.length && new Set(offers.map(key)).size === 1 && offers[0].price != null) p.offers = offers[0];
+  return p;
+}
+
+function expandProductGroups(roots: unknown[]): unknown[] {
+  const isGroup = (v: unknown): v is Record<string, unknown> => isObj(v) && typesOf(v).includes("productgroup") && asArray(v.hasVariant).some(isObj);
+  const map = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(map);
+    if (isGroup(v)) return productFromGroup(v);
+    if (isObj(v) && Array.isArray(v["@graph"])) return { ...v, "@graph": v["@graph"].map(map) };
+    return v;
+  };
+  return roots.map(map);
+}
+
 /** Shared by the HTML and JSON-LD entry points: one implementation of picking and meta fallback. */
-function extractFromParts(roots: unknown[], pageUrl: string, meta: Map<string, string>, page: PageTitles): Picked | null {
+function extractFromParts(rawRoots: unknown[], pageUrl: string, meta: Map<string, string>, page: PageTitles): Picked | null {
+  const roots = expandProductGroups(rawRoots);
   const cands = collectProducts(roots);
 
   let product: ExtractedProduct | null = null;

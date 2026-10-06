@@ -10,7 +10,9 @@ export const PRODUCT_PAGE_FUNCTION = `async function pageFunction(context) {
   const { request, customData } = context;
   const url = request.loadedUrl || request.url;
   const patterns = (customData && customData.productPatterns) || [];
-  if (!patterns.some((p) => { try { return new RegExp(p).test(url); } catch (e) { return false; } })) return null;
+  // The requested URL decides (a product URL that redirects, e.g. to add a trailing slash, still counts).
+  const candidates = [request.url, url];
+  if (!patterns.some((p) => { try { const re = new RegExp(p); return candidates.some((u) => re.test(u)); } catch (e) { return false; } })) return null;
   const text = (el) => (el ? (el.textContent || "").replace(/\\s+/g, " ").trim() : "");
   const abs = (v) => { try { return v ? new URL(v, url).toString() : null; } catch (e) { return null; } };
   // Every ld+json block: parsed as-is, or its raw text when the browser cannot parse it.

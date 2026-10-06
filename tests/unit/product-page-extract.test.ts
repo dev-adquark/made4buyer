@@ -7,6 +7,7 @@ import {
   extractProductFromHtml,
   normalizeGtin,
   sameProduct,
+  extractProductFromJsonLd,
 } from "@/lib/products/page-extract";
 import type { ExtractedProduct, ProductIdentity } from "@/lib/products/types";
 
@@ -323,5 +324,24 @@ describe("classifySource", () => {
     expect(classifySource("https://www.rtings.com/x", "Sony")).toBe("SECONDARY");
     expect(classifySource("not a url", "Sony")).toBe("SECONDARY");
     expect(classifySource("ftp://sony.com/x", "Sony")).toBe("SECONDARY");
+  });
+});
+
+describe("schema.org ProductGroup (variants)", () => {
+  const group = (variants: unknown[]) => ({ "@context": "https://schema.org", "@type": "ProductGroup", name: "Adjustable Bundle", brand: { "@type": "Brand", name: "Casper" }, url: "https://casper.com/products/adjustable-bundle", productGroupID: "123", hasVariant: variants });
+  const variant = (size: string, price: number, sku: string) => ({ "@type": "Product", name: `Adjustable Bundle - ${size}`, sku, offers: { "@type": "Offer", price, priceCurrency: "USD", availability: "https://schema.org/InStock" } });
+  it("uses the group identity and no price when variant prices differ", () => {
+    const p = extractProductFromJsonLd([group([variant("Queen", 1999, "Q1"), variant("King", 2399, "K1")])], "https://casper.com/products/adjustable-bundle", {});
+    expect(p).toMatchObject({ name: "Adjustable Bundle", brand: "Casper" });
+    expect(p?.price).toBeUndefined();
+    expect(p?.sku).toBeUndefined();
+  });
+  it("keeps a price every variant shares", () => {
+    const p = extractProductFromJsonLd([group([variant("Queen", 99, "Q1"), variant("King", 99, "K1")])], "https://casper.com/products/adjustable-bundle", {});
+    expect(p).toMatchObject({ name: "Adjustable Bundle", price: 99, currency: "USD" });
+  });
+  it("a single variant is the product, inheriting the group's brand", () => {
+    const p = extractProductFromJsonLd([group([variant("Queen", 1999, "Q1")])], "https://casper.com/products/adjustable-bundle", {});
+    expect(p).toMatchObject({ name: "Adjustable Bundle - Queen", brand: "Casper", sku: "Q1", price: 1999 });
   });
 });

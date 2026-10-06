@@ -42,10 +42,10 @@ export type DiscoveryResult = {
   reason?: string;
   robotsStatus?: RobotsStatus;
   sitemaps?: SitemapReport[];
-  counts?: { seen: number; offDomain: number; notProduct: number; robotsDisallowed: number; duplicates: number; candidates: number; changed: number };
+  counts?: { seen: number; otherLocale: number; nonUsSitemaps: number; offDomain: number; notProduct: number; robotsDisallowed: number; duplicates: number; candidates: number; changed: number };
 };
 
-export type DiscoveryBrand = Pick<CommerceBrand, "officialDomain" | "discoveryUrls" | "productUrlPatterns" | "maxProductsPerRun" | "lastCrawlAt"> & { id?: string | null; slug?: string };
+export type DiscoveryBrand = Pick<CommerceBrand, "officialDomain" | "discoveryUrls" | "productUrlPatterns" | "maxProductsPerRun" | "lastCrawlAt"> & { id?: string | null; slug?: string; market?: string | null };
 
 export type DiscoveryOptions = { now?: Date; persist?: boolean; maxSitemaps?: number; maxBytes?: number; timeoutMs?: number };
 
@@ -57,6 +57,37 @@ const userAgent = () => `Made4BuyersBot/1.0 (+${config.siteUrl()})`;
 
 /** Paths that are never product pages, whatever their slug looks like. */
 const NON_PRODUCT_PATH = /(^|\/)(blog|blogs|news|newsroom|press|stories|article|articles|support|help|faq|kb|manuals?|drivers?|downloads?|careers?|jobs|legal|privacy|terms|policies|account|login|signin|cart|basket|checkout|search|compare|community|forum|forums|events?|investors?|about|contact|stores?|locations?|sitemap)(\/|$)/i;
+/** Listings that are not a new product for sale: recalls, gift cards, refurbished/open-box, registrations. */
+const NOT_A_NEW_PRODUCT = /(^|[\/_-])(recalls?|gift-?cards?|e-?gift|refurb|refurbished|renewed|reconditioned|open-?box|pre-?owned|warranty|registration)([\/_.-]|$)/i;
+/** Country/language codes used as storefront path prefixes (ISO 3166-1 / 639-1 subsets). */
+// Codes that are also everyday path words (tv, pc, id, it, is, do, go, me, so, to, no, ai, io) are left out.
+const LOCALE_CODES = new Set("ad ae af ag al am ao ar at au az ba bb bd be bf bg bh bi bj bn bo br bs bt bw by bz ca cd cf cg ch ci cl cm cn co cr cs cu cv cy cz da de dj dk dm dz ec ee eg el en er es et fa fi fj fm fr ga gb gd ge gh gm gn gq gr gt gw gy he hi hk hn hr ht hu ie il in iq ir ja jm jo jp ka ke kg kh ki kk km kn ko kp kr kw kz la lb lc li lk lr ls lt lu lv ly ma mc md mg mh mk ml mm mn mo mr ms mt mu my mv mw mx mz na nb ne ng ni nl nn np nr nz om pa pe pg ph pk pl pt pw py qa ro rs ru rw sa sb sc sd se sg si sk sl sm sn sq sr ss st sv sy sz td tg th tj tl tm tn tr tt tw tz ua ug uk us uy uz va vc ve vi vn vu ws ye za zh zm zw".split(" "));
+
+/**
+ * The storefront locale a URL path belongs to, or null when the path has no locale prefix.
+ * Looks at the first two segments: "en-us", "cs-CZ", "eu-pl", "en_GB" or a bare "au" / "es".
+ */
+export function pathLocale(url: string): string | null {
+  let segs: string[];
+  try {
+    segs = new URL(url).pathname.split("/").filter(Boolean).slice(0, 2);
+  } catch {
+    return null;
+  }
+  for (const seg of segs) {
+    const s = seg.toLowerCase();
+    if (/^[a-z]{2}[-_][a-z]{2}$/.test(s) && (LOCALE_CODES.has(s.slice(0, 2)) || LOCALE_CODES.has(s.slice(3)))) return s.replace("_", "-");
+    if (LOCALE_CODES.has(s)) return s;
+  }
+  return null;
+}
+
+/** True for a US (or locale-neutral / plain English) storefront URL; false for any other country or language. */
+export function isUsStorefront(url: string): boolean {
+  const loc = pathLocale(url);
+  return loc === null || loc === "us" || loc === "en" || loc.endsWith("-us");
+}
+
 /** A product path segment followed by a further segment: /product/x, /products/x, /p/x, /dp/x, /pd/x, /item/x, /sku/x. */
 const PRODUCT_SEGMENT = /(^|\/)(products?|p|dp|pd|item|items|sku)\/[^/]+/i;
 /** /shop/<category>/<page>: at least two segments below /shop/. */
@@ -83,7 +114,7 @@ export function looksLikeProductUrl(url: string): boolean {
     return false;
   }
   if (path === "/" || !path) return false;
-  if (NON_PRODUCT_PATH.test(path)) return false;
+  if (NON_PRODUCT_PATH.test(path) || NOT_A_NEW_PRODUCT.test(path)) return false;
   if (PRODUCT_SEGMENT.test(path) || SHOP_PATH.test(path)) return true;
   const segs = path.split("/").filter(Boolean);
   const last = (segs[segs.length - 1] ?? "").replace(/\.(html?|aspx?|php)$/i, "");
@@ -251,6 +282,8 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
 
   const entries: SitemapEntry[] = [];
   const queued = new Set(queue);
+  const counts0 = { nonUsSitemaps: 0 };
+  const usOnly = (brand.market ?? "US") === "US";
   let fetched = 0;
   let read = 0;
   let robotsBlockedSitemaps = 0;
@@ -305,6 +338,7 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
         if (queued.has(key)) continue;
         queued.add(key);
         if (!onBrandDomain(cu, official)) sitemaps.push({ url: key, status: "SKIPPED", reason: `not on ${official}` });
+        else if (usOnly && !isUsStorefront(key)) counts0.nonUsSitemaps++;
         else queue.push(key);
       }
     } else {
@@ -321,7 +355,7 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
 
   // 3. Candidate product URLs.
   const patterns = brand.productUrlPatterns.map((p) => new RegExp(globToRegex(p), "i"));
-  const counts = { seen: entries.length, offDomain: 0, notProduct: 0, robotsDisallowed: 0, duplicates: 0, candidates: 0, changed: 0 };
+  const counts = { seen: entries.length, otherLocale: 0, nonUsSitemaps: counts0.nonUsSitemaps, offDomain: 0, notProduct: 0, robotsDisallowed: 0, duplicates: 0, candidates: 0, changed: 0 };
   const best = new Map<string, SitemapEntry>();
   for (const e of entries) {
     const norm = normalizeUrl(e.loc);
@@ -332,6 +366,10 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
     const u = new URL(norm);
     if (u.host !== official) {
       counts.offDomain++;
+      continue;
+    }
+    if (usOnly && !isUsStorefront(norm)) {
+      counts.otherLocale++;
       continue;
     }
     if (patterns.length ? !patterns.some((re) => re.test(norm)) : !looksLikeProductUrl(norm)) {

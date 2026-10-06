@@ -96,9 +96,9 @@ export function notACodeReason(code: string): string | null {
 
 const DISCOUNT_PATTERNS: Array<{ re: RegExp; type: DiscountType }> = [
   { re: /\b(?:save\s+)?(?:up\s+to\s+)?\d{1,3}(?:\.\d+)?\s?%\s*off\b/gi, type: "PERCENT" },
-  { re: /\bsave\s+(?:up\s+to\s+)?\d{1,3}(?:\.\d+)?\s?%/gi, type: "PERCENT" },
-  { re: /(?:\bsave\s+(?:up\s+to\s+)?)?(?:[$£€]\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?(?:USD|dollars))\s*off\b/gi, type: "AMOUNT" },
-  { re: /\bsave\s+(?:up\s+to\s+)?[$£€]\s?\d[\d,]*(?:\.\d{2})?/gi, type: "AMOUNT" },
+  { re: /\bsave\s+(?:(?:an\s+)?(?:extra|additional)\s+)?(?:up\s+to\s+)?\d{1,3}(?:\.\d+)?\s?%/gi, type: "PERCENT" },
+  { re: /(?:\bsave\s+(?:(?:an\s+)?(?:extra|additional)\s+)?(?:up\s+to\s+)?)?(?:[$£€]\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?(?:USD|dollars))\s*off\b/gi, type: "AMOUNT" },
+  { re: /\bsave\s+(?:(?:an\s+)?(?:extra|additional)\s+)?(?:up\s+to\s+)?[$£€]\s?\d[\d,]*(?:\.\d{2})?/gi, type: "AMOUNT" },
   { re: /\bfree\s+(?:standard\s+|ground\s+|2-day\s+|two-day\s+|express\s+|next-day\s+)?(?:shipping|delivery)\b/gi, type: "FREE_SHIPPING" },
   { re: /\b(?:buy\s+one,?\s+get\s+one(?:\s+free|\s+\d{1,3}\s?%\s*off)?|BOGO|free\s+gift(?:\s+with\s+(?:any\s+)?purchase)?)\b/gi, type: "OTHER" },
 ];

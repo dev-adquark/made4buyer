@@ -302,6 +302,8 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
   const seen = new Set<string>();
   let written = 0;
   for (const o of n.offers) {
+    // A US-market brand shows US-dollar prices only; an offer in another currency belongs to another storefront.
+    if (brand.market === "US" && o.currency && o.currency.toUpperCase() !== "USD") continue;
     // Only an offer on this same site; an offer URL elsewhere is never used as a destination.
     const dest = o.url && onDomain(o.url, hostOf(n.pageUrl)) ? normalizeUrl(o.url) : n.canonicalUrl;
     if (!dest || seen.has(dest)) continue;
@@ -337,6 +339,9 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
     return { url: raw.url, result: "NOT_EXTRACTED", reason: `SOURCE_NOT_ALLOWED: ${hostOf(n.pageUrl)} is neither ${brand.officialDomain} nor a known retailer` };
   }
   const source: FactSource = onDomain(n.pageUrl, brand.officialDomain) || classifySource(n.pageUrl, brand.name) === "MANUFACTURER" ? "MANUFACTURER" : "RETAILER";
+  // The brand's own official site names its own products: a page there that omits "brand" in its
+  // structured data is still that brand's product (provenance: the official domain).
+  if (!n.product.brand && onDomain(n.pageUrl, brand.officialDomain)) n.product.brand = brand.name;
   const product = await upsertProduct(brand, n, raw, now);
   const keys = [...new Set([brandKey(brand.name), brandKey(n.product.brand)].filter(Boolean))];
   const decision = decideIdentity(n, await candidatesFor(keys, cache));

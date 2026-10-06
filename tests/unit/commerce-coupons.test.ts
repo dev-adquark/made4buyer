@@ -128,3 +128,11 @@ describe("verifyCoupon status rules", () => {
     expect(verifyCoupon({ ...base, seenInLatestCrawl: false, consecutiveMisses: 2, previousStatus: "VERIFIED" }, now).status).toBe("INVALID");
   });
 });
+
+describe("discount phrasing seen on live official pages", () => {
+  it("reads 'save an extra' discounts exactly as stated", async () => {
+    const { statedDiscount } = await import("@/lib/commerce/coupons");
+    expect(statedDiscount("Save an extra 5% on bundles with code: PRIME26", "PRIME26")).toEqual({ discount: "Save an extra 5%", type: "PERCENT" });
+    expect(statedDiscount("Plus, save an extra $199.99 to use toward installation (code 199OFF).", "199OFF")).toEqual({ discount: "save an extra $199.99", type: "AMOUNT" });
+  });
+});

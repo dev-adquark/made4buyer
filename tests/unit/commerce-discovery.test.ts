@@ -227,3 +227,36 @@ describe("discoverProductUrls", () => {
     expect(bad.status).toBe("FETCH_FAILED");
   });
 });
+
+describe("US storefront and non-new-product filters (found in the live sample run)", () => {
+  it("reads storefront locales from the path", async () => {
+    const { pathLocale, isUsStorefront } = await import("@/lib/commerce/discovery");
+    expect(pathLocale("https://www.garmin.com/cs-CZ/p/100075")).toBe("cs-cz");
+    expect(pathLocale("https://www.anker.com/eu-pl/a1112")).toBe("eu-pl");
+    expect(pathLocale("https://www.breville.com/au/en/products/x.html")).toBe("au");
+    expect(isUsStorefront("https://www.sonos.com/en-us/shop/era-100")).toBe(true);
+    expect(isUsStorefront("https://www.samsung.com/us/mobile/phones/galaxy-s25")).toBe(true);
+    expect(isUsStorefront("https://www.keychron.com/products/q1-pro")).toBe(true);
+    expect(isUsStorefront("https://www.logitech.com/en-ph/shop/p/a10-gen-2")).toBe(false);
+    expect(isUsStorefront("https://www.jackery.com/es/products/explorer-1000")).toBe(false);
+    expect(isUsStorefront("https://www.apple.com/ae/shop/sitemap-index.xml")).toBe(false);
+    expect(isUsStorefront("https://www.bose.com/p/speakers/soundlink-flex/SLFLXII.html")).toBe(true);
+  });
+  it("rejects recalls, gift cards and refurbished listings", () => {
+    expect(looksLikeProductUrl("https://www.anker.com/a1112-recall")).toBe(false);
+    expect(looksLikeProductUrl("https://www.jackery.com/products/100-gift-card")).toBe(false);
+    expect(looksLikeProductUrl("https://www.bose.com/p/refurbished/bose-soundlink-micro/SLMC2-FR.html")).toBe(false);
+    expect(looksLikeProductUrl("https://www.bose.com/p/speakers/bose-soundlink-flex/SLFLXII.html")).toBe(true);
+  });
+});
+
+describe("every country storefront prefix counts as non-US", () => {
+  it("rejects /am/ and /az/ (seen on apple.com) but keeps /tv/ style words", async () => {
+    const { isUsStorefront } = await import("@/lib/commerce/discovery");
+    expect(isUsStorefront("https://www.apple.com/am/iphone-17e")).toBe(false);
+    expect(isUsStorefront("https://www.apple.com/az/iphone-17e")).toBe(false);
+    expect(isUsStorefront("https://www.apple.com/iphone-17e")).toBe(true);
+    expect(isUsStorefront("https://www.anker.com/my/a1780")).toBe(false);
+    expect(isUsStorefront("https://www.example.com/tv/oled-65-c4")).toBe(true);
+  });
+});

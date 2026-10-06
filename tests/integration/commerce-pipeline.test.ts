@@ -306,3 +306,17 @@ describe("commerce product runs", () => {
     expect(await db.commerceRawRecord.count()).toBe(2); // one per run, both unchanged
   });
 });
+
+describe("live-sample regressions", () => {
+  it("an official-site page without a stated brand is that brand's product; non-USD offers are not written for a US brand", async () => {
+    const brand = await addBrand();
+    await addEntity("Breville Barista Express", "breville-barista-express");
+    const ld = expressJsonLd()[0] as Record<string, unknown>;
+    delete ld.brand;
+    const offers = ([] as unknown[]).concat(ld.offers ?? []).map((o) => ({ ...(o as Record<string, unknown>), priceCurrency: "EUR" }));
+    const { collected } = await crawl(brand, [item({ jsonLd: [{ ...ld, offers }] })]);
+    expect(collected).toMatchObject({ collected: 1 });
+    expect(await db.commerceProduct.findFirstOrThrow()).toMatchObject({ identityStatus: "MATCHED" });
+    expect(await db.commerceOffer.count()).toBe(0);
+  });
+});
