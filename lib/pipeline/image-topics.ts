@@ -9,7 +9,14 @@ import { tokenize } from "@/lib/util/text";
  * A Pexels result qualifies only if its own description contains one of the topic's `accept`
  * words, so an off-topic photo is never used just because the search returned it.
  */
-export type ImageTopic = { key: string; label: string; queries: string[]; accept: string[] };
+export type ImageTopic = {
+  key: string;
+  label: string;
+  queries: string[];
+  accept: string[];
+  /** Other product types: a photo naming one of these before an accepted word is about that other object. */
+  competing?: string[];
+};
 
 type Rule = ImageTopic & { match: string[] };
 
@@ -86,6 +93,10 @@ export function imageTopic(input: { title: string; productName: string; category
 
 /** True when a photo's own description is about the topic. */
 export function photoMatchesTopic(alt: string, topic: ImageTopic): boolean {
-  const words = new Set(tokenize(alt));
-  return topic.accept.some((a) => words.has(a));
+  const words = tokenize(alt);
+  const first = words.findIndex((w) => topic.accept.includes(w));
+  if (first < 0) return false;
+  // "Compact white drone … surrounded by flashlight" is a photo of a drone, not of a flashlight.
+  if (topic.competing?.length && words.slice(0, first).some((w) => topic.competing!.includes(w))) return false;
+  return true;
 }

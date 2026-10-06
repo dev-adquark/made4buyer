@@ -8,14 +8,14 @@ import { imageTopic, type ImageTopic } from "@/lib/pipeline/image-topics";
  * product when no licensed photo of the exact product exists. A photo qualifies only if its own
  * description names the product type (`accept`), so an off-topic photo is never used.
  */
-type TypeRule = { key: string; label: string; match: string[]; queries: string[]; accept: string[] };
+type TypeRule = { key: string; label: string; match: string[]; queries: string[]; accept: string[]; allowWith?: string[] };
 
 // Ordered: specific types first ("galaxy watch" before "galaxy", "car mount" before "car").
 const TYPES: TypeRule[] = [
   { key: "smartwatch", label: "a smartwatch", match: ["smartwatch", "galaxy watch", "apple watch", "pixel watch", "fitness tracker", "watch"], queries: ["smartwatch on wrist", "smart watch close up"], accept: ["smartwatch", "watch", "wrist"] },
   { key: "foldable-phone", label: "a foldable smartphone", match: ["fold", "flip", "foldable"], queries: ["foldable smartphone", "smartphone in hand"], accept: ["smartphone", "phone", "mobile", "cellphone"] },
   { key: "smartphone", label: "a smartphone", match: ["smartphone", "phone", "iphone", "pixel", "galaxy", "motorola", "oneplus", "xiaomi", "moto"], queries: ["smartphone in hand", "modern smartphone on table"], accept: ["smartphone", "phone", "mobile", "cellphone", "iphone"] },
-  { key: "car-mount", label: "a car phone mount", match: ["car mount", "magsafe car", "phone mount", "dashboard mount", "vent mount"], queries: ["phone holder car dashboard", "smartphone car mount"], accept: ["car", "dashboard", "holder", "mount", "driving"] },
+  { key: "car-mount", label: "a car phone mount", match: ["car mount", "magsafe car", "phone mount", "dashboard mount", "vent mount"], queries: ["phone holder car dashboard", "smartphone car mount"], accept: ["car", "dashboard", "holder", "mount", "driving"], allowWith: ["smartphone", "phone", "iphone", "mobile"] },
   { key: "tumbler", label: "an insulated tumbler", match: ["tumbler", "travel mug", "insulated mug", "water bottle", "bottle", "flask", "mug"], queries: ["insulated tumbler cup", "stainless steel water bottle"], accept: ["tumbler", "bottle", "flask", "mug", "cup", "thermos"] },
   { key: "flashlight", label: "a flashlight", match: ["flashlight", "torch", "headlamp", "imini", "keychain light", "edc light"], queries: ["small flashlight", "flashlight in hand"], accept: ["flashlight", "torch", "headlamp"] },
   { key: "packing-cubes", label: "packing cubes", match: ["packing cube", "packing cubes", "packing organizer"], queries: ["packing cubes suitcase", "organized packing clothes"], accept: ["packing", "cubes", "suitcase", "clothes", "luggage", "organizer"] },
@@ -68,9 +68,16 @@ export function productTypeTopic(input: { productName: string; title?: string | 
   for (const text of [input.productName, `${input.productName} ${input.title ?? ""}`]) {
     const padded = ` ${tokenize(text).join(" ")} `;
     const rule = TYPES.find((r) => r.match.some((m) => contains(padded, m)));
-    if (rule) return { key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept };
+    if (rule) return { key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept, competing: competingWords(rule) };
   }
   return null;
+}
+
+/** Single words that name OTHER product types (minus this type's own words and allowed companions). */
+function competingWords(rule: TypeRule): string[] {
+  const own = new Set([...rule.accept, ...rule.match.flatMap((m) => tokenize(m)), ...(rule.allowWith ?? [])]);
+  const generic = new Set(["bag", "light", "air", "machine", "pack", "watch", "display", "beam", "arc", "buds", "flip", "fold", "s", "edge"]);
+  return [...new Set(TYPES.filter((t) => t.key !== rule.key).flatMap((t) => t.match.filter((m) => !m.includes(" ")).map((m) => m.toLowerCase())))].filter((w) => !own.has(w) && !generic.has(w));
 }
 
 /** Every query the product-type topics can issue (for the test stub). */

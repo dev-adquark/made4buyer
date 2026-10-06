@@ -84,3 +84,15 @@ describe("display guard: only relevant images are shown", () => {
     expect(relevantImage({ sourceType: "ENRICHMENT_SERVICE", altText: "Person holding tablet with VPN connection" }, vpn)).not.toBeNull();
   });
 });
+
+describe("the photo must be OF the product type, not merely mention it", () => {
+  it("rejects a drone photo that has a flashlight in the background; allows related companions", () => {
+    const flashlight = productTypeTopic({ productName: "imini 2", title: "Olight imini 2 Review" })!;
+    expect(photoMatchesTopic("Compact white drone on camouflage gear, surrounded by flashlight and tools.", flashlight)).toBe(false);
+    expect(photoMatchesTopic("Small flashlight next to a drone", flashlight)).toBe(true);
+    const mount = productTypeTopic({ productName: "MagSafe Car Mount" })!;
+    expect(photoMatchesTopic("Close-up of a smartphone mounted on a car dashboard", mount)).toBe(true);
+    const cubes = productTypeTopic({ productName: "Packing Cubes" })!;
+    expect(photoMatchesTopic("A woman arranging clothes and accessories into a suitcase", cubes)).toBe(true);
+  });
+});
