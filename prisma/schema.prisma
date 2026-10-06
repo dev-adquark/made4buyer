@@ -967,25 +967,30 @@ model ApifyRun {
 
 /// One product or service ("NordVPN", "Cursor"), shared by every review, comparison and guide that covers it.
 model ProductEntity {
-  id               String          @id @default(cuid())
-  slug             String          @unique
-  name             String
+  id                 String          @id @default(cuid())
+  slug               String          @unique
+  name               String
   /// Normalised identity: "Nord VPN", "NordVPN" and "nordvpn" share one key.
-  matchKey         String          @unique
-  aliases          String[]        @default([])
-  aliasKeys        String[]        @default([])
-  brand            String?
-  brandSlug        String?
-  categorySlug     String?
-  subcategorySlug  String?
+  matchKey           String          @unique
+  aliases            String[]        @default([])
+  aliasKeys          String[]        @default([])
+  brand              String?
+  brandSlug          String?
+  categorySlug       String?
+  subcategorySlug    String?
   /// Field-level enrichment (see lib/products): resolved snapshot, completeness and last run.
-  enrichmentStatus String?
-  enrichedAt       DateTime?
-  factSummary      Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  content          ContentEntity[]
-  facts            ProductFact[]
+  enrichmentStatus   String?
+  enrichedAt         DateTime?
+  /// Official-source verification: VERIFIED (found on the brand's official domain, identity matched),
+  /// NOT_FOUND, MISMATCH or null (not checked). Only VERIFIED may be labelled official.
+  officialStatus     String?
+  officialUrl        String?
+  officialVerifiedAt DateTime?
+  factSummary        Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  content            ContentEntity[]
+  facts              ProductFact[]
 
   @@index([brandSlug])
   @@index([categorySlug])
@@ -1064,10 +1069,20 @@ model ContentQueueItem {
   failureReason      String?
   normalizedReviewId String?
   publishedAt        DateTime?
+  /// Keyword schedule: DAILY | TWICE_WEEKLY | WEEKLY | MONTHLY | ONCE (Admin-editable).
+  frequency          String    @default("ONCE")
+  /// Where the keyword came from: calendar | admin | search-console | import.
+  source             String    @default("calendar")
+  enabled            Boolean   @default(true)
+  lastRunAt          DateTime?
+  nextRunAt          DateTime?
+  /// Outcome of the last run: PUBLISHED | DUPLICATE | FAILED | SKIPPED (with failureReason).
+  lastResult         String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
   @@index([status, priority])
+  @@index([enabled, nextRunAt])
   @@map("content_queue")
 }
 
@@ -1110,36 +1125,44 @@ model AutomationSetting {
 
 /// A brand whose official site is crawled for products and promotions (US market).
 model CommerceBrand {
-  id                  String            @id @default(cuid())
-  name                String
-  slug                String            @unique
-  officialDomain      String
+  id                   String            @id @default(cuid())
+  name                 String
+  slug                 String            @unique
+  officialDomain       String
   /// Market served, e.g. "US". Says nothing about ownership.
-  market              String            @default("US")
-  categories          String[]          @default([])
+  market               String            @default("US")
+  categories           String[]          @default([])
   /// Pages that list products (category pages, sitemaps); discovery starts here.
-  discoveryUrls       String[]          @default([])
+  discoveryUrls        String[]          @default([])
   /// Glob patterns that identify single product pages on the official domain.
-  productUrlPatterns  String[]          @default([])
+  productUrlPatterns   String[]          @default([])
   /// Official promotions/offers pages (coupon extraction; first-party only).
-  promoUrls           String[]          @default([])
-  enabled             Boolean           @default(true)
-  priority            Int               @default(100)
-  crawlFrequencyHours Int               @default(24)
-  maxProductsPerRun   Int               @default(20)
-  robotsStatus        String?
-  robotsCheckedAt     DateTime?
-  lastCrawlAt         DateTime?
-  nextCrawlAt         DateTime?
-  crawlStatus         String?
-  consecutiveFailures Int               @default(0)
-  lastError           String?
-  notes               String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  runs                CommerceRun[]
-  products            CommerceProduct[]
-  coupons             CommerceCoupon[]
+  promoUrls            String[]          @default([])
+  enabled              Boolean           @default(true)
+  priority             Int               @default(100)
+  crawlFrequencyHours  Int               @default(24)
+  /// Preferred crawl window start (hour 0–23 in `timezone`); null = any time. Staggers brands.
+  crawlWindowStartHour Int?
+  /// Window length in hours (1–24).
+  crawlWindowHours     Int               @default(24)
+  /// IANA timezone for the crawl window, e.g. "America/New_York".
+  timezone             String            @default("America/New_York")
+  /// Official store URL, when the brand runs one (shown in Admin; verified like any URL).
+  officialStoreUrl     String?
+  maxProductsPerRun    Int               @default(20)
+  robotsStatus         String?
+  robotsCheckedAt      DateTime?
+  lastCrawlAt          DateTime?
+  nextCrawlAt          DateTime?
+  crawlStatus          String?
+  consecutiveFailures  Int               @default(0)
+  lastError            String?
+  notes                String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  runs                 CommerceRun[]
+  products             CommerceProduct[]
+  coupons              CommerceCoupon[]
 
   @@index([enabled, nextCrawlAt])
   @@map("commerce_brands")
@@ -1267,6 +1290,11 @@ model CommerceOffer {
   observedAt        DateTime
   sourceRawId       String?
   status            String          @default("FRESH")
+  /// Destination check: UNCHECKED | OK | REDIRECTED_SAME_SITE | BROKEN | OFF_SITE | BLOCKED | UNREACHABLE.
+  linkStatus        String          @default("UNCHECKED")
+  linkCheckedAt     DateTime?
+  linkHttpStatus    Int?
+  linkFinalUrl      String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   product           CommerceProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
