@@ -232,15 +232,15 @@ export default async function Home() {
       {/* ── Category issues ── */}
       <section className="section tight" aria-labelledby="cats-title">
         <div className="wrap">
-          <SectionHeader id="cats-title" label={`${ledger.length} categories`} title="The categories">
+          <SectionHeader id="cats-title" label={`${ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0).length} categories`} title="The categories">
             Swipe or scroll sideways. Each category is an issue with its own colour.
           </SectionHeader>
         </div>
         <ul className="issue-rail" aria-label="Categories">
-          {/* Categories with published content first; numbers stay each category's issue number. */}
+          {/* Only categories with published content (same rule as the global nav); issue numbers run in order. */}
           {ledger
+            .filter((c) => c.reviews + c.comparisons + c.guides > 0)
             .map((c, i) => ({ ...c, issue: i + 1 }))
-            .sort((a, b) => Number(b.reviews + b.comparisons + b.guides > 0) - Number(a.reviews + a.comparisons + a.guides > 0) || a.issue - b.issue)
             .map((c) => {
             const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
             return (
