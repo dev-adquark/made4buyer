@@ -27,8 +27,9 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
     successMetrics(),
     db.ingestionRun.findFirst({ orderBy: { startedAt: "desc" } }),
   ]);
-  const day = new Date(Date.now() - 86_400_000);
-  const week = new Date(Date.now() - 7 * 86_400_000);
+  const now = new Date();
+  const day = new Date(now.getTime() - 86_400_000);
+  const week = new Date(now.getTime() - 7 * 86_400_000);
   const [publishedToday, freshToday, heldWeek, ktbWeek, apifyDay, failedRuns, withCoupon, sources] = await Promise.all([
     db.normalizedReview.count({ where: { status: "PUBLISHED", publishedAt: { gte: day } } }),
     db.contentItem.count({ where: { freshnessStatus: "FRESH", freshnessCheckedAt: { gte: day } } }),
@@ -42,8 +43,8 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
   const ktb = (st: string) => ktbWeek.find((r) => r.status === st)?._count._all ?? 0;
   const apifyTotal = apifyDay.reduce((n, r) => n + r._count._all, 0);
   const apifyFailed = apifyDay.filter((r) => ["FAILED", "ABORTED", "TIMED-OUT", "COLLECT_FAILED"].includes(r.status)).reduce((n, r) => n + r._count._all, 0);
-  const pausedSources = sources.filter((x) => x.pausedUntil && x.pausedUntil > new Date()).length;
-  const degradedSources = sources.filter((x) => !(x.pausedUntil && x.pausedUntil > new Date()) && (x.consecutiveStale || x.consecutiveFailures)).length;
+  const pausedSources = sources.filter((x) => x.pausedUntil && x.pausedUntil > now).length;
+  const degradedSources = sources.filter((x) => !(x.pausedUntil && x.pausedUntil > now) && (x.consecutiveStale || x.consecutiveFailures)).length;
   const content = (s: string) => contentByStatus.find((c) => c.processingStatus === s)?._count._all ?? 0;
   const reviews = (s: string) => reviewsByStatus.find((c) => c.status === s)?._count._all ?? 0;
   const totalContent = contentByStatus.reduce((n, c) => n + c._count._all, 0);
