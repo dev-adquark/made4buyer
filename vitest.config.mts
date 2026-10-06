@@ -10,7 +10,7 @@ export default defineConfig({
     projects: [
       {
         resolve: { alias },
-        test: { name: "unit", include: ["tests/unit/**/*.test.ts"], environment: "node", env: { LOG_SILENT: "1" } },
+        test: { name: "unit", include: ["tests/unit/**/*.test.ts"], environment: "node", env: { LOG_SILENT: "1", COMMONS_SEARCH_ENABLED: "false", WIKIDATA_ENABLED: "false" } },
       },
       {
         resolve: { alias },

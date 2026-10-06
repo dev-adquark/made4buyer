@@ -149,9 +149,16 @@ describe("illustrative photos for category-level content", () => {
     else expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
   });
 
-  it("a guide about one product (PRIMARY link) follows the single-product rule", async () => {
-    const before = pexelsCalls();
+  it("a guide about one product (PRIMARY link) follows the single-product rule: never a product-matched stock photo", async () => {
     const d = await enrichImage({ productName: "NordVPN", title: "NordVPN guide", categorySlug: "security-software", kind: "AI_GUIDE", singleProduct: true });
+    expect(d.subject).not.toBe("PRODUCT");
+    if (d.sourceType === "ENRICHMENT_SERVICE") expect(d).toMatchObject({ subject: "ILLUSTRATIVE", imageType: "illustrative-product-type" });
+    else expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
+  });
+
+  it("single-product pages without a readable product type get the neutral image, with no stock search", async () => {
+    const before = pexelsCalls();
+    const d = await enrichImage({ productName: "Zx-9", title: "Zx-9 review", categorySlug: "luggage-travel", kind: "REVIEW" });
     expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
     expect(pexelsCalls()).toBe(before);
   });

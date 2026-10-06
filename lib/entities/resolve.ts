@@ -140,7 +140,8 @@ export async function resolveEntity(
       (await client.productEntity.findFirst({
         where: { aliasKeys: { has: key } },
       }));
-    if (raced) return raced;
+    // Resolve again through the normal path so this spelling is recorded as an alias.
+    if (raced) return resolveEntity(name, hints, client);
     // A different product took the slug: retry once with a key suffix.
     return client.productEntity.create({
       data: {

@@ -1,6 +1,7 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { ALL_TOPIC_QUERIES } from "../../lib/pipeline/image-topics";
+import { PRODUCT_TYPE_QUERIES } from "../../lib/images/product-type";
 import path from "node:path";
 
 /**
@@ -208,7 +209,7 @@ export async function startStubServer(opts: StubOptions = {}) {
         src: { large: `${base}/pexels-img/${seed * 10 + i}.jpeg`, large2x: `${base}/pexels-img/${seed * 10 + i}.jpeg`, landscape: `${base}/pexels-img/${q.includes("broken") || pexels.broken ? "broken" : seed * 10 + i}.jpeg` },
         ...extra,
       });
-      const topical = ALL_TOPIC_QUERIES.includes(q);
+      const topical = ALL_TOPIC_QUERIES.includes(q) || PRODUCT_TYPE_QUERIES.includes(q);
       const photos = q.includes("sony")
         ? [photo(1, "Sony WH-1000XM6 headphones on a wooden table")]
         : [

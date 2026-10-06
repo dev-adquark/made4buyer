@@ -103,16 +103,19 @@ describe("single-product review hero", () => {
     expect(m.image).toMatchObject({ isFallback: false, subject: "PRODUCT", attribution: "Jane Doe / Wikimedia Commons, CC BY-SA 4.0", attributionUrl: FILE_PAGE });
   });
 
-  it("never stores a Pexels hero for a single-product review; neutral category image instead", async () => {
+  it("single-product reviews get a labelled photo of their product type, never a product-matched stock photo", async () => {
     const reviews = await db.normalizedReview.findMany({ where: { kind: "REVIEW" } });
     expect(reviews.length).toBeGreaterThan(0);
     for (const r of reviews) await runImageStage(r, await loadSourceContent(r));
     const heroes = await db.imageAsset.findMany({ where: { isPrimary: true, review: { kind: "REVIEW" } } });
-    expect(heroes.some((h) => h.sourceType === "ENRICHMENT_SERVICE")).toBe(false);
+    for (const h of heroes.filter((x) => x.sourceType === "ENRICHMENT_SERVICE")) expect(h).toMatchObject({ subject: "ILLUSTRATIVE", imageType: "illustrative-product-type" });
     const { review } = await sonyReview();
     const hero = await primaryImage(review.id);
-    expect(hero).toMatchObject({ sourceType: "PLACEHOLDER", sourceUrl: "/placeholders/audio.svg", imageType: "neutral-category", isFallback: true, licenseState: "OWNED_PLACEHOLDER" });
-    expect((await buildPageRenderModel(review.id)).image).toMatchObject({ isFallback: true, subject: null, attribution: null });
+    // The stub's "Sony WH-1000XM6 headphones" photo matches the product by name: never used as the product.
+    expect(hero.subject).not.toBe("PRODUCT");
+    expect(hero).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", imageType: "illustrative-product-type", licenseState: "VERIFIED" });
+    expect(hero.altText ?? "").toMatch(/headphone/i);
+    expect((await buildPageRenderModel(review.id)).image).toMatchObject({ isFallback: false, subject: "ILLUSTRATIVE" });
   });
 
   it("rejects image facts without a licence, with a non-free licence, off Commons or loosely matched", async () => {
@@ -123,7 +126,8 @@ describe("single-product review hero", () => {
     await addImageFact(productEntityId, { matchBasis: "name", value: `${stub.base}/image/c.png` });
     await addImageFact(productEntityId, { source: "RETAILER", value: `${stub.base}/image/d.png` });
     const asset = await runImageStage(review, await loadSourceContent(review));
-    expect(asset).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category", isFallback: true });
+    expect(asset?.sourceType).not.toBe("WIKIMEDIA_COMMONS");
+    expect(asset?.imageType).not.toBe("commons-product");
   });
 
   it("is idempotent: re-running keeps the same row", async () => {
@@ -149,8 +153,10 @@ describe("enrich-images corrects existing wrong heroes", () => {
     const first = await runImageBackfillWithCorrection("test", { limit: 100 });
     expect(first.heroCorrection.checked).toBe(2);
     expect(await primaryImage(sony.id)).toMatchObject({ sourceType: "WIKIMEDIA_COMMONS", imageType: "commons-product" });
-    expect(await primaryImage(other.id)).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category", isFallback: true });
-    expect(await db.imageAsset.count({ where: { isPrimary: true, review: { kind: "REVIEW" }, sourceType: "ENRICHMENT_SERVICE" } })).toBe(0);
+    const otherHero = await primaryImage(other.id);
+    expect(otherHero.providerPhotoId).not.toBe("pexels:900002");
+    expect(["illustrative-product-type", "neutral-category"]).toContain(otherHero.imageType);
+    expect(await db.imageAsset.count({ where: { isPrimary: true, review: { kind: "REVIEW" }, sourceType: "ENRICHMENT_SERVICE", NOT: { imageType: "illustrative-product-type" } } })).toBe(0);
     // One primary image per review, the unique primary-photo index intact.
     const primaries = await db.imageAsset.groupBy({ by: ["normalizedReviewId"], where: { isPrimary: true }, _count: { _all: true } });
     expect(primaries.every((p) => p._count._all === 1)).toBe(true);
@@ -179,7 +185,7 @@ describe("enrich-images corrects existing wrong heroes", () => {
   it("picks up a Commons photo that arrives later for a page showing the neutral image", async () => {
     const { review, productEntityId } = await sonyReview();
     await runImageStage(review, await loadSourceContent(review));
-    expect((await primaryImage(review.id)).sourceType).toBe("PLACEHOLDER");
+    expect((await primaryImage(review.id)).imageType).toBe("illustrative-product-type");
     await addImageFact(productEntityId, { matchBasis: "brand+name" });
     const r = await runImageBackfillWithCorrection("test", { limit: 100 });
     expect(r.heroCorrection.commons).toBe(1);

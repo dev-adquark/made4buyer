@@ -1,16 +1,17 @@
 /**
  * Image provenance (ImageAsset.imageType): what an image shows and how we know.
  *
- * A single-product page's hero is either the exact product (from a licensed source whose
- * identity match we can check) or a neutral category image. A keyword-matched stock photo is
- * never the hero of a single-product page; it may illustrate category-level content only, and
- * is then labelled "Illustrative photo, not the reviewed product".
+ * A single-product page's hero is, in order: the exact product (a licensed source whose identity
+ * match we can check), a labelled illustrative photo of that KIND of product (its type read from
+ * the product name; the photo's own description must name the type), or a neutral category
+ * image. A stock photo matched by product-name keywords is never presented as the product.
  */
 export const IMAGE_TYPES = [
   "official-product", // the manufacturer's own photo, licensed to us
   "retailer-product", // a verified retailer's photo, licensed to us
   "commons-product", // a freely licensed photo of the exact product on Wikimedia Commons
   "source-product", // the review source's own image, explicitly licensed to us (Content API)
+  "illustrative-product-type", // a labelled photo of the product's type (a tumbler for a tumbler review)
   "illustrative-category", // a labelled topic photo for category-level content (guides)
   "neutral-category", // our own category placeholder: names the category, shows no product
 ] as const;

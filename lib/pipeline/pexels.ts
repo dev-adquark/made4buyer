@@ -186,7 +186,7 @@ function toImage(p: PexelsPhoto, subject: PexelsImage["subject"], query: string,
  */
 export async function findPexelsImage(
   input: { productName: string; brand?: string | null; title?: string; categorySlug?: string | null; subcategorySlug?: string | null; kind?: string | null },
-  opts: { exclude?: Set<string>; cache?: Map<string, PexelsSearchResult> } = {},
+  opts: { exclude?: Set<string>; cache?: Map<string, PexelsSearchResult>; topic?: ImageTopic } = {},
 ): Promise<PexelsLookup> {
   const exclude = opts.exclude ?? new Set<string>();
   const fresh = (p: PexelsPhoto) => !exclude.has(`pexels:${p.id}`);
@@ -215,7 +215,8 @@ export async function findPexelsImage(
   }
 
   // 2. An illustrative photo of the subject.
-  const topic = imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug });
+  // A caller-chosen topic (the product type of a single-product page) replaces the category topic.
+  const topic = opts.topic ?? imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug });
   if (!topic) return { status: "EMPTY", reason: "no product photo, and no image topic for this category", requests };
   // The topic's queries, then the subject itself ("office chairs"), still filtered by the topic.
   const queries = [...topic.queries, ...(input.kind === "AI_GUIDE" || input.kind === "BUYING_GUIDE" ? [input.productName.toLowerCase()] : [])];

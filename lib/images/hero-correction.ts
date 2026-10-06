@@ -24,6 +24,9 @@ export type HeroCorrectionResult = {
   items: Array<{ slug: string; from: string; to: string }>;
 };
 
+/** When the hero rules last changed: anything checked earlier is re-checked on the next run. */
+export const IMAGE_RULES_CHANGED_AT = new Date(process.env.IMAGE_RULES_CHANGED_AT || "2026-10-06T09:00:00Z");
+
 const SINGLE_PRODUCT: Prisma.NormalizedReviewWhereInput = { OR: [{ kind: "REVIEW" }, { contentEntities: { some: { role: "PRIMARY" } } }] };
 
 export async function runHeroCorrection(trigger: string, opts: { limit?: number } = {}): Promise<HeroCorrectionResult> {
@@ -32,8 +35,13 @@ export async function runHeroCorrection(trigger: string, opts: { limit?: number 
     where: {
       isPrimary: true,
       OR: [
-        { sourceType: "ENRICHMENT_SERVICE", review: SINGLE_PRODUCT },
-        { sourceType: "PLACEHOLDER", review: { ...SINGLE_PRODUCT, contentEntities: { some: { role: "PRIMARY", entity: { facts: { some: { field: "image", source: "WIKIDATA" } } } } } } },
+        // A stock photo that is not a checked photo of the product's type.
+        // (Legacy rows have no imageType: NULL must be matched explicitly, NOT(...) would skip it.)
+        { sourceType: "ENRICHMENT_SERVICE", review: SINGLE_PRODUCT, OR: [{ imageType: null }, { imageType: { not: "illustrative-product-type" } }] },
+        // A product-type photo, once a licensed photo of the exact product is known.
+        { sourceType: "ENRICHMENT_SERVICE", imageType: "illustrative-product-type", review: { ...SINGLE_PRODUCT, contentEntities: { some: { role: "PRIMARY", entity: { facts: { some: { field: "image", source: "WIKIDATA" } } } } } } },
+        // A placeholder: retried for a relevant photo (Commons, then the product type) once a day.
+        { sourceType: "PLACEHOLDER", review: SINGLE_PRODUCT, OR: [{ verifiedAt: null }, { verifiedAt: { lte: new Date(Date.now() - 20 * 3_600_000) } }, { verifiedAt: { lte: IMAGE_RULES_CHANGED_AT } }] },
       ],
     },
     orderBy: { createdAt: "asc" },

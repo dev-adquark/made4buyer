@@ -88,9 +88,9 @@ describe("Pexels adapter", () => {
   it("skips a publisher's unlicensed image and uses an illustrative Pexels photo for a guide", async () => {
     const d = await enrichImage({ productName: "NordVPN", title: "Best VPNs", categorySlug: "productivity-software", subcategorySlug: "vpns", kind: "BUYING_GUIDE", imageUrl: `${stub.base}/image/publisher.png` });
     expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", licenseState: "VERIFIED", isFallback: false });
-    // A single-product review never gets the stock photo: the neutral category image instead.
+    // A single-product review gets a labelled photo of its product type, never a stock "product" photo.
     const review = await enrichImage({ productName: "NordVPN", title: "NordVPN Review", categorySlug: "productivity-software", subcategorySlug: "vpns", kind: "REVIEW", imageUrl: `${stub.base}/image/publisher.png` });
-    expect(review).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category", isFallback: true });
+    expect(review).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-product-type", isFallback: false });
   });
 });
 
@@ -105,8 +105,8 @@ describe("image enrichment in the pipeline", () => {
     // image or the neutral category image, each with its provenance.
     for (const a of assets) {
       expect(a.review.kind).toBe("REVIEW");
-      expect(a.sourceType).not.toBe("ENRICHMENT_SERVICE");
-      expect(a.imageType).toBe(a.sourceType === "PLACEHOLDER" ? "neutral-category" : "source-product");
+      if (a.sourceType === "ENRICHMENT_SERVICE") expect(a.subject).toBe("ILLUSTRATIVE");
+      expect(a.imageType).toBe(a.sourceType === "PLACEHOLDER" ? "neutral-category" : a.sourceType === "ENRICHMENT_SERVICE" ? "illustrative-product-type" : "source-product");
     }
     // As category guides they get labelled illustrative Pexels photos, with attribution.
     await asGuides();
@@ -118,7 +118,7 @@ describe("image enrichment in the pipeline", () => {
       expect(a.attributionUrl).toMatch(/^https:\/\/www\.pexels\.com\//);
       expect(a.providerPhotoId).toMatch(/^pexels:\d+$/);
       expect(a.subject).toBe("ILLUSTRATIVE");
-      expect(a.imageType).toBe("illustrative-category");
+      expect(["illustrative-category", "illustrative-product-type"]).toContain(a.imageType);
       expect(a.licenseState).toBe("VERIFIED");
     }
   });

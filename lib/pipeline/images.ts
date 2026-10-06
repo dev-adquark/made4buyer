@@ -5,6 +5,9 @@ import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import type { ImageType } from "@/lib/images/provenance";
 import { isCommonsFileUrl, isFreeLicence, type CommonsImage } from "@/lib/products/commons-image";
 import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
+import { productTypeTopic } from "@/lib/images/product-type";
+import type { ImageTopic } from "./image-topics";
+import { searchCommonsProductPhoto } from "@/lib/images/commons-search";
 
 /**
  * Stage IMAGE_ENRICHMENT. Never blocks publishing. A wrong image is worse than no image.
@@ -119,13 +122,13 @@ type ServiceImage = {
   photographerUrl?: string;
 };
 
-async function fromService(input: ImageInput): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
+async function fromService(input: ImageInput, topic?: ImageTopic): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
   if (config.images.pexelsKey()) {
     const p = await findPexelsImage(
-      // Only category-level content reaches the stock-photo service, so the lookup is always for
-      // an ILLUSTRATIVE topic photo, never a keyword "product" photo.
-      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: input.kind && input.kind !== "REVIEW" ? input.kind : "BUYING_GUIDE" },
-      { exclude: input.excludePhotoIds, cache: input.searchCache },
+      // The lookup is always for an ILLUSTRATIVE photo, never a keyword "product" photo: of the
+      // product type for single-product pages, of the topic for category-level content.
+      { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: topic ? "PRODUCT_TYPE" : input.kind && input.kind !== "REVIEW" ? input.kind : "BUYING_GUIDE" },
+      { exclude: input.excludePhotoIds, cache: input.searchCache, topic },
     );
     // Every photo served by the Pexels API is covered by the Pexels License.
     if (p.image) {
@@ -272,10 +275,51 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     if (showable) issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Content API image unusable: ${probe.reason}` });
   }
 
-  // 2. Single-product content never gets a keyword-matched stock photo: neutral category image.
-  if (single) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this exact product");
+  if (single) {
+    // 2. A freely licensed Commons photo whose own file title names this exact product.
+    const commons = await searchCommonsProductPhoto({ productName: input.productName, brand: input.brand }).catch(() => null);
+    if (commons) {
+      const found = await fromProductImages([commons], issues);
+      if (found) return found;
+    }
+    // 3. A labelled illustrative photo of this KIND of product (its type read from the product
+    // name, never the category), accepted only if the photo's own description names that type.
+    const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug });
+    if (!topic) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this product, and its product type can't be read from its name");
+    const typed = await fromService(input, topic);
+    if (typed.image && typed.image.subject === "ILLUSTRATIVE") {
+      const probe = await probeImage(typed.image.url);
+      if (probe.ok) {
+        return {
+          sourceType: "ENRICHMENT_SERVICE",
+          sourceUrl: typed.image.url,
+          cdnUrl: cdnUrlFor(typed.image.url),
+          contentType: probe.contentType,
+          width: typed.image.width,
+          height: typed.image.height,
+          licenseState: licenseStateOf(Boolean(typed.image.licenseVerified), typed.image.license),
+          license: typed.image.license,
+          attribution: typed.image.attribution,
+          attributionUrl: typed.image.attributionUrl,
+          subject: "ILLUSTRATIVE",
+          imageType: "illustrative-product-type",
+          providerPhotoId: typed.image.providerPhotoId,
+          searchQuery: typed.image.searchQuery,
+          altText: typed.image.altText,
+          photographerUrl: typed.image.photographerUrl,
+          enrichmentStatus: "ENRICHED",
+          isFallback: false,
+          verifiedAt: now,
+          issues,
+        };
+      }
+      issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Illustrative photo unusable: ${probe.reason}` });
+    }
+    // 4. Nothing relevant: the neutral category image, never an unrelated photo.
+    return neutralCategoryDecision(input.categorySlug, issues, typed.reason ?? `no on-topic photo of ${topic.label}`, typed.providerStatus);
+  }
 
-  // 3. Category-level content: a labelled illustrative topic photo.
+  // Category-level content: a labelled illustrative topic photo.
   const service = await fromService(input);
   if (service.image) {
     const probe = await probeImage(service.image.url);

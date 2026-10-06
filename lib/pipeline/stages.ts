@@ -210,7 +210,9 @@ export function imageRank(a: RankedImage | null | undefined, ctx?: { singleProdu
   // An image we are not allowed to show is worth no more than the placeholder.
   if (a.licenseState === "UNVERIFIED" && config.images.requireLicense()) return 0;
   if (a.sourceType === "ENRICHMENT_SERVICE") {
-    if (ctx?.singleProduct || a.subject !== "ILLUSTRATIVE") return 0;
+    if (a.subject !== "ILLUSTRATIVE") return 0;
+    // On a single-product page only a photo of the product's type counts (better than the placeholder).
+    if (ctx?.singleProduct) return a.imageType === "illustrative-product-type" ? 1 : 0;
     if (!ctx && !a.imageType) return 0;
     return 1;
   }
@@ -231,10 +233,9 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   const singleProduct = current.kind === "REVIEW" || Boolean(primary);
   const existing = await db.imageAsset.findFirst({ where: { normalizedReviewId: review.id, isPrimary: true } });
   // Photos other pages already use, so each page gets its own stock photo where one exists.
-  const exclude = singleProduct
-    ? (opts.excludePhotoIds ?? new Set<string>())
-    : (opts.excludePhotoIds ??
-      new Set((await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true } })).map((a) => a.providerPhotoId!)));
+  const exclude =
+    opts.excludePhotoIds ??
+    new Set((await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true } })).map((a) => a.providerPhotoId!));
   let decision: Awaited<ReturnType<typeof enrichImage>>;
   if (!(await getSwitches()).image_enrichment && !content.imageUrl) {
     // Admin switch: image enrichment paused → no provider call; existing images are kept, except
