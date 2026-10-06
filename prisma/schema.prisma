@@ -996,21 +996,26 @@ model ProductEntity {
 /// One value for one product field as one source stated it (provenance). Never guessed; the
 /// resolver (lib/products/facts.ts) chooses per field by authority, identity match and freshness.
 model ProductFact {
-  id              String        @id @default(cuid())
-  productEntityId String
-  field           String
-  value           Json
-  unit            String?
-  source          String
-  sourceName      String
+  id               String        @id @default(cuid())
+  productEntityId  String
+  field            String
+  value            Json
+  unit             String?
+  source           String
+  sourceName       String
   /// sourceUrl, or the source name when there is no URL (unique key part).
-  sourceKey       String
-  sourceUrl       String?
-  observedAt      DateTime
-  matchBasis      String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  entity          ProductEntity @relation(fields: [productEntityId], references: [id], onDelete: Cascade)
+  sourceKey        String
+  sourceUrl        String?
+  observedAt       DateTime
+  matchBasis       String
+  /// When the value was first seen, last confirmed, how sure the match is (0..1) and how it was read.
+  discoveredAt     DateTime?
+  verifiedAt       DateTime?
+  confidence       Float?
+  extractionMethod String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  entity           ProductEntity @relation(fields: [productEntityId], references: [id], onDelete: Cascade)
 
   @@unique([productEntityId, field, source, sourceKey])
   @@index([productEntityId])
@@ -1096,4 +1101,224 @@ model AutomationSetting {
   updatedAt DateTime @default(now()) @updatedAt
 
   @@map("automation_settings")
+}
+
+// ─── Commerce intelligence engine (Apify) ────────────────────────────────────
+// Brands and sources are configuration (editable in Admin). Runs record every Apify job.
+// Raw records are exactly what Apify returned and are never overwritten. Products, offers and
+// coupons are the normalized, provenance-carrying application data.
+
+/// A brand whose official site is crawled for products and promotions (US market).
+model CommerceBrand {
+  id                  String            @id @default(cuid())
+  name                String
+  slug                String            @unique
+  officialDomain      String
+  /// Market served, e.g. "US". Says nothing about ownership.
+  market              String            @default("US")
+  categories          String[]          @default([])
+  /// Pages that list products (category pages, sitemaps); discovery starts here.
+  discoveryUrls       String[]          @default([])
+  /// Glob patterns that identify single product pages on the official domain.
+  productUrlPatterns  String[]          @default([])
+  /// Official promotions/offers pages (coupon extraction; first-party only).
+  promoUrls           String[]          @default([])
+  enabled             Boolean           @default(true)
+  priority            Int               @default(100)
+  crawlFrequencyHours Int               @default(24)
+  maxProductsPerRun   Int               @default(20)
+  robotsStatus        String?
+  robotsCheckedAt     DateTime?
+  lastCrawlAt         DateTime?
+  nextCrawlAt         DateTime?
+  crawlStatus         String?
+  consecutiveFailures Int               @default(0)
+  lastError           String?
+  notes               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  runs                CommerceRun[]
+  products            CommerceProduct[]
+  coupons             CommerceCoupon[]
+
+  @@index([enabled, nextCrawlAt])
+  @@map("commerce_brands")
+}
+
+/// A non-brand source (a retailer, or a third-party coupon site kept disabled until its terms allow crawling).
+model CommerceSource {
+  id                  String        @id @default(cuid())
+  name                String
+  slug                String        @unique
+  kind                String
+  domain              String
+  startUrls           String[]      @default([])
+  urlPatterns         String[]      @default([])
+  enabled             Boolean       @default(false)
+  termsStatus         String        @default("UNREVIEWED")
+  robotsStatus        String?
+  robotsCheckedAt     DateTime?
+  crawlFrequencyHours Int           @default(24)
+  lastCrawlAt         DateTime?
+  nextCrawlAt         DateTime?
+  crawlStatus         String?
+  consecutiveFailures Int           @default(0)
+  lastError           String?
+  notes               String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  runs                CommerceRun[]
+
+  @@map("commerce_sources")
+}
+
+/// One Apify run (or a skipped/blocked attempt) of the commerce engine.
+model CommerceRun {
+  id             String              @id @default(cuid())
+  /// PRODUCT | COUPON
+  purpose        String
+  brandId        String?
+  sourceId       String?
+  actorId        String
+  apifyRunId     String?             @unique
+  datasetId      String?
+  trigger        String
+  status         String
+  startUrls      Int                 @default(0)
+  pagesProcessed Int?
+  extracted      Int?
+  accepted       Int?
+  rejected       Int?
+  errors         Json?
+  usageUsd       Float?
+  startedAt      DateTime            @default(now())
+  finishedAt     DateTime?
+  collectedAt    DateTime?
+  brand          CommerceBrand?      @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  source         CommerceSource?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  raws           CommerceRawRecord[]
+
+  @@index([status, startedAt])
+  @@index([brandId, startedAt])
+  @@map("commerce_runs")
+}
+
+/// Exactly what Apify extracted for one page. Never modified; re-processing reads it again.
+model CommerceRawRecord {
+  id          String      @id @default(cuid())
+  runId       String
+  url         String
+  purpose     String
+  payload     Json
+  contentHash String
+  fetchedAt   DateTime    @default(now())
+  run         CommerceRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, url])
+  @@index([url])
+  @@map("commerce_raw_records")
+}
+
+/// A normalized product read from an official or retailer page.
+model CommerceProduct {
+  id              String          @id @default(cuid())
+  brandId         String?
+  /// The Made4Buyers product it is attached to, only after an exact identity match.
+  productEntityId String?
+  canonicalUrl    String          @unique
+  name            String
+  model           String?
+  mpn             String?
+  sku             String?
+  gtin            String?
+  category        String?
+  data            Json?
+  identityStatus  String          @default("UNMATCHED")
+  identityReason  String?
+  lastRawId       String?
+  observedAt      DateTime
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  brand           CommerceBrand?  @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  offers          CommerceOffer[]
+
+  @@index([productEntityId])
+  @@index([brandId])
+  @@map("commerce_products")
+}
+
+/// A price/availability observation at one seller page. Shown only while fresh.
+model CommerceOffer {
+  id                String          @id @default(cuid())
+  productId         String
+  seller            String
+  /// MANUFACTURER | RETAILER
+  sellerType        String
+  destinationUrl    String
+  /// Set only when a real affiliate provider generated it; null otherwise.
+  affiliateUrl      String?
+  affiliateProvider String?
+  affiliateStatus   String          @default("NONE")
+  price             Float?
+  listPrice         Float?
+  currency          String?
+  availability      String?
+  shipping          String?
+  observedAt        DateTime
+  sourceRawId       String?
+  status            String          @default("FRESH")
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  product           CommerceProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, destinationUrl])
+  @@index([status, observedAt])
+  @@map("commerce_offers")
+}
+
+/// A promo code from a brand's own official promotions page (first-party) or a reviewed source.
+model CommerceCoupon {
+  id                   String         @id @default(cuid())
+  brandId              String?
+  merchant             String
+  code                 String
+  title                String?
+  description          String?
+  discount             String?
+  discountType         String?
+  startsAt             DateTime?
+  expiresAt            DateTime?
+  eligibility          String?
+  restrictions         String?
+  sourceUrl            String
+  merchantUrl          String?
+  /// VERIFIED | UNVERIFIED | EXPIRED | INVALID | CONFLICTING | UNKNOWN
+  status               String         @default("UNVERIFIED")
+  verificationEvidence String?
+  firstSeenAt          DateTime       @default(now())
+  observedAt           DateTime
+  lastVerifiedAt       DateTime?
+  sourceRawId          String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  brand                CommerceBrand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+
+  @@unique([merchant, code, sourceUrl])
+  @@index([status, expiresAt])
+  @@map("commerce_coupons")
+}
+
+/// Every identity decision: why a scraped product was (or was not) attached to a Made4Buyers product.
+model CommerceMatchLog {
+  id                String   @id @default(cuid())
+  commerceProductId String
+  productEntityId   String?
+  result            String
+  basis             String?
+  reason            String
+  createdAt         DateTime @default(now())
+
+  @@index([commerceProductId])
+  @@index([result, createdAt])
+  @@map("commerce_match_logs")
 }
