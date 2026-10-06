@@ -9,12 +9,14 @@ import { audit, type AuditContext } from "@/lib/security/audit";
 export const SWITCHES = {
   automation: { label: "Automation (master switch)", help: "Off pauses every scheduled job below. Manual 'Run now' still works.", default: true },
   scheduled_publishing: { label: "Scheduled publishing", help: "Automatic publishing of new posts and QA-passed source reviews.", default: true },
+  review_publishing: { label: "Source review publishing", help: "Automatic publishing of fresh external reviews, comparisons and buying guides (Apify / Content API).", default: true },
   guides: { label: "Morning guides", help: "08:00 IST Keyword-to-Blog buying guide.", default: true },
   articles: { label: "Evening articles", help: "19:00 IST Keyword-to-Blog informational article.", default: true },
   keyword_to_blog: { label: "Keyword-to-Blog generation", help: "Off stops all generation requests (quota protection).", default: true },
   external_ingestion: { label: "External source ingestion", help: "Apify crawls, collection and the Content API feed.", default: true },
   image_enrichment: { label: "Image enrichment", help: "Daily Pexels image backfill.", default: true },
   affiliate_enrichment: { label: "Affiliate enrichment", help: "Sovrn offer refresh and link verification.", default: true },
+  coupons: { label: "Coupon enrichment", help: "Sovrn promo-code lookups for products with a real retailer URL.", default: true },
   retries: { label: "Automatic retries", help: "Retry of failed pipeline stages.", default: true },
 } as const;
 

@@ -221,6 +221,7 @@ enum RevalidationType {
   FAILED_RETRY
   PUBLISH_CYCLE
   INDEX_INSPECTION
+  COUPON_REFRESH
 
   @@map("revalidation_type")
 }
@@ -298,6 +299,7 @@ model ContentItem {
   freshnessStatus    String?
   freshnessAgeDays   Int?
   freshnessCheckedAt DateTime?
+
   @@unique([source, sourceId])
   @@index([processingStatus])
   @@index([contentHash])
@@ -352,6 +354,16 @@ model NormalizedReview {
   assignments              ReviewCategoryAssignment[]
   offerMatches             SovrnOfferMatch[]
   affiliateLinks           AffiliateLink[]
+  coupons                  SovrnCoupon[]
+  /// Commerce data the SOURCE page published (provenance: source page + observation time).
+  /// Never presented as a live price; the verified-offer pipeline stays the only "deal" source.
+  sourceProductUrl         String?
+  sourcePrice              Float?
+  sourceCurrency           String?
+  sourceAvailability       String?
+  sourcePriceObservedAt    DateTime?
+  /// Extra normalized source data (pros, cons, specs, breadcrumbs, images, identifiers …); null when absent.
+  sourceData               Json?
   images                   ImageAsset[]
   contentEntities          ContentEntity[]
   renderModel              PageRenderModel?
@@ -360,8 +372,9 @@ model NormalizedReview {
   csvItems                 CsvImportItem[]
   indexChecks              SearchIndexCheck[]
 
-  sourceUpdatedAt          DateTime?
-  freshnessStatus          String?
+  sourceUpdatedAt DateTime?
+  freshnessStatus String?
+
   @@unique([source, sourceId])
   @@index([status, publishedAt])
   @@index([kind, status])
@@ -535,6 +548,37 @@ model AffiliateLink {
   @@index([nextVerificationAt])
   @@index([lastVerifiedAt])
   @@map("affiliate_links")
+}
+
+/// A Sovrn Commerce promo code for a product URL (Product Promo Codes API). Stored only as Sovrn
+/// returned it; a code missing from the latest response, or not re-verified recently, is not shown.
+model SovrnCoupon {
+  id                 String           @id @default(cuid())
+  normalizedReviewId String
+  productUrl         String
+  sovrnCouponId      String
+  code               String
+  description        String?
+  affiliatedUrl      String
+  originalPrice      Float?
+  priceWithCode      Float?
+  currency           String
+  verified           Boolean
+  verifiedAt         DateTime?
+  merchantDomain     String?
+  merchantName       String?
+  rank               Int              @default(0)
+  isActive           Boolean          @default(true)
+  firstSeenAt        DateTime         @default(now())
+  lastSeenAt         DateTime         @default(now())
+  nextCheckAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([normalizedReviewId, productUrl, sovrnCouponId])
+  @@index([isActive, nextCheckAt])
+  @@map("sovrn_coupons")
 }
 
 // ─── Images ─────────────────────────────────────────────────────────────────
@@ -871,6 +915,12 @@ model ReviewSource {
   /// Skipped by the scheduler until this time (automatic, recovers on its own).
   pausedUntil         DateTime?
   healthNote          String?
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  lastError           String?
+  duplicateCount      Int       @default(0)
+  errorCount          Int       @default(0)
+
   @@index([enabled, lastRunAt])
   @@map("review_sources")
 }
@@ -896,6 +946,7 @@ model ApifyRun {
   freshCount            Int?
   staleCount            Int?
   unknownFreshnessCount Int?
+
   @@index([status, startedAt])
   @@index([sourceId, startedAt])
   @@map("apify_runs")

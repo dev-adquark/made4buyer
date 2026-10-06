@@ -32,6 +32,7 @@ export const cardSelect = {
   publishedAt: true,
   sourcePublishedAt: true,
   author: true,
+  generationMeta: true,
   entities: { select: { source: true } },
   images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true } },
   // Only a VERIFIED_OK link on a matched offer counts as a verified offer.

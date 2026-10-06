@@ -13,6 +13,14 @@ export const POST = adminAction("/admin/sources", async ({ form, ctx }) => {
   const id = field(form, "id");
   const action = field(form, "action") || "save";
 
+  if (action === "resume") {
+    const source = await db.reviewSource.findUnique({ where: { id } });
+    if (!source) return { error: "Source not found" };
+    await db.reviewSource.update({ where: { id }, data: { pausedUntil: null, priority: 100, consecutiveStale: 0, consecutiveFailures: 0, healthNote: `Resumed by ${ctx.actor}` } });
+    await audit(ctx, { action: "source.resume", entityType: "review_source", entityId: id, before: { pausedUntil: source.pausedUntil, priority: source.priority }, after: { pausedUntil: null, priority: 100 } });
+    return { ok: `${source.name} resumed: it is crawled on the next scheduled run` };
+  }
+
   if (action === "toggle" || action === "run") {
     const source = await db.reviewSource.findUnique({ where: { id } });
     if (!source) return { error: "Source not found" };

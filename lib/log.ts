@@ -52,7 +52,7 @@ export function redact(value: unknown, depth = 0): unknown {
 
 function emit(level: Level, message: string, fields: Fields = {}) {
   if (process.env.LOG_SILENT === "1") return;
-  const line = JSON.stringify({ ts: new Date().toISOString(), level, msg: message, ...(redact(fields) as Fields) });
+  const line = JSON.stringify({ ts: new Date().toISOString(), level, msg: redactString(message), ...(redact(fields) as Fields) });
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);

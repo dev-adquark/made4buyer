@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { categoryName } from "@/lib/taxonomy/definitions";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "QA queue" };
+export const metadata = { title: "Content status" };
 
 const STATUSES: ReviewStatus[] = ["NEEDS_REVIEW", "QUEUED", "PUBLISHED", "UNPUBLISHED", "REJECTED"];
 const PAGE = 50;
@@ -45,7 +45,8 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
 
   return (
     <>
-      <h1>QA queue</h1>
+      <h1>Content status</h1>
+      <p className="muted">Everything here is handled automatically: content that passes the rules is published by the scheduler, and held items are rechecked on every cycle. Use these tools only to override.</p>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <nav aria-label="Status filter">
         <ul className="chips">

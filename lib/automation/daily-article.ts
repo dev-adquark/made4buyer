@@ -244,12 +244,15 @@ export type DailyArticleResult = {
   attempts?: number;
 };
 
-function dueSlot(
+export function dueSlot(
   now: Date,
   slots: Array<{ slot: string; status: string }>,
 ): Slot | null {
   const { hour } = istParts(now);
-  for (const s of ["MORNING", "EVENING"] as Slot[]) {
+  // The current slot goes first: after 19:00 the evening post is not delayed by a morning retry
+  // (the morning retry still runs on a later trigger the same day).
+  const order: Slot[] = hour >= SLOT_HOUR_IST.EVENING ? ["EVENING", "MORNING"] : ["MORNING", "EVENING"];
+  for (const s of order) {
     if (hour < SLOT_HOUR_IST[s]) continue;
     const row = slots.find((r) => r.slot === s);
     if (!row || !["PUBLISHED", "BLOCKED"].includes(row.status)) return s;

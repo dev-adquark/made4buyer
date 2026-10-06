@@ -21,6 +21,10 @@ export type NormalizedOffer = {
   brand?: string;
   category?: string;
   imageUrl?: string;
+  /** Sovrn's own flag; false means the merchant cannot be monetised for this site (never shown as a deal). */
+  affiliatable?: boolean;
+  retailPrice?: number;
+  discountRate?: number;
 };
 
 export type OfferQuery = {
@@ -143,6 +147,9 @@ export function normalizeOffers(payload: unknown): NormalizedOffer[] {
       brand: s(raw.brand) ?? s((raw.brand as Raw | undefined)?.name),
       category: s(raw.category) ?? s(raw.categoryName),
       imageUrl: httpUrl(raw.image ?? raw.imageUrl ?? raw.thumbnail),
+      affiliatable: typeof raw.affiliatable === "boolean" ? raw.affiliatable : undefined,
+      retailPrice: n(raw.retailPrice ?? raw.retail_price),
+      discountRate: n(raw.discountRate ?? raw.discount_rate),
     });
   }
   return out;
@@ -225,7 +232,8 @@ export function rankOffers(query: OfferQuery, offers: NormalizedOffer[], opts: {
   return offers
     .map((offer) => {
       const breakdown = scoreOffer(query, offer, opts.trustedMerchants);
-      const viable = breakdown.total >= opts.minScore && breakdown.product >= 0.5 && breakdown.brand > 0 && breakdown.category > 0;
+      // Sovrn says it cannot affiliate this merchant for our site: not a usable deal.
+      const viable = offer.affiliatable !== false && breakdown.total >= opts.minScore && breakdown.product >= 0.5 && breakdown.brand > 0 && breakdown.category > 0;
       return { offer, breakdown, viable };
     })
     .sort(

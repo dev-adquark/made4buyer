@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession, type AdminSession } from "@/lib/auth";
-import { log } from "@/lib/log";
+import { log, redactString } from "@/lib/log";
 import type { AuditContext } from "@/lib/security/audit";
 import { clientIp, isSameOrigin, safeReturnPath } from "@/lib/security/request";
 
@@ -49,7 +49,8 @@ export function adminAction(fallbackPath: string, handler: (a: AdminActionContex
       if (wantsJson(req)) return NextResponse.json(result.json ?? { ok: result.ok ?? true, error: result.error }, { status: result.error ? 422 : 200 });
       return redirectWith(req, result.redirect ?? returnTo, { ok: result.ok, error: result.error });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      // Shown back to the admin (URL/JSON): never carry a secret value.
+      const message = redactString((error instanceof Error ? error.message : String(error)).slice(0, 500));
       log.error("admin action failed", { path: new URL(req.url).pathname, actor: admin.email, error: message });
       if (wantsJson(req)) return NextResponse.json({ error: message }, { status: 500 });
       return redirectWith(req, returnTo, { error: message });

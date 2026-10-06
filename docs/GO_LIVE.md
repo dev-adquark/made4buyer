@@ -41,14 +41,14 @@ makes one request per provider. It writes nothing except an audit-log entry with
    Jobs → **collect-scrapes** once the run finishes. Check Ingestion (invalid items and reasons),
    Entities and Categorization (low-confidence items), Deals (`MATCHED` / `NO_MATCH` /
    `FAILED`), Link health (`VERIFIED_OK` share) and Failures.
-3. Publish two or three reviews from the QA queue by hand. Open each public page: source
+3. Let the publish cycle run (it publishes fresh, rule-passing content by itself). Open a few public pages: source
    attribution, dates, image credit, "Verified offer" only where the link is `VERIFIED_OK`.
 4. Click one "View deal" link and confirm it lands on the merchant.
 5. Confirm the pages appear in `/sitemap.xml`. Jobs → run `inspect-index` for GSC status.
 
 ## 4. Continuous operation
 
-Set `AUTO_PUBLISH_ENABLED=true` and raise `INGEST_MAX_ITEMS_PER_RUN` (default 50). Vercel
+Automatic publishing is on by default (`AUTO_PUBLISH_ENABLED`, pausable in Admin → Automation). Raise `INGEST_MAX_ITEMS_PER_RUN` (default 50) if needed. Vercel
 Hobby runs each cron once a day; for the intended cadence set the GitHub secrets `SITE_URL` and
 `CRON_SECRET` (activates `.github/workflows/scheduled-jobs.yml`) or move to Vercel Pro.
 

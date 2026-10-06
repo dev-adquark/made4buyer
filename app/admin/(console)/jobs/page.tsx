@@ -2,6 +2,7 @@ import Flash from "@/components/flash";
 import { ActionForm, Badge, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
+import { couponsConfigured } from "@/lib/sovrn/coupons";
 import { db } from "@/lib/db";
 import { jobOutcome, JOBS } from "@/lib/jobs/registry";
 import { apifyConfigured } from "@/lib/pipeline/apify";
@@ -13,12 +14,13 @@ export const metadata = { title: "Jobs & runs" };
 const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   ingest: "Fetch the legacy Content API (skipped when not configured) and run all review stages.",
   "scrape-sources": "Start Apify Web Scraper runs for enabled review sources whose crawl interval has elapsed (robots.txt checked first).",
-  "collect-scrapes": "Poll running Apify runs; fetch finished datasets, reject invalid pages with a reason, and ingest the rest into the QA queue.",
+  "collect-scrapes": "Poll running Apify runs; fetch finished datasets, reject invalid pages with a reason, and ingest the rest; fresh items are published automatically.",
   "verify-links": "Re-verify affiliate links that are due (or pending).",
   "revalidate-offers": "Re-query Sovrn for reviews with stale or failed deal data.",
   "retry-failed": "Retry due retryable failures with bounded attempts.",
   "cleanup-cache": "Delete expired Sovrn cache rows, sessions, rate-limit buckets and stale locks.",
   "publish-cycle": "Publish QA-passing reviews automatically (pause it in Admin → Automation).",
+  "refresh-coupons": "Look up Sovrn promo codes for published products with a real retailer URL; retire codes Sovrn no longer returns.",
   "daily-article": "Publish the scheduled article for the due slot (MORNING 08:00, EVENING 19:00 Asia/Kolkata): next topic from the queue, duplicate checks, Keyword-to-Blog, content and SEO QA, unique image, then publish. Does nothing when no slot is due or it is already published. See Admin → Daily articles.",
   "reclassify-content": "Re-run entity extraction, content-kind detection (review / comparison / buying guide), product linking and categorization for existing content after rule or taxonomy changes. Never changes publish state; rebuilds live pages.",
   "enrich-images": "Give published and QA reviews a real Pexels image: a photo of the product if one exists, otherwise a labelled illustrative photo of its topic. Replaces broken images, never downgrades a good one, stops on a Pexels rate limit.",
@@ -39,6 +41,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     ingest: integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured" : undefined,
     "revalidate-offers": integrations.sovrn !== "READY" ? "Sovrn not configured" : undefined,
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
+    "refresh-coupons": couponsConfigured() ? undefined : "SOVRN_COUPONS_ENABLED is off (needs Sovrn Promo Codes registration)",
     "scrape-sources": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
     "collect-scrapes": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
   };

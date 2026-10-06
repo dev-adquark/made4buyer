@@ -24,8 +24,9 @@ function lowered(n: number): number {
 export type FreshnessTally = { fresh: number; stale: number; unknown: number; invalidDate: number };
 
 /** After a collected run. Runs whose items were all unchanged say nothing about health. */
-export async function recordSourceRun(sourceId: string, t: FreshnessTally | undefined, now = new Date()) {
+export async function recordSourceRun(sourceId: string, t: FreshnessTally | undefined, now = new Date(), duplicates = 0) {
   const notFresh = t ? t.stale + t.unknown + t.invalidDate : 0;
+  await db.reviewSource.update({ where: { id: sourceId }, data: { lastSuccessAt: now, ...(duplicates ? { duplicateCount: { increment: duplicates } } : {}) } });
   if (t && t.fresh > 0) {
     await db.reviewSource.update({
       where: { id: sourceId },
@@ -43,7 +44,7 @@ export async function recordSourceRun(sourceId: string, t: FreshnessTally | unde
 
 /** After a failed run or collection. */
 export async function recordSourceFailure(sourceId: string, reason: string, now = new Date()) {
-  const s = await db.reviewSource.update({ where: { id: sourceId }, data: { consecutiveFailures: { increment: 1 } } });
+  const s = await db.reviewSource.update({ where: { id: sourceId }, data: { consecutiveFailures: { increment: 1 }, errorCount: { increment: 1 }, lastFailureAt: now, lastError: reason.slice(0, 500) } });
   await applyBackoff(sourceId, s.consecutiveFailures, `${s.consecutiveFailures} failed run(s) in a row: ${reason.slice(0, 200)}`, now);
 }
 

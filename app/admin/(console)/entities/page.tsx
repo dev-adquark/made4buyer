@@ -49,7 +49,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
               <th scope="col">Brand</th>
               <th scope="col">Device type</th>
               <th scope="col" className="num">Overall</th>
-              <th scope="col">Needs review</th>
+              <th scope="col">Low confidence (info)</th>
               <th scope="col">Action</th>
             </tr>
           </thead>
@@ -74,7 +74,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Sea
                   <td data-label="Brand">{cell("brand")}</td>
                   <td data-label="Device type">{cell("deviceType")}</td>
                   <td data-label="Overall" className="num">{pct(e.overallConfidence)}</td>
-                  <td data-label="Needs review">{e.lowConfidenceFields.join(", ") || "—"}</td>
+                  <td data-label="Low confidence">{e.lowConfidenceFields.join(", ") || "—"}</td>
                   <td data-label="Action">
                     <div className="btnrow" style={{ margin: 0 }}>
                       {e.lowConfidenceFields.length > 0 && <ActionForm action="/api/admin/reviews" fields={{ id: e.review.id, action: "confirm-entities" }} label="Confirm values" returnTo={`/admin/entities${view === "overrides" ? "?view=overrides" : ""}`} />}

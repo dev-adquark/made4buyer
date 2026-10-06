@@ -66,6 +66,10 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   </td>
                   <td data-label="Status">
                     <Badge value={s.enabled ? "ENABLED" : "DISABLED"} tone={s.enabled ? "ok" : "warn"} />
+                    {s.enabled && s.pausedUntil && s.pausedUntil > new Date() && <div><Badge value="AUTO-PAUSED" tone="warn" /></div>}
+                    <div className="small muted">Priority {s.priority}{s.lastFreshAt ? ` · last fresh ${when(s.lastFreshAt)}` : ""}</div>
+                    <div className="small muted">{s.freshCount} fresh · {s.staleCount} stale/undated · {s.duplicateCount} duplicate · {s.errorCount} errors</div>
+                    {s.healthNote && <div className="small">{s.healthNote}</div>}
                   </td>
                   <td data-label="Rights">{s.rights === "LICENSED" ? "Licensed (full text)" : "Excerpt only"}</td>
                   <td data-label="Every">{s.crawlFrequencyHours} h</td>
@@ -77,7 +81,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                       <div className="small muted">
                         {h.accepted} accepted · {h.rejected} rejected · {h.duplicates} duplicate
                         <br />
-                        {h.inQa} in QA · {h.published} published{h.unpublishedOrRejected ? ` · ${h.unpublishedOrRejected} unpublished/rejected` : ""}
+                        {h.inQa} held · {h.published} published{h.unpublishedOrRejected ? ` · ${h.unpublishedOrRejected} unpublished/rejected` : ""}
                       </div>
                     )}
                   </td>
@@ -108,6 +112,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                     <div className="btnrow" style={{ margin: 0 }}>
                       <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "toggle" }} label={s.enabled ? "Disable" : "Enable"} returnTo="/admin/sources" />
                       <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "run" }} label="Run now" returnTo="/admin/sources" disabledReason={apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured"} />
+                      {(s.pausedUntil || s.priority !== 100) && <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "resume" }} label="Resume now" returnTo="/admin/sources" />}
                       <a className="btn small" href={`/admin/sources?edit=${s.id}`}>
                         Edit
                       </a>

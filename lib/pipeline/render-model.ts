@@ -14,7 +14,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 5;
+export const RENDER_MODEL_VERSION = 6;
 
 export type PublicDeal = {
   linkId: string;
@@ -25,6 +25,31 @@ export type PublicDeal = {
   verifiedAt: string;
   isBest: boolean;
 };
+
+/** A Sovrn-verified promo code. Shown only while verifiedAt is recent (see couponIsCurrent). */
+export type PublicCoupon = {
+  id: string;
+  code: string;
+  description: string | null;
+  merchant: string | null;
+  originalPrice: number | null;
+  priceWithCode: number | null;
+  currency: string;
+  verifiedAt: string;
+};
+
+/** A code is shown only while Sovrn verified it within SOVRN_COUPON_MAX_AGE_DAYS; the API has no expiry date. */
+export function couponIsCurrent(c: Pick<PublicCoupon, "verifiedAt">, now = Date.now(), maxAgeDays = config.sovrn.couponMaxAgeDays()): boolean {
+  const t = Date.parse(c.verifiedAt);
+  return Number.isFinite(t) && now - t <= maxAgeDays * 86_400_000 && t <= now + 86_400_000;
+}
+
+export async function activeCoupons(reviewId: string): Promise<PublicCoupon[]> {
+  const rows = await db.sovrnCoupon.findMany({ where: { normalizedReviewId: reviewId, isActive: true, verified: true, verifiedAt: { not: null } }, orderBy: [{ rank: "asc" }], take: 3 });
+  return rows
+    .map((c) => ({ id: c.id, code: c.code, description: c.description, merchant: c.merchantName ?? c.merchantDomain, originalPrice: c.originalPrice, priceWithCode: c.priceWithCode, currency: c.currency, verifiedAt: c.verifiedAt!.toISOString() }))
+    .filter((c) => couponIsCurrent(c));
+}
 
 export type PageRenderModel = {
   version: number;
@@ -46,15 +71,20 @@ export type PageRenderModel = {
   bodyParagraphs: string[];
   /** Older persisted models have no value: treat as FULL (licensed feed or our own guide). */
   textRights?: "FULL" | "EXCERPT";
+  /** The source's own pros and cons (from its structured data), shown only with full-text rights. */
+  highlights?: { pros: string[]; cons: string[] } | null;
   /** subject ILLUSTRATIVE: a topic photo, captioned as such; never presented as the product. */
   image: { url: string; alt: string; width: number; height: number; attribution: string | null; attributionUrl: string | null; isFallback: boolean; subject: "PRODUCT" | "ILLUSTRATIVE" | null };
   keyEntities: Array<{ label: string; value: string }>;
   /** For AI-assisted guides: who approved publication (an editor, or the automated QA gates). */
   approval?: "EDITOR" | "AUTOMATED" | null;
+  /** Keyword-to-Blog post type: an informational ARTICLE or a buying GUIDE. */
+  articleType?: "ARTICLE" | "GUIDE" | null;
   /** Products/services this content covers (one for a review, several for a comparison). */
   products: Array<{ name: string; slug: string; role: string; brand: string | null }>;
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
+  coupons?: PublicCoupon[];
   source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
   publishedAt: string | null;
   updatedAt: string;
@@ -83,6 +113,8 @@ export async function verifiedDeals(reviewId: string): Promise<PublicDeal[]> {
 export type RenderInputs = {
   review: {
     editorApprovedBy?: string | null;
+    generationMeta?: unknown;
+    sourceData?: unknown;
     id: string;
     slug: string;
     canonicalTitle: string;
@@ -105,13 +137,22 @@ export type RenderInputs = {
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
   image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null } | null | undefined;
   deals: PublicDeal[];
+  coupons?: PublicCoupon[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
   products?: PageRenderModel["products"];
 };
 
 /** Pure composition of the PageRenderModel (shared by the DB builder and the dry-run). */
-export function composeRenderModel({ review, entities: e, assignments, image, deals, textRights = "FULL", products = [] }: RenderInputs): PageRenderModel {
+function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | null {
+  const d = (data ?? {}) as { pros?: unknown; cons?: unknown };
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").slice(0, 8) : []);
+  const pros = list(d.pros);
+  const cons = list(d.cons);
+  return pros.length || cons.length ? { pros, cons } : null;
+}
+
+export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [] }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   const pub = publicImageUrl(image, review.categorySlug);
@@ -145,6 +186,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     // Excerpt-only sources: the full text stays private (used for extraction); the page links out.
     bodyParagraphs: textRights === "EXCERPT" ? [] : paragraphs(review.body),
     textRights,
+    highlights: textRights === "EXCERPT" ? null : sourceHighlights(review.sourceData),
     image: {
       url: pub.url,
       alt: pub.isFallback
@@ -160,11 +202,13 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
       subject: pub.isFallback ? null : image?.subject === "ILLUSTRATIVE" ? "ILLUSTRATIVE" : "PRODUCT",
     },
     keyEntities,
+    articleType: review.kind === "AI_GUIDE" ? ((review.generationMeta as { articleType?: string } | null)?.articleType === "ARTICLE" ? "ARTICLE" : "GUIDE") : null,
     approval: review.kind === "AI_GUIDE" ? (review.editorApprovedBy?.startsWith("automation:") ? "AUTOMATED" : review.editorApprovedBy ? "EDITOR" : null) : null,
     products,
     // A rating belongs to a single-product review; comparisons and guides never carry one.
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     deals,
+    coupons,
     source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
@@ -182,7 +226,7 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
     },
   });
   const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), textRights: await textRightsFor(review.source), products });
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products });
 }
 
 /**

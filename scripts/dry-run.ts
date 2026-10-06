@@ -109,7 +109,8 @@ for (const [index, item] of items.entries()) {
   });
   stages.PAGE_RENDER = { outcome: "SUCCESS", record: "page_render_models", pageRenderModel: { ...model, bodyParagraphs: [`${model.bodyParagraphs.length} paragraph(s)`] }, note: "deals is empty: no link is VERIFIED_OK in a dry-run" };
 
-  const qa = [!c.category && "NO_PRIMARY_CATEGORY", c.category && !autoAccept && "CATEGORY_NEEDS_REVIEW", low.length && "ENTITIES_NEED_REVIEW"].filter(Boolean);
+  // Same hard rules as evaluateQa: low category/entity confidence is information only.
+  const qa = [!c.category && "NO_PRIMARY_CATEGORY"].filter(Boolean);
   stages.PUBLISH = { outcome: qa.length ? "BLOCKED_BY_QA (review status NEEDS_REVIEW)" : "READY (review status QUEUED)", record: "publish_jobs", qaFailures: qa };
   results.push({ input: { ...(item as object), body: "…" }, stages });
   summary.push({ item: v.value.sourceId, status: qa.length ? "NEEDS_REVIEW" : "QUEUED", category: `${c.category?.slug ?? "-"} (${c.category?.confidence ?? 0})`, deal: viable[0]?.offer.offerId ?? "NO_MATCH" });

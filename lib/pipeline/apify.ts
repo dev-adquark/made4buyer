@@ -152,46 +152,112 @@ export const PAGE_FUNCTION = `async function pageFunction(context) {
   const patterns = (customData && customData.reviewPatterns) || [];
   if (!patterns.some((p) => new RegExp(p).test(url))) return null;
   const meta = (sel) => { const el = document.querySelector(sel); return el ? (el.getAttribute("content") || el.getAttribute("href") || "").trim() || null : null; };
+  const metas = (sel) => [...document.querySelectorAll(sel)].map((el) => (el.getAttribute("content") || "").trim()).filter(Boolean);
   const text = (el) => (el ? el.textContent.replace(/\\s+/g, " ").trim() : null);
+  const abs = (v) => { try { return v ? new URL(v, url).toString() : null; } catch (e) { return null; } };
+  // Every JSON-LD node, however deeply nested (@graph, Product.review, mainEntity …).
   const nodes = [];
-  for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
-    try { const j = JSON.parse(s.textContent); for (const n of [].concat(j)) { nodes.push(n); if (n && n["@graph"]) nodes.push(...n["@graph"]); } } catch (e) {}
-  }
-  const typeOf = (n) => [].concat((n && n["@type"]) || []);
+  const walk = (v, depth) => {
+    if (!v || typeof v !== "object" || depth > 8) return;
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+    if (v["@type"]) nodes.push(v);
+    for (const k of Object.keys(v)) if (k !== "@context") walk(v[k], depth + 1);
+  };
+  for (const s of document.querySelectorAll('script[type="application/ld+json"]')) { try { walk(JSON.parse(s.textContent), 0); } catch (e) {} }
+  const typeOf = (n) => [].concat((n && n["@type"]) || []).map((t) => String(t).toLowerCase());
   const find = (...types) => nodes.find((n) => typeOf(n).some((t) => types.includes(t)));
-  const review = find("Review", "CriticReview");
-  const article = find("NewsArticle", "Article", "BlogPosting", "ReportageNewsArticle", "TechArticle") || review;
-  const name = (v) => (v == null ? null : typeof v === "string" ? v : Array.isArray(v) ? name(v[0]) : v.name || null);
-  const item = (review && review.itemReviewed) || find("Product") || null;
-  const offer = item && item.offers ? [].concat(item.offers)[0] : null;
-  const root = document.querySelector("article") || document.querySelector("main") || document.body;
-  const paragraphs = [...root.querySelectorAll("p")].map(text).filter((p) => p && p.length > 40);
+  const findAll = (...types) => nodes.filter((n) => typeOf(n).some((t) => types.includes(t)));
+  const name = (v) => (v == null ? null : typeof v === "string" ? v.trim() || null : Array.isArray(v) ? name(v[0]) : (v.name && String(v.name).trim()) || null);
+  const val = (v) => (v == null || v === "" ? null : v);
+  const num = (v) => { const n = Number(v); return v != null && v !== "" && Number.isFinite(n) ? n : null; };
+  const review = find("review", "criticreview");
+  const products = findAll("product", "softwareapplication");
+  const item = (review && review.itemReviewed && typeof review.itemReviewed === "object" ? review.itemReviewed : null)
+    || products.find((p) => p.review && [].concat(p.review).includes(review)) || products[0] || null;
+  const article = find("newsarticle", "article", "blogposting", "reportagenewsarticle", "techarticle") || review;
+  const webPage = find("webpage");
+  const offers = item && item.offers ? [].concat(item.offers) : [];
+  const offer = offers[0] || null;
+  const notes = (v) => (v && v.itemListElement ? [].concat(v.itemListElement) : []).map((e) => name(e) || name(e && e.item)).filter(Boolean).slice(0, 20);
+  // Content root: the <article> (or <main>) with the most paragraph text.
+  const cands = [...document.querySelectorAll("article"), document.querySelector("main")].filter(Boolean);
+  const size = (el) => [...el.querySelectorAll("p")].reduce((n, p) => n + (p.textContent || "").length, 0);
+  const root = cands.sort((a, b) => size(b) - size(a))[0] || document.body;
+  const skip = 'nav, aside, footer, header, form, [role="navigation"], [class*="related"], [class*="newsletter"], [class*="share"], [class*="comment"]';
+  const blocks = [];
+  for (const el of root.querySelectorAll("h2, h3, h4, p, li, table, blockquote, figcaption")) {
+    if (el.closest(skip)) continue;
+    const tag = el.tagName.toLowerCase();
+    if (tag !== "li" && tag !== "table" && el.parentElement && el.parentElement.closest("li, table, blockquote")) continue;
+    if (tag === "table") {
+      const rows = [...el.querySelectorAll("tr")].map((tr) => [...tr.querySelectorAll("th, td")].map(text).join(" | ")).filter(Boolean);
+      if (rows.length) blocks.push(rows.join("\\n"));
+      continue;
+    }
+    const t = text(el);
+    if (!t) continue;
+    if (tag === "h2" || tag === "h3" || tag === "h4") blocks.push("## " + t);
+    else if (tag === "li") { if (!el.parentElement || !el.parentElement.closest(skip)) blocks.push("• " + t); }
+    else if (tag === "p" && t.length < 25) continue;
+    else blocks.push(t);
+  }
+  let body = blocks.join("\\n\\n");
+  const ldBody = article && typeof article.articleBody === "string" ? article.articleBody.trim() : "";
+  if (ldBody.length > body.length * 1.5 && body.length < 1500) body = ldBody;
   const timeEl = root.querySelector("time[datetime]");
   const rating = review && review.reviewRating ? review.reviewRating : null;
+  const agg = item && item.aggregateRating ? item.aggregateRating : null;
+  const crumbs = find("breadcrumblist");
+  const faq = find("faqpage");
+  const tags = [...new Set([...metas('meta[property="article:tag"]'), ...[].concat((article && article.keywords) || []).flatMap((k) => String(k).split(",")), ...(meta('meta[name="keywords"]') || "").split(",")].map((t) => t.trim()).filter(Boolean))].slice(0, 30);
+  const images = [];
+  for (const img of root.querySelectorAll("figure img, img")) {
+    if (img.closest(skip) || images.length >= 12) continue;
+    const src = abs(img.currentSrc || img.getAttribute("src"));
+    if (!src || src.startsWith("data:")) continue;
+    const fig = img.closest("figure");
+    const w = num(img.getAttribute("width")), h = num(img.getAttribute("height"));
+    if ((w && w < 200) || (h && h < 150) || /logo|avatar|icon|banner|promo/i.test(src)) continue;
+    images.push({ url: src, alt: img.getAttribute("alt") || null, caption: fig ? text(fig.querySelector("figcaption")) : null, width: num(img.getAttribute("width")), height: num(img.getAttribute("height")) });
+  }
   return {
     m4b: 1,
     url,
     canonicalUrl: meta('link[rel="canonical"]') || meta('meta[property="og:url"]') || url,
     title: (article && (article.headline || article.name)) || meta('meta[property="og:title"]') || text(document.querySelector("h1")),
-    author: name(article && article.author) || meta('meta[name="author"]'),
+    author: name(article && article.author) || name(review && review.author) || meta('meta[name="author"]'),
+    authorUrl: abs((article && article.author && [].concat(article.author)[0] && [].concat(article.author)[0].url) || (review && review.author && [].concat(review.author)[0] && [].concat(review.author)[0].url) || null),
     publisher: name(article && article.publisher) || meta('meta[property="og:site_name"]'),
-    datePublished: (article && article.datePublished) || meta('meta[property="article:published_time"]') || (timeEl && timeEl.getAttribute("datetime")),
-    dateModified: (article && article.dateModified) || meta('meta[property="article:modified_time"]'),
+    datePublished: val(article && article.datePublished) || val(review && review.datePublished) || meta('meta[property="article:published_time"]') || meta('meta[property="article:first_published_time"]') || (timeEl && timeEl.getAttribute("datetime")),
+    dateModified: val(article && article.dateModified) || val(review && review.dateModified) || val(webPage && webPage.dateModified) || meta('meta[property="article:modified_time"]') || meta('meta[property="og:updated_time"]'),
     excerpt: meta('meta[name="description"]') || meta('meta[property="og:description"]') || (article && article.description) || null,
-    body: paragraphs.join("\\n\\n").slice(0, 60000) || null,
-    rating: rating && rating.ratingValue != null ? Number(rating.ratingValue) : null,
-    ratingScale: rating && rating.bestRating != null ? Number(rating.bestRating) : null,
-    productName: name(item),
+    body: body.slice(0, 60000) || null,
+    rating: rating ? num(rating.ratingValue) : null,
+    ratingScale: rating ? num(rating.bestRating) : null,
+    ratingWorst: rating ? num(rating.worstRating) : null,
+    aggregateRating: agg ? { value: num(agg.ratingValue), count: num(agg.reviewCount) || num(agg.ratingCount), best: num(agg.bestRating) } : null,
+    pros: review ? notes(review.positiveNotes) : [],
+    cons: review ? notes(review.negativeNotes) : [],
+    productName: name(item) ? name(item).replace(/\s+review$/i, "").trim() || null : null,
     brand: item ? name(item.brand) : null,
-    model: item ? item.model || null : null,
-    sku: item ? item.sku || null : null,
-    mpn: item ? item.mpn || null : null,
-    gtin: item ? item.gtin13 || item.gtin12 || item.gtin || null : null,
-    price: offer && offer.price != null ? String(offer.price) : null,
-    currency: offer ? offer.priceCurrency || null : null,
+    model: item ? val(item.model) : null,
+    sku: item ? val(item.sku) : null,
+    mpn: item ? val(item.mpn) : null,
+    gtin: item ? val(item.gtin13) || val(item.gtin12) || val(item.gtin14) || val(item.gtin8) || val(item.gtin) : null,
+    price: offer && val(offer.price) != null ? String(offer.price) : offer && val(offer.lowPrice) != null ? String(offer.lowPrice) : null,
+    currency: offer ? val(offer.priceCurrency) : null,
+    availability: offer && offer.availability ? String(offer.availability).replace(/^https?:\\/\\/schema\\.org\\//, "") : null,
+    offerUrl: offer ? abs(val(offer.url)) : null,
     image: meta('meta[property="og:image"]'),
+    imageAlt: meta('meta[property="og:image:alt"]'),
+    images,
+    tags,
+    section: (article && name(article.articleSection)) || meta('meta[property="article:section"]'),
+    breadcrumbs: crumbs && crumbs.itemListElement ? [].concat(crumbs.itemListElement).map((e) => ({ position: num(e.position), name: name(e) || name(e.item), url: abs(e.item && typeof e.item === "object" ? e.item["@id"] || e.item.url : e.item) })).filter((c) => c.name) : [],
+    faq: faq && faq.mainEntity ? [].concat(faq.mainEntity).map((q) => ({ q: name(q), a: q.acceptedAnswer ? text(new DOMParser().parseFromString(String(q.acceptedAnswer.text || ""), "text/html").body) : null })).filter((x) => x.q && x.a).slice(0, 20) : [],
+    wordCount: article ? num(article.wordCount) : null,
     lang: document.documentElement.lang || null,
-    extractedFrom: { jsonLd: Boolean(review || article), review: Boolean(review), product: Boolean(item) },
+    extractedFrom: { jsonLd: Boolean(review || article), review: Boolean(review), product: Boolean(item), structuredBody: blocks.length > 0 },
   };
 }`;
 
@@ -221,6 +287,33 @@ export type MappedItem = { ok: true; raw: Record<string, unknown> } | { ok: fals
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+const arr = (v: unknown) => (Array.isArray(v) && v.length ? v : undefined);
+
+/** Everything else the page stated that Made4Buyers can use, without empty keys. Never filled in. */
+export function sourceDataOf(item: ApifyItem): Record<string, unknown> | undefined {
+  const strings = (v: unknown) => arr(v)?.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim());
+  const ids = Object.fromEntries(Object.entries({ sku: str(item.sku), mpn: str(item.mpn), gtin: str(item.gtin), model: str(item.model) }).filter(([, v]) => v));
+  const rating = num(item.rating) !== undefined ? { value: num(item.rating), best: num(item.ratingScale) ?? null, worst: num(item.ratingWorst) ?? null } : undefined;
+  const agg = item.aggregateRating && typeof item.aggregateRating === "object" ? (item.aggregateRating as Record<string, unknown>) : undefined;
+  const data: Record<string, unknown> = {
+    pros: strings(item.pros),
+    cons: strings(item.cons),
+    breadcrumbs: arr(item.breadcrumbs),
+    faq: arr(item.faq),
+    images: arr(item.images),
+    tags: strings(item.tags),
+    section: str(item.section),
+    authorUrl: str(item.authorUrl),
+    identifiers: Object.keys(ids).length ? ids : undefined,
+    rating,
+    aggregateRating: agg && num(agg.value) !== undefined ? agg : undefined,
+    wordCount: num(item.wordCount),
+    lang: str(item.lang),
+    imageAlt: str(item.imageAlt),
+  };
+  const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+  return Object.keys(clean).length ? clean : undefined;
+}
 
 /**
  * Maps one dataset item to the Content-API shape validateContentItem understands. Only fields
@@ -260,8 +353,17 @@ export function mapApifyItem(item: ApifyItem, source: Pick<ReviewSource, "slug" 
       imageUrl: str(item.image),
       imageLicenseVerified: false,
       category: source.categoryHint ?? undefined,
+      tags: arr(item.tags),
+      // The product page the source linked (its offer URL), kept with provenance; never shown as a live price.
+      productUrl: (() => {
+        const u = str(item.offerUrl);
+        return u && /^https?:\/\//i.test(u) && normalizeUrl(u) !== canonical ? u : undefined;
+      })(),
+      availability: str(item.availability),
+      sourceData: sourceDataOf(item),
       contentKind: "REVIEW",
-      sourceMeta: { scraper: "apify/web-scraper", source: source.slug, dateModified: str(item.dateModified) ?? null, gtin: str(item.gtin) ?? null, extractedFrom: item.extractedFrom ?? null },
+      // The full original item (minus the body, stored above) so a better mapping can be replayed without re-crawling.
+      sourceMeta: { scraper: "apify/web-scraper", source: source.slug, dateModified: str(item.dateModified) ?? null, gtin: str(item.gtin) ?? null, extractedFrom: item.extractedFrom ?? null, raw: { ...item, body: undefined } },
     },
   };
 }
@@ -364,7 +466,8 @@ export async function runScrapeSources(trigger: string) {
       results.push({ source: s.slug, status: "PAUSED", reason: s.healthNote ?? `paused until ${s.pausedUntil.toISOString()}` });
       continue;
     }
-    if (s.lastRunAt && now - s.lastRunAt.getTime() < s.crawlFrequencyHours * 3_600_000) continue;
+    // 30 minutes of slack: a daily cron lands a few seconds short of 24 h, which must not skip a day.
+    if (s.lastRunAt && now - s.lastRunAt.getTime() < s.crawlFrequencyHours * 3_600_000 - 30 * 60_000) continue;
     const r = await startSourceRun(s, trigger);
     results.push({ source: s.slug, status: r.status, reason: r.reason });
   }
@@ -414,7 +517,7 @@ export async function collectRun(run: ApifyRun, trigger: string): Promise<Collec
     const notFresh = f ? f.stale + f.unknown + f.invalidDate : 0;
     const rejected = Object.values(rejections).reduce((n, x) => n + x, 0) + (ingest?.failedNormalization ?? 0) + notFresh;
     await db.apifyRun.update({ where: { id: run.id }, data: { status: "COLLECTED", collectedAt: new Date(), itemCount: pages.length, accepted: ingest ? ingest.normalized : 0, rejected, ingestRunId: ingest?.runId ?? null, freshCount: f?.fresh ?? 0, staleCount: f?.stale ?? 0, unknownFreshnessCount: f ? f.unknown + f.invalidDate : 0 } });
-    if (pages.length) await recordSourceRun(source.id, f);
+    if (pages.length) await recordSourceRun(source.id, f, new Date(), (rejections.DUPLICATE_REVIEW ?? 0) + (ingest?.duplicates ?? 0));
     else await recordSourceFailure(source.id, "empty dataset");
     log.info("apify run collected", { stage: "CONTENT_FETCH", source: source.slug, runId: run.apifyRunId, items: pages.length, valid: valid.length });
     return {

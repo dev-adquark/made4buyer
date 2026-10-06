@@ -36,6 +36,10 @@ export type ValidatedContent = {
   ratingScale?: number;
   contentKind: "REVIEW" | "AI_GUIDE";
   generation?: Record<string, unknown>;
+  /** Product page the source linked, its stated availability, and other normalized source data. */
+  productUrl?: string;
+  availability?: string;
+  sourceData?: Record<string, unknown>;
 };
 
 export type ValidationResult = { ok: true; value: ValidatedContent } | { ok: false; issues: string[]; sourceId?: string; code: ValidationCode };
@@ -143,6 +147,9 @@ const schema = z.object({
   ratingScale: z.number().positive().max(100).optional(),
   contentKind: z.enum(["REVIEW", "AI_GUIDE"]),
   generation: z.record(z.unknown()).optional(),
+  productUrl: httpUrl.optional(),
+  availability: z.string().max(80).optional(),
+  sourceData: z.record(z.unknown()).optional(),
 });
 
 /**
@@ -230,6 +237,12 @@ export function validateContentItem(input: unknown): ValidationResult {
     rating: typeof ratingRaw === "number" ? ratingRaw : typeof ratingRaw === "string" && ratingRaw.trim() !== "" ? Number(ratingRaw) : undefined,
     contentKind: pick(raw, ["contentKind", "kind"]) === "AI_GUIDE" ? ("AI_GUIDE" as const) : ("REVIEW" as const),
     generation: raw.generation && typeof raw.generation === "object" && !Array.isArray(raw.generation) ? (raw.generation as Record<string, unknown>) : undefined,
+    productUrl: (() => {
+      const u = asString(pick(raw, ["productUrl", "product_url", "offerUrl", "product.url"]));
+      return u && httpUrl.safeParse(u).success ? u : undefined;
+    })(),
+    availability: asString(pick(raw, ["availability", "product.availability"]))?.slice(0, 80),
+    sourceData: raw.sourceData && typeof raw.sourceData === "object" && !Array.isArray(raw.sourceData) ? (raw.sourceData as Record<string, unknown>) : undefined,
     ratingScale: (() => {
       const v = pick(raw, ["ratingScale", "rating_scale", "bestRating"]);
       return typeof v === "number" ? v : typeof v === "string" ? Number(v) : undefined;

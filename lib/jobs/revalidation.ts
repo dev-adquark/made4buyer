@@ -10,6 +10,7 @@ import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { verifyLinkRecord } from "@/lib/pipeline/stages";
 import { config } from "@/lib/config";
+import { canonicalProductUrl, couponsConfigured, fetchSovrnCoupons } from "@/lib/sovrn/coupons";
 
 /**
  * Revalidation / maintenance jobs. Each run is recorded in revalidation_runs with checked,
@@ -118,6 +119,53 @@ export async function runOfferRefresh(opts: { trigger: string; ctx?: AuditContex
     for (const r of reviews) {
       const summary = await processReview(r.id, { from: "OFFER_MATCHING", bypassOfferCache: Boolean(rangeWhere) });
       tally.add(summary.dealStatus === "MATCHED", summary.dealStatus ?? "ERROR");
+    }
+  });
+}
+
+/**
+ * Coupon enrichment (Sovrn Product Promo Codes). For published content with a real retailer
+ * product URL (a verified offer's final retailer page, or the product URL the source published),
+ * stores the codes Sovrn returns and retires codes it no longer returns. Never blocks content.
+ */
+export async function runCouponRefresh(opts: { trigger: string; ctx?: AuditContext; limit?: number }): Promise<RunResult | { status: "BLOCKED_BY_ENVIRONMENT"; reason: string }> {
+  if (!couponsConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "Sovrn promo codes not enabled: set SOVRN_COUPONS_ENABLED=true once Sovrn Support has registered this site for the Product Promo Codes API" };
+  return trackRun("COUPON_REFRESH", opts.trigger, opts.ctx ?? SYSTEM_ACTOR, {}, async (tally) => {
+    const reviews = await db.normalizedReview.findMany({
+      where: { status: "PUBLISHED", OR: [{ sourceProductUrl: { not: null } }, { affiliateLinks: { some: { isActive: true, verificationStatus: "VERIFIED_OK", finalUrl: { not: null } } } }] },
+      orderBy: { updatedAt: "asc" },
+      take: opts.limit ?? 40,
+      select: { id: true, slug: true, status: true, categorySlug: true, brandSlug: true, sourceProductUrl: true, affiliateLinks: { where: { isActive: true, verificationStatus: "VERIFIED_OK" }, select: { finalUrl: true } } },
+    });
+    for (const r of reviews) {
+      const urls = [...new Set([r.sourceProductUrl, ...r.affiliateLinks.map((l) => l.finalUrl)].map(canonicalProductUrl).filter((u): u is string => Boolean(u)))].slice(0, 3);
+      let changed = false;
+      for (const productUrl of urls) {
+        const out = await fetchSovrnCoupons(productUrl);
+        if (out.status !== "OK" && out.status !== "EMPTY") {
+          tally.add(false, out.status);
+          // A refused or failing request leaves existing codes to age out of display; nothing is invented.
+          continue;
+        }
+        if (out.fromCache) {
+          tally.add(true, "CACHED");
+          continue;
+        }
+        const seen: string[] = [];
+        for (const [rank, c] of out.data.coupons.entries()) {
+          seen.push(c.id);
+          const data = { code: c.code, description: c.description, affiliatedUrl: c.affiliatedUrl, originalPrice: c.originalPrice, priceWithCode: c.priceWithCode, currency: c.currency, verified: c.verified, verifiedAt: c.verifiedAt, merchantDomain: out.data.merchant.domain, merchantName: out.data.merchant.name, rank, isActive: true, lastSeenAt: new Date() };
+          await db.sovrnCoupon.upsert({ where: { normalizedReviewId_productUrl_sovrnCouponId: { normalizedReviewId: r.id, productUrl, sovrnCouponId: c.id } }, create: { normalizedReviewId: r.id, productUrl, sovrnCouponId: c.id, ...data }, update: data });
+        }
+        const retired = await db.sovrnCoupon.updateMany({ where: { normalizedReviewId: r.id, productUrl, isActive: true, sovrnCouponId: { notIn: seen } }, data: { isActive: false } });
+        changed ||= seen.length > 0 || retired.count > 0;
+        tally.add(true, out.data.coupons.length ? "COUPONS_FOUND" : "NO_COUPON");
+      }
+      if (!urls.length) tally.add(true, "NO_PRODUCT_URL");
+      if (changed) {
+        await persistPageRenderModel(r.id);
+        revalidateReviewPaths(r);
+      }
     }
   });
 }

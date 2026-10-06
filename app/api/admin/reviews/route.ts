@@ -82,7 +82,7 @@ export const POST = adminAction("/admin/qa", async ({ form, ctx }) => {
       return { ok: "Review rejected" };
     case "restore":
       await restoreReview(id, ctx);
-      return { ok: "Review restored to the QA queue" };
+      return { ok: "Review restored; it is published automatically once it passes the rules" };
     case "override-category": {
       const category = resolveCategorySlug(field(form, "category"));
       if (!category) return { error: "Unknown category" };

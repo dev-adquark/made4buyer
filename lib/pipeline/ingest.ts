@@ -193,6 +193,13 @@ export async function processContentItem(itemId: string, c: IngestCounters, runI
       author: cand.author ?? null,
       sourcePublishedAt: cand.publishedAt ?? null,
       sourceUpdatedAt: v.value.updatedAt ?? null,
+      // Commerce data as the source page stated it, with provenance (observed when crawled).
+      sourceProductUrl: v.value.productUrl ?? null,
+      sourcePrice: v.value.price ?? null,
+      sourceCurrency: v.value.price !== undefined ? (v.value.currency ?? null) : null,
+      sourceAvailability: v.value.availability ?? null,
+      sourcePriceObservedAt: v.value.price !== undefined ? item.fetchedAt : null,
+      sourceData: v.value.sourceData ? (v.value.sourceData as Prisma.InputJsonValue) : Prisma.DbNull,
       freshnessStatus: freshnessExempt(item.source) ? null : evaluateFreshness({ publishedAt: v.value.publishedAt, updatedAt: v.value.updatedAt }).status,
     };
     const review = own

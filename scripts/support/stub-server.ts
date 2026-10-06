@@ -30,6 +30,8 @@ export async function startStubServer(opts: StubOptions = {}) {
   const pexels = { broken: false, rateLimited: false };
   // Sovrn stub controls: `status` forces that HTTP status (e.g. 403); `notAffiliatable` marks every offer affiliatable:false.
   const sovrnCtl = { status: 0, notAffiliatable: false };
+  // Sovrn Product Promo Codes stub (documented response shape). `coupons` is returned for any product_url.
+  const couponCtl = { status: 0, coupons: [] as Array<Record<string, unknown>>, verificationActive: false, requests: [] as string[] };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
   const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[], tinyPost: false, fixedTitle: "" };
@@ -46,6 +48,12 @@ export async function startStubServer(opts: StubOptions = {}) {
     if (url.pathname === "/content") {
       if (opts.contentKey && req.headers.authorization !== `Bearer ${opts.contentKey}`) return send(401, { error: "unauthorized" });
       return send(200, fill(opts.contentOverride?.() ?? { items: content.items }));
+    }
+    if (url.pathname === "/coupons/product") {
+      if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
+      if (couponCtl.status) return send(couponCtl.status, { error: "forbidden" });
+      couponCtl.requests.push(url.searchParams.get("product_url") ?? "");
+      return send(200, { merchant: { domain: "shop.example.test", group_id: 1, group_name: "Example Shop", logo_url: null }, scan: { verification_active: couponCtl.verificationActive, when_to_check_back: 600 }, coupons: couponCtl.coupons });
     }
     if (url.pathname === "/sovrn") {
       if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
@@ -202,5 +210,5 @@ export async function startStubServer(opts: StubOptions = {}) {
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, pexels, ktb, sovrn: sovrnCtl, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, ktb, sovrn: sovrnCtl, coupons: couponCtl, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

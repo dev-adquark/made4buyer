@@ -32,9 +32,7 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   // (Publish button, bulk publish, publish cycle, restore, reprocess).
   if (review.source === "keyword-to-blog") return [];
   const failures: QaFailure[] = [];
-  if (review.kind === "AI_GUIDE" && !review.editorApprovedAt) {
-    failures.push({ code: "AI_GUIDE_NEEDS_EDITOR_APPROVAL", message: "AI-assisted guide must be read and approved by an editor before publishing" });
-  }
+  // An AI guide never waits for editor approval (owner's rule): no approval gate exists.
   if (review.kind !== "AI_GUIDE" && !review.sourcePublishedAt) {
     failures.push({ code: "PUBLICATION_DATE_MISSING", message: "The source did not supply a publication date. Fix it in the Content API: we never guess a date" });
   } else if (review.kind !== "AI_GUIDE" && !review.publishedAt && !freshnessExempt(review.source)) {
@@ -153,7 +151,7 @@ export async function restoreReview(reviewId: string, ctx: AuditContext) {
  * or Admin → Automation pauses scheduled publishing.
  */
 export async function runPublishCycle(ctx: AuditContext, limit = 100) {
-  if (!config.ingest.autoPublish() || !(await allowed("scheduled_publishing")).ok) return { enabled: false, attempted: 0, published: 0, failed: 0, ready: 0 };
+  if (!config.ingest.autoPublish() || !(await allowed("scheduled_publishing")).ok || !(await allowed("review_publishing")).ok) return { enabled: false, attempted: 0, published: 0, failed: 0, ready: 0 };
   let ready = 0;
   const parked = await db.normalizedReview.findMany({ where: { status: { in: ["NEEDS_REVIEW", "QUEUED"] }, source: { not: "keyword-to-blog" } }, select: { id: true }, orderBy: { updatedAt: "asc" }, take: 200 });
   // Re-check QUEUED too, so one that has since aged out is parked quietly instead of failing a publish every cycle.

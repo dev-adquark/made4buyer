@@ -7,8 +7,13 @@ import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline } from "@/lib/util/format";
 
-export function KindPill({ kind }: { kind: string }) {
-  if (kind === "AI_GUIDE") return <TrustLabel kind="ai" />;
+/** Keyword-to-Blog post type, from the stored generation metadata. */
+export function aiPostType(meta: unknown): "ARTICLE" | "GUIDE" {
+  return (meta as { articleType?: string } | null)?.articleType === "ARTICLE" ? "ARTICLE" : "GUIDE";
+}
+
+export function KindPill({ kind, articleType }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null }) {
+  if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "AI-assisted article" : "AI-assisted guide"}</TrustLabel>;
   if (kind === "COMPARISON") return <TrustLabel kind="source">Source comparison</TrustLabel>;
   if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Source buying guide</TrustLabel>;
   return <TrustLabel kind="source" />;
@@ -52,7 +57,7 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
         <div className="media">
           <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={640} height={427} loading={eager ? "eager" : "lazy"} decoding="async" />
           <span className="kind">
-            <KindPill kind={review.kind} />
+            <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
           </span>
         </div>
         <div className="body">
@@ -80,7 +85,7 @@ export function FeatureStory({ review }: { review: Card }) {
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
           <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
-          <KindPill kind={review.kind} />
+          <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
           {hasVerifiedOffer(review) && <TrustLabel kind="verified" />}
         </div>
         <h3>{review.canonicalTitle}</h3>

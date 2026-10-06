@@ -62,7 +62,7 @@ export const config = {
   },
 
   freshness: {
-    /** A published review whose source article is older than this is flagged for an editor. */
+    /** A published review whose source article is older than this is flagged in Admin (information only). */
     reviewMonths: () => num("STALE_REVIEW_MONTHS", 18, 1, 120),
     /** A published AI-assisted guide older than this is flagged for a refresh. */
     guideMonths: () => num("STALE_GUIDE_MONTHS", 12, 1, 120),
@@ -106,6 +106,14 @@ export const config = {
     /** True when SOVRN_SITE_KEY holds the secret key (reported by go-live checks and health). */
     siteKeyIsSecret: () => Boolean(str("SOVRN_SITE_KEY") && str("SOVRN_SITE_KEY") === str("SOVRN_API_KEY")),
     linkWrapperUrl: () => str("SOVRN_LINK_WRAPPER_URL") ?? "https://redirect.viglink.com",
+    /** Product Promo Codes API (needs separate registration with Sovrn Support). */
+    couponsUrl: () => str("SOVRN_COUPONS_URL") ?? "https://viglink.io/coupons/product",
+    /** Off unless enabled: the coupon API needs its own Sovrn registration. */
+    couponsEnabled: () => bool("SOVRN_COUPONS_ENABLED", false),
+    /** Unverified codes are not shown unless explicitly allowed. */
+    couponsIncludeUnverified: () => bool("SOVRN_COUPONS_INCLUDE_UNVERIFIED", false),
+    /** A code is displayed only while its last Sovrn verification is at most this many days old. */
+    couponMaxAgeDays: () => num("SOVRN_COUPON_MAX_AGE_DAYS", 7, 1, 60),
     timeoutMs: () => num("SOVRN_TIMEOUT_MS", 12000, 1000, 60000),
     cacheTtlMinutes: () => num("SOVRN_CACHE_TTL_MINUTES", 360, 5, 7 * 24 * 60),
     minScore: () => num("SOVRN_MIN_MATCH_SCORE", 0.55, 0, 1),

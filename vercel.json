@@ -42,6 +42,10 @@
       "schedule": "30 8 * * *"
     },
     {
+      "path": "/api/cron/refresh-coupons",
+      "schedule": "15 8 * * *"
+    },
+    {
       "path": "/api/cron/detect-stale",
       "schedule": "30 3 * * *"
     },

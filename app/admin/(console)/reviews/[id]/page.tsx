@@ -45,7 +45,7 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
   return (
     <>
       <p className="small">
-        <Link href="/admin/qa">← QA queue</Link>
+        <Link href="/admin/qa">← Content status</Link>
       </p>
       <h1>{r.canonicalTitle}</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />

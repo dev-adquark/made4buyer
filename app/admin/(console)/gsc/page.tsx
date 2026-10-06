@@ -2,7 +2,7 @@ import { Badge, pct, Stat, when } from "@/components/admin-ui";
 import { requireAdminPage } from "@/lib/admin/guard";
 import { NOT_AVAILABLE_IN_ENVIRONMENT } from "@/lib/config";
 import { db } from "@/lib/db";
-import { gscConfigured, querySearchConsole } from "@/lib/gsc";
+import { checkGscAccess, gscConfigured, querySearchConsole } from "@/lib/gsc";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Search Console" };
@@ -14,8 +14,16 @@ export default async function GscPage() {
       <>
         <h1>Google Search Console</h1>
         <p className="notice warn">
-          {NOT_AVAILABLE_IN_ENVIRONMENT}: set GSC_SITE_URL and GSC_SERVICE_ACCOUNT_JSON and grant the service account access to the property. No search or indexing numbers are shown until then.
+          {NOT_AVAILABLE_IN_ENVIRONMENT}: Search Console is not connected. No search or indexing numbers are shown until it is, and publishing does not depend on it.
         </p>
+        <h2>What the site owner needs to do</h2>
+        <ol>
+          <li>In Search Console, add and verify the property (URL prefix <code>https://made4buyers.vercel.app/</code> by HTML tag or file, or a domain property by DNS TXT once a custom domain is used).</li>
+          <li>In Google Cloud, enable the &ldquo;Google Search Console API&rdquo;, create a service account and download its JSON key.</li>
+          <li>In Search Console → Settings → Users and permissions, add the service account&apos;s <code>client_email</code> as a user.</li>
+          <li>In Vercel (production), set <code>GSC_SITE_URL</code> to the exact property string and <code>GSC_SERVICE_ACCOUNT_JSON</code> to the whole JSON key (Sensitive), then redeploy.</li>
+          <li>Come back here: the access check below runs on every visit.</li>
+        </ol>
       </>
     );
   }
@@ -24,6 +32,7 @@ export default async function GscPage() {
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - 29);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const access = await checkGscAccess().catch((e: unknown) => ({ ok: false as const, reason: e instanceof Error ? e.message : "access check failed" }));
   let error = "";
   let data: Awaited<ReturnType<typeof querySearchConsole>> | null = null;
   try {
@@ -36,6 +45,9 @@ export default async function GscPage() {
   return (
     <>
       <h1>Google Search Console</h1>
+      <p className={`notice ${access.ok ? "ok" : "error"}`} role="status">
+        Access check: {access.ok ? "connected (the service account can read this property)" : `not working: ${"reason" in access ? access.reason : "unknown"}`}
+      </p>
       {error && (
         <p className="notice error" role="alert">
           {error}

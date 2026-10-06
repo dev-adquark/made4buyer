@@ -13,7 +13,7 @@ import { placeholderPath } from "@/lib/pipeline/images";
 import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { buildPageRenderModel, RENDER_MODEL_VERSION, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
+import { buildPageRenderModel, couponIsCurrent, RENDER_MODEL_VERSION, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
 import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
 
@@ -171,7 +171,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <div>
               <div className="meta-row">
                 {m.category && <span className="cat-tag">{m.category.name}</span>}
-                <KindPill kind={m.kind} />
+                <KindPill kind={m.kind} articleType={m.articleType} />
                 {best && <TrustLabel kind="verified" />}
               </div>
               <h1>{m.title}</h1>
@@ -333,6 +333,27 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             </table>
           </section>
 
+          {m.highlights && (
+            <section id="pros-cons" aria-labelledby="pc-heading">
+              <h2 id="pc-heading">Pros and cons</h2>
+              <p className="muted small">As listed by {m.source.name} in its review.</p>
+              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                {m.highlights.pros.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: "0 0 6px" }}>Pros</h3>
+                    <ul>{m.highlights.pros.map((t) => <li key={t}>{t}</li>)}</ul>
+                  </div>
+                )}
+                {m.highlights.cons.length > 0 && (
+                  <div>
+                    <h3 style={{ margin: "0 0 6px" }}>Cons</h3>
+                    <ul>{m.highlights.cons.map((t) => <li key={t}>{t}</li>)}</ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
           {considerations && m.category && (
             <section id="considerations" aria-labelledby="cons-heading">
               <h2 id="cons-heading">Buying considerations</h2>
@@ -463,6 +484,27 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 <p>We only show a deal after confirming its link reaches the retailer.</p>
               </div>
             )}
+            {(m.coupons ?? []).filter((c) => couponIsCurrent(c)).map((c) => (
+              <div key={c.id} className="coupon" style={{ marginTop: 14, borderTop: "1px solid var(--line, #ddd)", paddingTop: 12 }}>
+                <div className="verified-head">Verified coupon</div>
+                <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "0.04em" }}>
+                  <code>{c.code}</code>
+                </div>
+                {c.description && <div className="small">{c.description}</div>}
+                {money(c.priceWithCode, c.currency) && (
+                  <div className="small">
+                    {money(c.priceWithCode, c.currency)} with code{money(c.originalPrice, c.currency) && c.originalPrice !== c.priceWithCode ? <> (was <s>{money(c.originalPrice, c.currency)}</s>)</> : null}
+                    {c.merchant ? ` at ${c.merchant}` : ""}
+                  </div>
+                )}
+                <p className="small muted" style={{ margin: "4px 0 8px" }}>
+                  Verified by Sovrn <time dateTime={c.verifiedAt}>{shortDate(c.verifiedAt)}</time>. Codes can stop working at any time.
+                </p>
+                <a className="btn small" href={`/go/coupon/${c.id}`} rel="sponsored nofollow noopener" target="_blank">
+                  Shop with code<span className="visually-hidden"> {c.code} (opens in a new tab)</span>
+                </a>
+              </div>
+            ))}
             <p className="disclosure">
               Made4Buyers may earn a commission from qualifying purchases made through offer links. <Link href="/disclosure">Affiliate disclosure</Link>
             </p>

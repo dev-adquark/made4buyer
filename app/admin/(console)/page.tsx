@@ -27,6 +27,23 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
     successMetrics(),
     db.ingestionRun.findFirst({ orderBy: { startedAt: "desc" } }),
   ]);
+  const day = new Date(Date.now() - 86_400_000);
+  const week = new Date(Date.now() - 7 * 86_400_000);
+  const [publishedToday, freshToday, heldWeek, ktbWeek, apifyDay, failedRuns, withCoupon, sources] = await Promise.all([
+    db.normalizedReview.count({ where: { status: "PUBLISHED", publishedAt: { gte: day } } }),
+    db.contentItem.count({ where: { freshnessStatus: "FRESH", freshnessCheckedAt: { gte: day } } }),
+    db.contentItem.count({ where: { freshnessStatus: { in: ["STALE", "UNKNOWN", "INVALID_DATE"] }, freshnessCheckedAt: { gte: week } } }),
+    db.automationSlot.groupBy({ by: ["status"], where: { updatedAt: { gte: week } }, _count: { _all: true } }),
+    db.apifyRun.groupBy({ by: ["status"], where: { startedAt: { gte: day } }, _count: { _all: true } }),
+    Promise.all([db.revalidationRun.count({ where: { startedAt: { gte: day }, status: { in: ["FAILED", "COMPLETED_WITH_ERRORS"] } } }), db.ingestionRun.count({ where: { startedAt: { gte: day }, status: "FAILED" } })]).then(([a, b]) => a + b),
+    db.normalizedReview.count({ where: { status: "PUBLISHED", coupons: { some: { isActive: true, verified: true } } } }),
+    db.reviewSource.findMany({ where: { enabled: true }, select: { pausedUntil: true, consecutiveStale: true, consecutiveFailures: true } }),
+  ]);
+  const ktb = (st: string) => ktbWeek.find((r) => r.status === st)?._count._all ?? 0;
+  const apifyTotal = apifyDay.reduce((n, r) => n + r._count._all, 0);
+  const apifyFailed = apifyDay.filter((r) => ["FAILED", "ABORTED", "TIMED-OUT", "COLLECT_FAILED"].includes(r.status)).reduce((n, r) => n + r._count._all, 0);
+  const pausedSources = sources.filter((x) => x.pausedUntil && x.pausedUntil > new Date()).length;
+  const degradedSources = sources.filter((x) => !(x.pausedUntil && x.pausedUntil > new Date()) && (x.consecutiveStale || x.consecutiveFailures)).length;
   const content = (s: string) => contentByStatus.find((c) => c.processingStatus === s)?._count._all ?? 0;
   const reviews = (s: string) => reviewsByStatus.find((c) => c.status === s)?._count._all ?? 0;
   const totalContent = contentByStatus.reduce((n, c) => n + c._count._all, 0);
@@ -43,14 +60,25 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
         <ActionForm action="/api/admin/jobs" fields={{ job: "ingest" }} label="Run ingestion now" returnTo="/admin" className="btn primary" disabledReason={integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured (BLOCKED_BY_ENVIRONMENT)" : undefined} />
         <ActionForm action="/api/admin/jobs" fields={{ job: "verify-links" }} label="Verify due links" returnTo="/admin" />
         <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin" disabledReason={integrations.sovrn === "READY" ? undefined : "Sovrn not configured"} />
-        <Link className="btn" href="/admin/qa?status=QUEUED">
-          Review publish queue ({reviews("QUEUED")})
+        <Link className="btn" href="/admin/automation">
+          Automation control centre
         </Link>
+      </div>
+      <h2>Autonomous engine</h2>
+      <div className="stats">
+        <Stat label="Published (24 h)" value={publishedToday} note="all pipelines, no approval step" />
+        <Stat label="Fresh external items (24 h)" value={freshToday} />
+        <Stat label="Held: stale / undated (7 d)" value={heldWeek} note="never published automatically" />
+        <Stat label="Keyword-to-Blog slots (7 d)" value={`${ktb("PUBLISHED")} published`} note={`${ktb("BLOCKED")} blocked, ${ktb("FAILED") + ktb("RETRYING")} failed/retrying`} />
+        <Stat label="Apify runs (24 h)" value={apifyTotal} note={`${apifyFailed} failed`} />
+        <Stat label="Failed job runs (24 h)" value={failedRuns} />
+        <Stat label="Coupon coverage" value={pct(published ? withCoupon / published : null)} note={`${withCoupon}/${published} published with a verified Sovrn code`} />
+        <Stat label="Sources" value={`${sources.length - pausedSources - degradedSources} healthy`} note={`${degradedSources} degraded, ${pausedSources} paused`} />
       </div>
       <div className="stats">
         <Stat label="Content items ingested" value={totalContent} note={lastRun ? `last run ${lastRun.status}` : "no runs yet"} />
         <Stat label="Published reviews" value={published} />
-        <Stat label="Needs review" value={reviews("NEEDS_REVIEW")} />
+        <Stat label="Held by a rule" value={reviews("NEEDS_REVIEW")} note="stale, undated or incomplete; rechecked automatically" />
         <Stat label="Failed items" value={content("FAILED")} />
         <Stat label="Duplicates" value={content("DUPLICATE")} />
         <Stat label="Deal coverage" value={pct(published ? withDeal / published : null)} note={`${withDeal}/${published} published with verified deal`} />
