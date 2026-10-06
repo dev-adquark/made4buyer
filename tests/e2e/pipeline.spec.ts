@@ -1,3 +1,4 @@
+import { FORBIDDEN_PUBLIC_TOKENS, NO_VERIFIED_OFFER, NO_VERIFIED_PRICE } from "../../lib/public/display";
 import { CATEGORIES } from "../../lib/taxonomy/definitions";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
@@ -115,7 +116,8 @@ test("9. public review page", async () => {
   state.macbookSlug = page.url().split("/review/")[1];
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MacBook Air");
   // No commerce data: the honest state, never a stale or invented price.
-  await expect(page.locator("#deal")).toContainText("Price currently unavailable");
+  expect((await page.locator("body").innerText()).match(FORBIDDEN_PUBLIC_TOKENS)?.[0], "forbidden token on the review page").toBeUndefined();
+  await expect(page.locator("#deal")).toContainText(NO_VERIFIED_PRICE);
   await expect(page.locator("#deal")).toContainText("we earn nothing");
   await expect(page.getByRole("link", { name: /View deal/ })).toHaveCount(0);
   await expect(page.locator(".sticky-offer")).toHaveCount(0);
@@ -134,8 +136,9 @@ test("9. public review page", async () => {
   // Every review without commerce data shows the same honest state.
   await page.goto("/category/ai-tools");
   await page.locator('a[href^="/review/"]', { hasText: /ChatGPT Plus/ }).first().click();
-  await expect(page.locator("#deal")).toContainText("Price currently unavailable");
+  await expect(page.locator("#deal")).toContainText(NO_VERIFIED_PRICE);
   await expect(page.locator("#deal .price")).toHaveCount(0);
+  expect((await page.locator("body").innerText()).match(FORBIDDEN_PUBLIC_TOKENS)?.[0], "forbidden token on the review page").toBeUndefined();
 });
 
 test("10. category page with filters", async () => {
@@ -165,6 +168,18 @@ test("11. search", async () => {
   await page.locator('a[href^="/review/"]', { hasText: /Pixel 10/ }).first().click();
   await page.waitForURL(/\/review\//);
   state.pixelSlug = page.url().split("/review/")[1];
+});
+
+test("12a. /deals without verified offers shows the empty state, never a fake card", async () => {
+  await page.goto("/deals");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Deals");
+  await expect(page.getByText(NO_VERIFIED_OFFER)).toBeVisible();
+  await expect(page.locator(".deal-card")).toHaveCount(0);
+  const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
+  expect(ld.join("")).not.toContain('"Offer"');
+  // "Deals" is in the public navigation.
+  await page.goto("/");
+  await expect(page.getByRole("navigation").getByRole("link", { name: "Deals", exact: true }).first()).toBeVisible();
 });
 
 test("12. /go redirects only to stored commerce offers", async () => {
@@ -234,6 +249,11 @@ test("no dead links and no dead buttons", async () => {
   for (const p of pages) {
     const res = await page.goto(p);
     expect(res?.status(), p).toBeLessThan(400);
+    // Public pages never show a placeholder for missing data ("null", "undefined", "NaN", "N/A", "$0").
+    if (!p.startsWith("/admin")) {
+      const visible = await page.locator("body").innerText();
+      expect(visible.match(FORBIDDEN_PUBLIC_TOKENS)?.[0], `forbidden token on ${p}`).toBeUndefined();
+    }
     for (const h of await page.locator("a[href]").evaluateAll((as) => as.map((a) => (a as HTMLAnchorElement).href))) {
       const u = new URL(h);
       if (u.origin === new URL(page.url()).origin && !u.pathname.startsWith("/go/") && !u.pathname.startsWith("/api/admin/reports/")) hrefs.add(u.pathname + u.search);
@@ -310,6 +330,7 @@ test("product hubs, content-type filters and typo suggestions", async () => {
   await page.goto("/product/sony-wh-1000xm6");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sony WH-1000XM6");
   await expect(page.locator('a[href^="/review/sony-wh-1000xm6"]').first()).toBeVisible();
+  expect((await page.locator("body").innerText()).match(FORBIDDEN_PUBLIC_TOKENS)?.[0], "forbidden token on the product hub").toBeUndefined();
   // The type filter changes the database query, and an empty type says so honestly.
   await page.goto("/reviews?type=comparison");
   await expect(page.getByText("Nothing of this type has been published yet.")).toBeVisible();

@@ -3,6 +3,8 @@ import seedFile from "@/data/commerce/brands.seed.json";
 import { db } from "@/lib/db";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
+import { sha256 } from "@/lib/util/text";
+import { isValidTimezone, zonedParts } from "@/lib/util/timezone";
 
 /**
  * Commerce brands: the official brand sites the commerce engine reads products, prices and
@@ -15,6 +17,8 @@ export const BRAND_LIMITS = {
   maxProductsPerRun: { min: 1, max: 100 },
   crawlFrequencyHours: { min: 6, max: 720 },
   priority: { min: 0, max: 1000 },
+  crawlWindowStartHour: { min: 0, max: 23 },
+  crawlWindowHours: { min: 1, max: 24 },
   listItems: 20,
   notes: 1000,
 } as const;
@@ -35,8 +39,17 @@ export type BrandInput = {
   priority: number;
   crawlFrequencyHours: number;
   maxProductsPerRun: number;
+  /** Crawl window start (0–23, in `timezone`); null = any time. */
+  crawlWindowStartHour: number | null;
+  crawlWindowHours: number;
+  timezone: string;
+  officialStoreUrl: string | null;
   notes: string | null;
 };
+
+export const DEFAULT_BRAND_TIMEZONE = "America/New_York";
+/** Seed brands are spread across the day in 2-hour windows (12 windows) by a hash of the slug. */
+export const SEED_WINDOW_HOURS = 2;
 
 /** Loose input: lists may be arrays or one-per-line text (admin textareas); numbers may be strings. */
 export type BrandInputRaw = {
@@ -154,16 +167,36 @@ export function validateBrandInput(raw: BrandInputRaw, defaults: Partial<BrandIn
   if (!(crawlFrequencyHours >= L.crawlFrequencyHours.min && crawlFrequencyHours <= L.crawlFrequencyHours.max)) return { ok: false, error: `Crawl frequency: ${L.crawlFrequencyHours.min}–${L.crawlFrequencyHours.max} hours` };
   if (!(maxProductsPerRun >= L.maxProductsPerRun.min && maxProductsPerRun <= L.maxProductsPerRun.max)) return { ok: false, error: `Products per run: ${L.maxProductsPerRun.min}–${L.maxProductsPerRun.max}` };
 
+  // Crawl window: blank start = any time. Hours 1–24 in an IANA time zone.
+  const startRaw = raw.crawlWindowStartHour;
+  const crawlWindowStartHour = startRaw === undefined ? (defaults.crawlWindowStartHour ?? null) : startRaw === null || String(startRaw).trim() === "" ? null : toInt(startRaw, 0);
+  if (crawlWindowStartHour !== null && !(crawlWindowStartHour >= L.crawlWindowStartHour.min && crawlWindowStartHour <= L.crawlWindowStartHour.max)) return { ok: false, error: `Crawl window start: an hour ${L.crawlWindowStartHour.min}–${L.crawlWindowStartHour.max}, or blank for any time` };
+  const crawlWindowHours = toInt(raw.crawlWindowHours, defaults.crawlWindowHours ?? 24);
+  if (!(crawlWindowHours >= L.crawlWindowHours.min && crawlWindowHours <= L.crawlWindowHours.max)) return { ok: false, error: `Crawl window length: ${L.crawlWindowHours.min}–${L.crawlWindowHours.max} hours` };
+  const tzRaw = raw.timezone === undefined || raw.timezone === null || String(raw.timezone).trim() === "" ? (defaults.timezone ?? DEFAULT_BRAND_TIMEZONE) : String(raw.timezone).trim();
+  if (!isValidTimezone(tzRaw)) return { ok: false, error: `Time zone must be an IANA name such as America/New_York: ${tzRaw}` };
+
+  // Official store URL: https, public, on the official domain (or its subdomains). Optional.
+  const storeRaw = raw.officialStoreUrl !== undefined ? raw.officialStoreUrl : defaults.officialStoreUrl;
+  const store = typeof storeRaw === "string" ? storeRaw.trim() : "";
+  let officialStoreUrl: string | null = null;
+  if (store) {
+    const r = validateOutboundUrl(store, { standardPortsOnly: true });
+    if (!r.url || r.url.protocol !== "https:") return { ok: false, error: `Official store URL must be a public https:// URL: ${store}` };
+    if (!onBrandDomain(r.url, officialDomain)) return { ok: false, error: `Official store URL must be on ${officialDomain} (or its subdomains): ${store}` };
+    officialStoreUrl = r.url.toString();
+  }
+
   const notesRaw = raw.notes !== undefined ? raw.notes : defaults.notes;
   const notes = typeof notesRaw === "string" && notesRaw.trim() ? notesRaw.trim().slice(0, L.notes) : null;
   const enabled = toBool(raw.enabled, defaults.enabled ?? true);
-  return { ok: true, value: { name, slug, officialDomain, market, categories, discoveryUrls, productUrlPatterns, promoUrls, enabled, priority, crawlFrequencyHours, maxProductsPerRun, notes } };
+  return { ok: true, value: { name, slug, officialDomain, market, categories, discoveryUrls, productUrlPatterns, promoUrls, enabled, priority, crawlFrequencyHours, maxProductsPerRun, crawlWindowStartHour, crawlWindowHours, timezone: tzRaw, officialStoreUrl, notes } };
 }
 
 /** Admin form → validated input. Lists are textareas, one entry per line. */
 export function parseBrandForm(get: (name: string) => string, defaults: Partial<BrandInput> = {}): Validation<BrandInput> {
   const raw: BrandInputRaw = {};
-  for (const k of ["name", "slug", "officialDomain", "market", "priority", "crawlFrequencyHours", "maxProductsPerRun", "notes", ...ARRAY_FIELDS] as const) raw[k] = get(k);
+  for (const k of ["name", "slug", "officialDomain", "market", "priority", "crawlFrequencyHours", "maxProductsPerRun", "crawlWindowStartHour", "crawlWindowHours", "timezone", "officialStoreUrl", "notes", ...ARRAY_FIELDS] as const) raw[k] = get(k);
   // Unchecked checkboxes are absent from a form post: "enabledPresent" says the field was on the form.
   raw.enabled = get("enabledPresent") ? (get("enabled") ? "true" : "false") : undefined;
   return validateBrandInput(raw, defaults);
@@ -200,11 +233,13 @@ export async function importSeedBrands(seed: BrandSeed[] = readBrandSeed()): Pro
     const b = v.value;
     const existing = await db.commerceBrand.findUnique({ where: { slug: b.slug } });
     if (!existing) {
-      await db.commerceBrand.create({ data: { name: b.name, slug: b.slug, officialDomain: b.officialDomain, market: b.market, categories: b.categories, discoveryUrls: b.discoveryUrls, productUrlPatterns: b.productUrlPatterns, promoUrls: b.promoUrls, notes: b.notes } });
+      await db.commerceBrand.create({ data: { name: b.name, slug: b.slug, officialDomain: b.officialDomain, market: b.market, categories: b.categories, discoveryUrls: b.discoveryUrls, productUrlPatterns: b.productUrlPatterns, promoUrls: b.promoUrls, notes: b.notes, ...seedWindow(b.slug) } });
       result.created++;
       continue;
     }
-    const fill: Partial<Record<ArrayField, string[]>> = {};
+    const fill: Partial<Record<ArrayField, string[]>> & { crawlWindowStartHour?: number; crawlWindowHours?: number } = {};
+    // A window is assigned only to a brand that never had one: an admin's window is never replaced.
+    if (existing.crawlWindowStartHour === null) Object.assign(fill, seedWindow(existing.slug));
     for (const k of ARRAY_FIELDS) {
       if (!existing[k].length && b[k].length) {
         // Seed URLs are checked against the domain the admin may have changed since; never mix sites.
@@ -220,12 +255,26 @@ export async function importSeedBrands(seed: BrandSeed[] = readBrandSeed()): Pro
   return result;
 }
 
+/** Deterministic staggered window for a seed brand: hash(slug) → one of 12 two-hour windows. */
+export function seedWindow(slug: string): { crawlWindowStartHour: number; crawlWindowHours: number } {
+  const slots = 24 / SEED_WINDOW_HOURS;
+  return { crawlWindowStartHour: (parseInt(sha256(slug).slice(0, 8), 16) % slots) * SEED_WINDOW_HOURS, crawlWindowHours: SEED_WINDOW_HOURS };
+}
+
 // ── Admin mutations ──────────────────────────────────────────────────────────
+
+/**
+ * An admin's "any time" (blank start) is stored as the full-day window 0 + 24 h, so null keeps
+ * meaning "never configured" and the seed import can never replace an admin's choice.
+ */
+function windowForSave(input: BrandInput): BrandInput {
+  return input.crawlWindowStartHour === null ? { ...input, crawlWindowStartHour: 0, crawlWindowHours: 24 } : input;
+}
 
 export async function createBrand(input: BrandInput): Promise<Validation<CommerceBrand>> {
   const clash = await db.commerceBrand.findUnique({ where: { slug: input.slug }, select: { id: true } });
   if (clash) return { ok: false, error: `Slug ${input.slug} is already used` };
-  return { ok: true, value: await db.commerceBrand.create({ data: input }) };
+  return { ok: true, value: await db.commerceBrand.create({ data: windowForSave(input) }) };
 }
 
 export async function updateBrand(id: string, input: BrandInput): Promise<{ ok: true; before: CommerceBrand; after: CommerceBrand } | { ok: false; error: string }> {
@@ -237,7 +286,7 @@ export async function updateBrand(id: string, input: BrandInput): Promise<{ ok: 
   const after = await db.commerceBrand.update({
     where: { id },
     // A new domain has its own robots.txt: the old check no longer applies.
-    data: { ...input, ...(domainChanged ? { robotsStatus: null, robotsCheckedAt: null } : {}) },
+    data: { ...windowForSave(input), ...(domainChanged ? { robotsStatus: null, robotsCheckedAt: null } : {}) },
   });
   return { ok: true, before, after };
 }
@@ -278,7 +327,7 @@ export async function brandCounts(now = new Date()) {
   const [total, enabled, due, failing] = await Promise.all([
     db.commerceBrand.count(),
     db.commerceBrand.count({ where: { enabled: true } }),
-    db.commerceBrand.count({ where: dueWhere(now) }),
+    dueBrands(now, 500).then((b) => b.length),
     db.commerceBrand.count({ where: { consecutiveFailures: { gt: 0 } } }),
   ]);
   return { total, enabled, due, failing };
@@ -289,11 +338,42 @@ function dueWhere(now: Date): Prisma.CommerceBrandWhereInput {
   return { enabled: true, OR: [{ nextCrawlAt: null }, { nextCrawlAt: { lte: now } }] };
 }
 
-/** Brands to crawl now: highest priority first, then the longest-waiting (never-scheduled first). */
-export function dueBrands(now = new Date(), limit = 10): Promise<CommerceBrand[]> {
-  return db.commerceBrand.findMany({
+type WindowFields = Pick<CommerceBrand, "crawlWindowStartHour" | "crawlWindowHours" | "timezone">;
+
+/** Whether `now` falls in the brand's crawl window (its own time zone). No start, or 24 h, = any time. */
+export function inCrawlWindow(b: WindowFields, now: Date): boolean {
+  if (b.crawlWindowStartHour === null || b.crawlWindowHours >= 24) return true;
+  const { hour } = zonedParts(now, isValidTimezone(b.timezone) ? b.timezone : "UTC");
+  return (hour - b.crawlWindowStartHour + 24) % 24 < Math.max(1, b.crawlWindowHours);
+}
+
+/**
+ * No starvation: a brand that has been due for longer than its crawl frequency (its window was
+ * missed, e.g. because the discover cron runs once a day) is crawled outside its window.
+ */
+export function windowOverdue(b: Pick<CommerceBrand, "nextCrawlAt" | "createdAt" | "crawlFrequencyHours">, now: Date): boolean {
+  const dueSince = b.nextCrawlAt ?? b.createdAt;
+  return now.getTime() - dueSince.getTime() >= Math.max(1, b.crawlFrequencyHours) * 3_600_000;
+}
+
+/** Window label for Admin, e.g. "06:00–08:00 America/New_York" or "Any time". */
+export function windowLabel(b: WindowFields): string {
+  if (b.crawlWindowStartHour === null || b.crawlWindowHours >= 24) return "Any time";
+  const h = (n: number) => `${String(n % 24).padStart(2, "0")}:00`;
+  return `${h(b.crawlWindowStartHour)}–${h(b.crawlWindowStartHour + b.crawlWindowHours)} ${b.timezone}`;
+}
+
+/**
+ * Brands to crawl now: highest priority first, then the longest-waiting (never-scheduled first).
+ * A brand is due when its next crawl time has come AND it is inside its crawl window (or has
+ * waited longer than its crawl frequency, so a missed window never starves it).
+ */
+export async function dueBrands(now = new Date(), limit = 10): Promise<CommerceBrand[]> {
+  const take = Math.max(1, Math.min(500, Math.floor(limit) || 1));
+  const candidates = await db.commerceBrand.findMany({
     where: dueWhere(now),
     orderBy: [{ priority: "desc" }, { nextCrawlAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
-    take: Math.max(1, Math.min(500, Math.floor(limit) || 1)),
+    take: 1000,
   });
+  return candidates.filter((b) => inCrawlWindow(b, now) || windowOverdue(b, now)).slice(0, take);
 }

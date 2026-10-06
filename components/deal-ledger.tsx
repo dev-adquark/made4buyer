@@ -2,21 +2,32 @@ import Link from "next/link";
 import DealImpression from "./deal-impression";
 import SafeImg from "./safe-img";
 import { placeholderPath } from "@/lib/pipeline/images";
+import { displayText } from "@/lib/public/display";
 import { cardImage, type DealRow } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { availabilityLabel, dateline, money } from "@/lib/util/format";
+
+/** A row can be shown only with a real price (amount + ISO currency) and a named seller. */
+export function dealRowShowable(d: DealRow): boolean {
+  return money(d.price, d.currency) !== null && displayText(d.seller) !== null;
+}
 
 /** One fresh commerce price as a tear-off tag: product, price and seller as observed, and when we checked. */
 export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2 | 3 }) {
   const H = headingLevel === 2 ? "h2" : "h3";
   const r = d.review;
   const price = money(d.price, d.currency);
+  // Never a card without a verified price: nothing is rendered instead.
+  if (!price || !displayText(d.seller)) return null;
+  const availability = availabilityLabel(d.availability);
+  const checked = dateline(d.observedAt);
+  const category = categoryName(r.categorySlug);
   return (
     <DealImpression offerId={d.offerId} reviewId={r.id} categorySlug={r.categorySlug}>
       <article className="deal-card" style={themeStyle(r.categorySlug) as React.CSSProperties}>
         <div className="dc-top">
-          <span className="cat-tag">{categoryName(r.categorySlug) ?? "General"}</span>
+          {category ? <span className="cat-tag">{category}</span> : <span />}
           <span className="trust checked">Price checked</span>
         </div>
         <div className="dc-main">
@@ -27,17 +38,25 @@ export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2
                 {r.productName}
               </Link>
             </H>
-            <span className="dc-price">{price ?? <span className="na">Price currently unavailable</span>}</span>
+            <span className="dc-price">{price}</span>
             <span className="label muted">{d.seller}</span>
           </div>
         </div>
         <dl className="dc-more">
-          <dt>Availability</dt>
-          <dd>{availabilityLabel(d.availability)}</dd>
-          <dt>Last checked</dt>
-          <dd>
-            <time dateTime={d.observedAt.toISOString()}>{dateline(d.observedAt)}</time>
-          </dd>
+          {availability && (
+            <>
+              <dt>Availability</dt>
+              <dd>{availability}</dd>
+            </>
+          )}
+          {checked && (
+            <>
+              <dt>Last checked</dt>
+              <dd>
+                <time dateTime={d.observedAt.toISOString()}>{checked}</time>
+              </dd>
+            </>
+          )}
           <dt>Seller</dt>
           <dd>{d.sellerType === "MANUFACTURER" ? "Official store" : "Retailer"}</dd>
         </dl>
@@ -53,9 +72,11 @@ export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2
 }
 
 export default function DealLedger({ rows, headingLevel = 3 }: { rows: DealRow[]; headingLevel?: 2 | 3 }) {
+  const shown = rows.filter(dealRowShowable);
+  if (!shown.length) return null;
   return (
     <ul className="deal-grid">
-      {rows.map((d, i) => (
+      {shown.map((d, i) => (
         <li key={d.offerId} className="reveal" style={{ "--delay": `${Math.min(i, 5) * 60}ms` } as React.CSSProperties}>
           <DealCard d={d} headingLevel={headingLevel} />
         </li>

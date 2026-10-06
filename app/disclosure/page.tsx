@@ -15,7 +15,7 @@ export default function Disclosure() {
           <p>Links to retailers and brands on Made4Buyers are plain links to the retailer’s or maker’s own page. We do not currently use an affiliate program, so we currently earn nothing from retailer links or from purchases you make after following one.</p>
         )}
         <h2>Where prices and links come from</h2>
-        <p>Prices, availability and seller links come from our own commerce data: we read the maker’s official product pages and retailer product pages and record what they state, and when. A price is shown only while that observation is recent; otherwise a review says “Price currently unavailable” rather than showing an old price. “Where to buy” links point to the maker’s own site or a retailer, taken from the product pages we used as sources; they never show a price on their own.</p>
+        <p>Prices, availability and seller links come from our own commerce data: we read the maker’s official product pages and retailer product pages and record what they state, and when. A price is shown only while that observation is recent; otherwise a review says “We couldn’t verify a current price from an authoritative source.” rather than showing an old price. “Where to buy” links point to the maker’s own site or a retailer, taken from the product pages we used as sources; they never show a price on their own.</p>
         <p>How we link to retailers does not affect which products are reviewed, how reviews are categorised or ranked, or which seller is listed. Prices and availability can change after we check them; always confirm the final price at the retailer.</p>
         <h2>Sponsored placements</h2>
         <p>Paid placements are always labelled “Sponsored” and include the advertiser’s name.</p>

@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
+import { commerceAudit } from "./audit";
 import { CODE_SHAPE, findCodesInText } from "./page-functions/coupon";
 
 /**
@@ -353,12 +354,19 @@ export function verifyCoupon(o: CouponObservation, now = new Date()): { status: 
 /** Evidence prefix written by Admin → Coupons → Mark invalid. */
 export const ADMIN_INVALID_PREFIX = "Marked invalid by ";
 
-export type UpsertSummary = { created: number; updated: number; statuses: Partial<Record<CouponStatus, number>> };
+export type UpsertSummary = { created: number; updated: number; statuses: Partial<Record<CouponStatus, number>>; /** Rows created or whose status changed. */ changed: number };
+
+/** COUPON_EXPIRED / COUPON_INVALIDATED for a real status change (no event for an unchanged observation). */
+async function auditStatusChange(id: string, code: string, from: string | null | undefined, to: string, evidence?: string | null) {
+  if (from === to) return;
+  const action = to === "EXPIRED" ? "COUPON_EXPIRED" : to === "INVALID" ? "COUPON_INVALIDATED" : null;
+  if (action) await commerceAudit(action, "commerce_coupon", id, { before: { status: from ?? null }, after: { status: to }, metadata: { code, evidence: evidence ?? null } });
+}
 
 /** Writes coupons observed in one crawl (unique merchant+code+sourceUrl). Never deletes. */
 export async function upsertCoupons(input: { brandId: string | null; coupons: NormalizedCoupon[]; observedAt: Date; rawIds?: Record<string, string>; now?: Date }): Promise<UpsertSummary> {
   const now = input.now ?? new Date();
-  const out: UpsertSummary = { created: 0, updated: 0, statuses: {} };
+  const out: UpsertSummary = { created: 0, updated: 0, statuses: {}, changed: 0 };
   for (const c of input.coupons) {
     const where = { merchant_code_sourceUrl: { merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl } };
     const existing = await db.commerceCoupon.findUnique({ where, select: { id: true, status: true, verificationEvidence: true } });
@@ -386,9 +394,13 @@ export async function upsertCoupons(input: { brandId: string | null; coupons: No
     if (existing) {
       await db.commerceCoupon.update({ where: { id: existing.id }, data });
       out.updated++;
+      if (existing.status !== v.status) out.changed++;
+      await auditStatusChange(existing.id, c.code, existing.status, v.status, v.evidence);
     } else {
-      await db.commerceCoupon.create({ data: { ...data, merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl, firstSeenAt: input.observedAt } });
+      const row = await db.commerceCoupon.create({ data: { ...data, merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl, firstSeenAt: input.observedAt } });
       out.created++;
+      out.changed++;
+      await commerceAudit("COUPON_CREATED", "commerce_coupon", row.id, { after: { status: v.status }, metadata: { merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl, discount: c.discount, expiresAt: c.expiresAt?.toISOString() ?? null } });
     }
     out.statuses[v.status] = (out.statuses[v.status] ?? 0) + 1;
   }
@@ -410,15 +422,24 @@ export async function recordDisappearances(input: { merchant: string; sourceUrl:
     if (v.status !== c.status || v.evidence) {
       await db.commerceCoupon.update({ where: { id: c.id }, data: { status: v.status, ...(v.evidence ? { verificationEvidence: v.evidence } : {}) } });
       if (v.status === "INVALID") invalid++;
+      await auditStatusChange(c.id, c.code, c.status, v.status, v.evidence);
     }
   }
   return { missed: gone.length, invalid };
 }
 
-/** Marks every coupon whose stated expiry has passed as EXPIRED (rows kept). */
+/** Marks every coupon whose stated expiry has passed as EXPIRED (rows kept; one COUPON_EXPIRED event each). */
 export async function markExpiredCoupons(now = new Date()): Promise<number> {
-  const r = await db.commerceCoupon.updateMany({ where: { expiresAt: { lt: now }, status: { not: "EXPIRED" } }, data: { status: "EXPIRED" } });
-  return r.count;
+  const due = await db.commerceCoupon.findMany({ where: { expiresAt: { lt: now }, status: { not: "EXPIRED" } }, select: { id: true, code: true, status: true, expiresAt: true } });
+  let count = 0;
+  for (const c of due) {
+    // Conditional update: a concurrent run that already expired it does not produce a second event.
+    const r = await db.commerceCoupon.updateMany({ where: { id: c.id, status: c.status }, data: { status: "EXPIRED" } });
+    if (!r.count) continue;
+    count++;
+    await auditStatusChange(c.id, c.code, c.status, "EXPIRED", `stated expiry ${c.expiresAt?.toISOString()} has passed`);
+  }
+  return count;
 }
 
 /** Days a VERIFIED code stays displayable without being re-seen on the official page (COMMERCE_COUPON_MAX_AGE_DAYS, default 7). */

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { canonicalProductUrl, isAffiliateRedirectUrl } from "@/lib/net/product-url";
+import { canonicalDestination } from "./display";
 
 /**
  * "Where to buy": plain, direct links to the maker's site or a retailer, built ONLY from URLs
@@ -135,8 +136,10 @@ export function retailerLinksFor(review: RetailerLinkInput, opts: { siteUrl?: st
   for (const c of [...official, ...retailer]) {
     if (out.length >= MAX_RETAILER_LINKS) break;
     const l = linkableUrl(c.raw, excluded);
-    if (!l || seenUrls.has(l.url) || seenMerchants.has(l.merchant)) continue;
-    seenUrls.add(l.url);
+    // One link per canonical destination (fragment, tracking and repeated parameters ignored) and per merchant.
+    const key = l ? canonicalDestination(l.url) : null;
+    if (!l || !key || seenUrls.has(key) || seenMerchants.has(l.merchant)) continue;
+    seenUrls.add(key);
     seenMerchants.add(l.merchant);
     out.push({ url: l.url, merchant: l.merchant, kind: c.kind, label: c.kind === "official" ? "Official site" : `View at ${l.merchant}`, source: c.source });
   }

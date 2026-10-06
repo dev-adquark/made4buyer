@@ -10,7 +10,7 @@ const { reviewRevalidationTargets, revalidateReviewPaths } = await import("@/lib
 const src = (file: string) => readFileSync(path.join(process.cwd(), file), "utf8");
 
 describe("public pages are cacheable (ISR)", () => {
-  const cached = ["app/page.tsx", "app/product/[slug]/page.tsx", "app/brand/[slug]/page.tsx", "app/review/[slug]/page.tsx"];
+  const cached = ["app/page.tsx", "app/deals/page.tsx", "app/product/[slug]/page.tsx", "app/brand/[slug]/page.tsx", "app/review/[slug]/page.tsx"];
   it.each(cached)("%s revalidates every 5 minutes and never opts into dynamic rendering", (file) => {
     const s = src(file);
     expect(s).toMatch(/^export const revalidate = 300;$/m);

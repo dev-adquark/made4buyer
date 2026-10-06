@@ -5,6 +5,7 @@ import { placeholderPath } from "@/lib/pipeline/images";
 import { cardImage, type ReviewCard as Card } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
+import { displayText } from "@/lib/public/display";
 import { dateline } from "@/lib/util/format";
 
 /** Keyword-to-Blog post type, from the stored generation metadata. */
@@ -25,8 +26,8 @@ export function kindNoun(kind: string): string {
 }
 
 /** Who wrote it: the publisher for reviews; Made4Buyers for our own guides and articles. */
-export function sourceOf(r: Pick<Card, "kind" | "entities" | "author">) {
-  return r.kind === "AI_GUIDE" ? "Made4Buyers" : r.entities?.source ?? r.author ?? "Source not reported";
+export function sourceOf(r: Pick<Card, "kind" | "entities" | "author">): string | null {
+  return r.kind === "AI_GUIDE" ? "Made4Buyers" : displayText(r.entities?.source) ?? displayText(r.author);
 }
 
 /** The date the source published it (never our ingestion date, so old reviews don't look new). */
@@ -36,10 +37,13 @@ export function shownDate(r: Pick<Card, "sourcePublishedAt" | "publishedAt">) {
 
 function Meta({ r }: { r: Card }) {
   const d = shownDate(r);
+  const source = sourceOf(r);
+  const when = dateline(d);
+  if (!source && !when) return null;
   return (
     <div className="foot">
-      <span>{sourceOf(r)}</span>
-      {d && <time dateTime={d.toISOString()}>{dateline(d)}</time>}
+      {source && <span>{source}</span>}
+      {d && when && <time dateTime={d.toISOString()}>{when}</time>}
     </div>
   );
 }
@@ -72,10 +76,10 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
         </div>
         <div className="body">
           <div className="meta-row">
-            <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
+            {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}
           </div>
           <Heading>{review.canonicalTitle}</Heading>
-          <p className="summary">{review.summary}</p>
+          {displayText(review.summary) && <p className="summary">{review.summary}</p>}
           <Meta r={review} />
         </div>
       </Link>
@@ -93,11 +97,11 @@ export function FeatureStory({ review }: { review: Card }) {
           <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
-          <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
+          {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}
           <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
         </div>
         <h3>{review.canonicalTitle}</h3>
-        <p className="summary">{review.summary}</p>
+        {displayText(review.summary) && <p className="summary">{review.summary}</p>}
         <div className="review-card" style={{ height: "auto" }}>
           <Meta r={review} />
         </div>

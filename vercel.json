@@ -68,6 +68,18 @@
     {
       "path": "/api/cron/commerce-coupons",
       "schedule": "20 11 * * *"
+    },
+    {
+      "path": "/api/cron/data-audit",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-validate-links",
+      "schedule": "10 12 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-official-verify",
+      "schedule": "40 12 * * *"
     }
   ]
 }

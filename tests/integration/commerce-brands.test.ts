@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { createBrand, crawlBrandNow, dueBrands, importSeedBrands, listBrands, parseBrandForm, readBrandSeed, toggleBrand, updateBrand, validateBrandInput, type BrandSeed } from "@/lib/commerce/brands";
+import { createBrand, crawlBrandNow, dueBrands, importSeedBrands, inCrawlWindow, listBrands, parseBrandForm, readBrandSeed, seedWindow, toggleBrand, updateBrand, validateBrandInput, type BrandSeed } from "@/lib/commerce/brands";
 import { resetDb } from "../support/db";
 import { withEnv } from "../support/env";
 
@@ -155,5 +155,87 @@ describe("validation and admin mutations", () => {
     if (!v.ok) throw new Error(v.error);
     const r = await updateBrand(b.id, v.value);
     expect(r.ok && r.after).toMatchObject({ officialDomain: "www.moved.example.com", robotsStatus: null, robotsCheckedAt: null });
+  });
+});
+
+describe("crawl windows and staggering", () => {
+  it("seed import staggers brands deterministically across the day in 2-hour windows", async () => {
+    await importSeedBrands();
+    const brands = await db.commerceBrand.findMany({ select: { slug: true, crawlWindowStartHour: true, crawlWindowHours: true } });
+    expect(brands.every((b) => b.crawlWindowHours === 2 && b.crawlWindowStartHour !== null && b.crawlWindowStartHour % 2 === 0 && b.crawlWindowStartHour <= 22)).toBe(true);
+    for (const b of brands) expect(b.crawlWindowStartHour).toBe(seedWindow(b.slug).crawlWindowStartHour);
+    // Spread over (nearly) every window of the day, none holding a large share of the 100 brands.
+    const perWindow = new Map<number, number>();
+    for (const b of brands) perWindow.set(b.crawlWindowStartHour!, (perWindow.get(b.crawlWindowStartHour!) ?? 0) + 1);
+    expect(perWindow.size).toBeGreaterThanOrEqual(10);
+    expect(Math.max(...perWindow.values())).toBeLessThanOrEqual(20);
+  });
+
+  it("assigns a window only when none is set: an admin's window is never overwritten", async () => {
+    const seed = readBrandSeed().filter((s) => s.slug === "apple");
+    await importSeedBrands(seed);
+    await db.commerceBrand.update({ where: { slug: "apple" }, data: { crawlWindowStartHour: 5, crawlWindowHours: 3, timezone: "Europe/London" } });
+    await importSeedBrands(seed);
+    expect(await db.commerceBrand.findUniqueOrThrow({ where: { slug: "apple" } })).toMatchObject({ crawlWindowStartHour: 5, crawlWindowHours: 3, timezone: "Europe/London" });
+    // A brand from before windows existed (null start) gets the staggered window on the next import.
+    await db.commerceBrand.update({ where: { slug: "apple" }, data: { crawlWindowStartHour: null, crawlWindowHours: 24 } });
+    const r = await importSeedBrands(seed);
+    expect(r.filled).toBe(1);
+    expect(await db.commerceBrand.findUniqueOrThrow({ where: { slug: "apple" } })).toMatchObject(seedWindow("apple"));
+    // An admin's "any time" (blank start) is stored as the full-day window, so the seed leaves it alone.
+    const b = await db.commerceBrand.findUniqueOrThrow({ where: { slug: "apple" } });
+    const v = validateBrandInput({ crawlWindowStartHour: "" }, { ...b, notes: b.notes });
+    if (!v.ok) throw new Error(v.error);
+    await updateBrand(b.id, v.value);
+    await importSeedBrands(seed);
+    expect(await db.commerceBrand.findUniqueOrThrow({ where: { slug: "apple" } })).toMatchObject({ crawlWindowStartHour: 0, crawlWindowHours: 24 });
+  });
+
+  it("dueBrands respects the window in the brand's time zone and never starves a missed window", async () => {
+    // 2026-10-06 12:00 UTC = 08:00 in New York (EDT), 17:30 in Kolkata.
+    const now = new Date("2026-10-06T12:00:00Z");
+    const recent = new Date(now.getTime() - 2 * 3_600_000);
+    await db.commerceBrand.createMany({
+      data: [
+        { ...sample("ny-in"), crawlWindowStartHour: 7, crawlWindowHours: 2, timezone: "America/New_York", nextCrawlAt: recent },
+        { ...sample("ny-out"), crawlWindowStartHour: 14, crawlWindowHours: 2, timezone: "America/New_York", nextCrawlAt: recent },
+        { ...sample("in-in"), crawlWindowStartHour: 16, crawlWindowHours: 2, timezone: "Asia/Kolkata", nextCrawlAt: recent },
+        { ...sample("wrap"), crawlWindowStartHour: 23, crawlWindowHours: 10, timezone: "America/New_York", nextCrawlAt: recent },
+        { ...sample("any"), crawlWindowStartHour: null, nextCrawlAt: recent },
+        // Due for 30 h with a 24 h frequency: its window was missed, so it is crawled anyway.
+        { ...sample("starved"), crawlWindowStartHour: 20, crawlWindowHours: 2, timezone: "America/New_York", crawlFrequencyHours: 24, nextCrawlAt: new Date(now.getTime() - 30 * 3_600_000) },
+      ],
+    });
+    const due = (await dueBrands(now, 10)).map((b) => b.slug).sort();
+    expect(due).toEqual(["any", "in-in", "ny-in", "starved", "wrap"]);
+    expect(inCrawlWindow({ crawlWindowStartHour: 14, crawlWindowHours: 2, timezone: "America/New_York" }, new Date("2026-10-06T18:30:00Z"))).toBe(true);
+    // The limit applies after the window filter.
+    expect(await dueBrands(now, 2)).toHaveLength(2);
+  });
+
+  it("validates time zone, window hours and the official store URL", () => {
+    const restore = withEnv({ UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: "false" });
+    try {
+      const v = (over: Record<string, unknown>) => validateBrandInput({ ...sample("valid"), ...over });
+      const good = v({ crawlWindowStartHour: "6", crawlWindowHours: "2", timezone: "Asia/Kolkata", officialStoreUrl: "https://store.valid.example.com/shop" });
+      expect(good).toMatchObject({ ok: true, value: { crawlWindowStartHour: 6, crawlWindowHours: 2, timezone: "Asia/Kolkata", officialStoreUrl: "https://store.valid.example.com/shop" } });
+      expect(v({})).toMatchObject({ ok: true, value: { crawlWindowStartHour: null, crawlWindowHours: 24, timezone: "America/New_York", officialStoreUrl: null } });
+      for (const [over, msg] of [
+        [{ timezone: "Mars/Olympus" }, /Time zone/],
+        [{ timezone: "+05:30" }, /Time zone/],
+        [{ crawlWindowStartHour: "24" }, /window start/],
+        [{ crawlWindowStartHour: "-1" }, /window start/],
+        [{ crawlWindowHours: "0" }, /window length/],
+        [{ crawlWindowHours: "25" }, /window length/],
+        [{ officialStoreUrl: "http://www.valid.example.com/shop" }, /https/],
+        [{ officialStoreUrl: "https://elsewhere.example.org/shop" }, /must be on/],
+      ] as const) {
+        const r = v(over);
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toMatch(msg);
+      }
+    } finally {
+      restore();
+    }
   });
 });

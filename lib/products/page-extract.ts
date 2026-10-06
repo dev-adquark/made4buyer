@@ -315,14 +315,21 @@ function listOf(v: string): string[] {
 
 type OfferInfo = { price?: number; listPrice?: number; currency?: string; availability?: string; seller?: string };
 
-function listPriceFromSpec(spec: unknown): number | undefined {
+/**
+ * The regular ("was") price, only as the page states it: a priceSpecification (typically a
+ * UnitPriceSpecification) whose priceType is schema.org ListPrice or StrikethroughPrice. Never
+ * derived from anything else (not highPrice, not MSRP, not a sale-price difference). A list price
+ * in a different currency from the offer is ignored.
+ */
+function listPriceFromSpec(spec: unknown, offerCurrency?: string): number | undefined {
   for (const s of asArray(spec)) {
     if (!isObj(s)) continue;
     const t = stripSchema(str(s.priceType) ?? "").toLowerCase();
-    if (t === "listprice" || t === "strikethroughprice" || t === "msrp") {
-      const p = positive(s.price);
-      if (p) return p;
-    }
+    if (t !== "listprice" && t !== "strikethroughprice") continue;
+    const cur = str(s.priceCurrency);
+    if (cur && offerCurrency && cur.toUpperCase() !== offerCurrency.toUpperCase()) continue;
+    const p = positive(s.price);
+    if (p) return p;
   }
   return undefined;
 }
@@ -363,10 +370,8 @@ function readOffer(o: Record<string, unknown>): OfferInfo {
       info.price = sp.price;
       if (sp.currency) info.currency = sp.currency;
     }
-    const high = positive(o.highPrice);
-    if (high != null && info.price != null && high > info.price) info.listPrice = high;
   }
-  const lp = listPriceFromSpec(o.priceSpecification);
+  const lp = listPriceFromSpec(o.priceSpecification, str(o.priceCurrency) ?? info.currency);
   if (lp != null && (info.price == null || lp >= info.price)) info.listPrice = lp;
   const cur = str(o.priceCurrency) ?? info.currency;
   if (cur && /^[a-z]{3}$/i.test(cur)) info.currency = cur.toUpperCase();

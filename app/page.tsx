@@ -5,6 +5,7 @@ import Collage from "@/components/collage";
 import DealLedger from "@/components/deal-ledger";
 import EmptyState from "@/components/empty-state";
 import JsonLd from "@/components/json-ld";
+import { PriceDropGrid, PromoCodeGrid } from "@/components/official-deals";
 import ReviewCard, { FeatureStory, ReviewGrid } from "@/components/review-card";
 import SafeImg from "@/components/safe-img";
 import SearchCombobox from "@/components/search-combobox";
@@ -15,6 +16,7 @@ import TrustLabel from "@/components/trust-label";
 import { config } from "@/lib/config";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryPhotos } from "@/lib/public/category-images";
+import { officialDeals } from "@/lib/public/deals";
 import { prerenderNeedsDatabase } from "@/lib/public/isr";
 import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, freshDealRows } from "@/lib/public/queries";
 import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
@@ -49,7 +51,7 @@ function SpecRows({ rows }: { rows: Array<[string, string | null | undefined]> }
 export default async function Home() {
   await prerenderNeedsDatabase();
   // Photos depend only on the static taxonomy, so they load alongside the database queries.
-  const [reviews, guides, comparisons, ledger, deals, trending, pair, stats, photos] = await Promise.all([
+  const [reviews, guides, comparisons, ledger, deals, trending, pair, stats, photos, verified] = await Promise.all([
     latestByKind("REVIEW", 6),
     latestByKind(["AI_GUIDE", "BUYING_GUIDE"], 3),
     latestByKind("COMPARISON", 3),
@@ -59,7 +61,11 @@ export default async function Home() {
     comparePair(),
     trustStats(),
     categoryPhotos(CATEGORIES.map((c) => c.slug)).catch(() => ({}) as Record<string, null>),
+    officialDeals().catch(() => ({ drops: [], codes: [], checkedAt: null })),
   ]);
+  // "Verified deals" rail: up to 6, official price drops first, then official promo codes.
+  const railDrops = verified.drops.slice(0, 6);
+  const railCodes = verified.codes.slice(0, 6 - railDrops.length);
   const site = config.siteUrl();
   const lead = reviews[0];
   const heroDeal = deals[0];
@@ -125,9 +131,9 @@ export default async function Home() {
                   <span className="tape" aria-hidden="true" />
                   <SafeImg src={cardImage(lead).url} fallback={placeholderPath(lead.categorySlug)} alt="" width={380} height={285} />
                   <span className="clip-body">
-                    <span className="cat-tag">{categoryName(lead.categorySlug) ?? "General"}</span>
+                    {categoryName(lead.categorySlug) && <span className="cat-tag">{categoryName(lead.categorySlug)}</span>}
                     <span className="clip-title">{lead.productName}</span>
-                    <span className="label muted">Latest review, {dateline(lead.sourcePublishedAt ?? lead.publishedAt)}</span>
+                    <span className="label muted">{dateline(lead.sourcePublishedAt ?? lead.publishedAt) ? `Latest review, ${dateline(lead.sourcePublishedAt ?? lead.publishedAt)}` : "Latest review"}</span>
                   </span>
                 </Link>
               ) : (
@@ -290,6 +296,19 @@ export default async function Home() {
           })}
         </ul>
       </section>
+
+      {/* ── Verified deals (renders nothing without any) ── */}
+      {railDrops.length + railCodes.length > 0 && (
+        <section className="section tight" aria-labelledby="verified-deals-title">
+          <div className="wrap">
+            <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} verified`} title="Verified deals" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
+              Official price drops and promo codes, read from brands’ own sites and checked within the last 48 hours.
+            </SectionHeader>
+            <PriceDropGrid drops={railDrops} />
+            {railCodes.length > 0 && <div style={{ marginTop: railDrops.length ? "var(--gutter)" : 0 }}><PromoCodeGrid codes={railCodes} /></div>}
+          </div>
+        </section>
+      )}
 
       {/* ── Current prices ── */}
       <section className="section" aria-labelledby="deals-title">

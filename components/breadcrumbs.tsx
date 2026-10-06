@@ -1,8 +1,19 @@
 import Link from "next/link";
+import { displayText } from "@/lib/public/display";
 
 export type Crumb = { name: string; href?: string };
 
-export default function Breadcrumbs({ items }: { items: Crumb[] }) {
+/** Crumbs with a real name only (an empty or placeholder name is left out). */
+function clean(items: Crumb[]): Crumb[] {
+  return items.flatMap((c) => {
+    const name = displayText(c.name);
+    return name ? [{ ...c, name }] : [];
+  });
+}
+
+export default function Breadcrumbs({ items: raw }: { items: Crumb[] }) {
+  const items = clean(raw);
+  if (!items.length) return null;
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       <ol>
@@ -14,7 +25,8 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
   );
 }
 
-export function breadcrumbJsonLd(items: Crumb[], siteUrl: string) {
+export function breadcrumbJsonLd(raw: Crumb[], siteUrl: string) {
+  const items = clean(raw);
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

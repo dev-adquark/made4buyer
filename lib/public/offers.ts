@@ -1,7 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { affiliateProviderActive } from "@/lib/affiliate/provider";
+import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { registrableDomain } from "@/lib/net/ip";
+import { canonicalDestination, displayAmount, displayCurrency, displayText } from "./display";
 
 /**
  * Public commerce offers: prices and seller links observed by the commerce engine
@@ -12,6 +15,14 @@ import { registrableDomain } from "@/lib/net/ip";
  * observation is at most PRODUCT_PRICE_MAX_AGE_HOURS (default 48) old. A stale price is
  * never shown. Links are the retailer's own URL unless a real affiliate provider generated
  * an affiliate URL for the offer (lib/affiliate/provider.ts).
+ *
+ * Link rule: an offer whose destination check (CommerceOffer.linkStatus) found it BROKEN,
+ * OFF_SITE or UNREACHABLE is never shown; UNCHECKED, OK and REDIRECTED_SAME_SITE are.
+ *
+ * Dedup rule: an offer is shown once. Two offers are the same when they share the canonical
+ * destination (no fragment, no utm_* / gclid / fbclid / mc_* or repeated parameters; affiliate
+ * parameters kept only when a real provider is configured), or the same (seller, currency,
+ * amount); and at most one offer per seller domain is shown (cheapest, then most recent).
  */
 
 export type PublicOffer = {
@@ -30,6 +41,16 @@ export type PublicOffer = {
 
 export const MAX_PUBLIC_OFFERS = 4;
 
+/**
+ * Destination-check results that hide an offer (BROKEN, OFF_SITE, UNREACHABLE), owned by the link
+ * checker. UNCHECKED, OK, REDIRECTED_SAME_SITE and BLOCKED (bot-blocked, not dead) stay visible.
+ */
+export { HIDDEN_LINK_STATUSES };
+
+export function linkStatusShowable(status: string | null | undefined): boolean {
+  return !(HIDDEN_LINK_STATUSES as readonly string[]).includes(status ?? "UNCHECKED");
+}
+
 export function priceMaxAgeMs(): number {
   return config.commerce.priceMaxAgeHours() * 3_600_000;
 }
@@ -39,15 +60,16 @@ export function freshSince(now = Date.now()): Date {
   return new Date(now - priceMaxAgeMs());
 }
 
-/** True only for a FRESH offer observed within the price window (and not in the future). */
-export function offerIsFresh(o: { observedAt: string | Date; status?: string }, now = Date.now()): boolean {
+/** True only for a FRESH offer observed within the price window (and not in the future), whose link is not known to be bad. */
+export function offerIsFresh(o: { observedAt: string | Date; status?: string; linkStatus?: string | null }, now = Date.now()): boolean {
   if (o.status !== undefined && o.status !== "FRESH") return false;
+  if (o.linkStatus !== undefined && !linkStatusShowable(o.linkStatus)) return false;
   const t = o.observedAt instanceof Date ? o.observedAt.getTime() : Date.parse(o.observedAt);
   return Number.isFinite(t) && t >= now - priceMaxAgeMs() && t <= now + 3_600_000;
 }
 
 export function freshOfferWhere(now = Date.now()): Prisma.CommerceOfferWhereInput {
-  return { status: "FRESH", observedAt: { gte: freshSince(now) } };
+  return { status: "FRESH", observedAt: { gte: freshSince(now) }, linkStatus: { notIn: [...HIDDEN_LINK_STATUSES] } };
 }
 
 /** The link an offer uses: a provider-generated affiliate URL only when one is stored, else the plain URL. */
@@ -57,34 +79,49 @@ export function offerUrl(o: { destinationUrl: string; affiliateUrl: string | nul
 }
 
 type OfferRow = Prisma.CommerceOfferGetPayload<{ select: typeof OFFER_SELECT }>;
-const OFFER_SELECT = { id: true, seller: true, sellerType: true, price: true, currency: true, availability: true, observedAt: true, destinationUrl: true, affiliateUrl: true, affiliateStatus: true, status: true } as const;
+const OFFER_SELECT = { id: true, seller: true, sellerType: true, price: true, currency: true, availability: true, observedAt: true, destinationUrl: true, affiliateUrl: true, affiliateStatus: true, status: true, linkStatus: true } as const;
 
-export function toPublicOffer(o: OfferRow, now = Date.now()): PublicOffer {
+export function toPublicOffer(o: Omit<OfferRow, "linkStatus"> & { linkStatus?: string | null }, now = Date.now()): PublicOffer {
   const fresh = offerIsFresh(o, now);
   const link = offerUrl(o);
+  // Belt and braces: a price is carried only while the observation is fresh, with a positive
+  // amount AND a valid ISO 4217 currency (never a price without its currency).
+  const amount = fresh ? displayAmount(o.price) : null;
+  const currency = fresh ? displayCurrency(o.currency) : null;
+  const priced = amount !== null && currency !== null;
   return {
     id: o.id,
-    seller: o.seller,
+    seller: displayText(o.seller) ?? offerDomain(link.url) ?? "",
     sellerType: o.sellerType,
-    // Belt and braces: a price is carried only while the observation is fresh.
-    price: fresh && typeof o.price === "number" && Number.isFinite(o.price) && o.price > 0 ? o.price : null,
-    currency: fresh ? o.currency : null,
-    availability: fresh ? o.availability : null,
+    price: priced ? amount : null,
+    currency: priced ? currency : null,
+    availability: fresh ? displayText(o.availability) : null,
     observedAt: o.observedAt.toISOString(),
     url: link.url,
     affiliated: link.affiliated,
   };
 }
 
-/** One offer per seller domain, cheapest priced first, then by recency. */
-function sortAndDedupe(rows: PublicOffer[]): PublicOffer[] {
+/** Canonical destination of an offer link (affiliate parameters kept only with a real provider). */
+export function offerLinkKey(url: string): string | null {
+  return canonicalDestination(url, { keepAffiliateParams: affiliateProviderActive() });
+}
+
+/**
+ * Shown once: cheapest priced first, then by recency; drops offers without a usable http(s)
+ * link or seller, and any offer whose canonical destination, (seller, currency, amount) or
+ * seller domain was already shown.
+ */
+export function sortAndDedupe<T extends Pick<PublicOffer, "url" | "seller" | "price" | "currency" | "observedAt">>(rows: T[]): T[] {
   const sorted = [...rows].sort((a, b) => (a.price == null ? 1 : 0) - (b.price == null ? 1 : 0) || (a.price ?? 0) - (b.price ?? 0) || Date.parse(b.observedAt) - Date.parse(a.observedAt));
   const seen = new Set<string>();
-  const out: PublicOffer[] = [];
+  const out: T[] = [];
   for (const o of sorted) {
-    const key = offerDomain(o.url) ?? o.seller.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const dest = offerLinkKey(o.url);
+    if (!dest || !o.seller) continue;
+    const keys = [`url:${dest}`, `domain:${offerDomain(o.url) ?? o.seller.toLowerCase()}`, ...(o.price != null ? [`price:${o.seller.toLowerCase()}|${o.currency}|${o.price}`] : [])];
+    if (keys.some((k) => seen.has(k))) continue;
+    for (const k of keys) seen.add(k);
     out.push(o);
   }
   return out;
@@ -146,7 +183,7 @@ export async function publishedFreshOffers(opts: { categorySlug?: string; limit?
   const best = new Map<string, ReviewOffer>();
   for (const r of rows) {
     const pub = toPublicOffer(r, now);
-    if (pub.price == null) continue;
+    if (pub.price == null || !pub.seller || !offerLinkKey(pub.url)) continue;
     for (const review of byEntity.get(r.product.productEntityId!) ?? []) {
       const cur = best.get(review.id);
       if (!cur || pub.price < (cur.price ?? Infinity)) best.set(review.id, { ...pub, review });

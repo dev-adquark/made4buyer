@@ -30,7 +30,7 @@ jobs:
           fi
           if [ -n "$MANUAL_JOB" ]; then JOBS="$MANUAL_JOB"
           elif [ "$SCHEDULE" = "10 */6 * * *" ]; then JOBS="enrich-products commerce-collect"
-          else JOBS="scrape-sources collect-scrapes ingest retry-failed publish-cycle daily-article"; fi
+          else JOBS="scrape-sources collect-scrapes ingest retry-failed publish-cycle daily-article commerce-discover commerce-collect"; fi
           status=0
           for job in $JOBS; do
             code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 320 -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/$job")

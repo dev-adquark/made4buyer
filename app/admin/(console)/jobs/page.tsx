@@ -26,6 +26,9 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "commerce-discover": "For due brands (COMMERCE_BRANDS_PER_RUN, default 10): discover product URLs on the official site and start one Apify Web Scraper run per brand (robots.txt respected; skipped when the monthly Apify budget is spent).",
   "commerce-collect": "Collect finished commerce runs: store raw records, normalize, match exactly to Made4Buyers products, write facts and offers with provenance; mark offers older than 48 h as stale.",
   "commerce-coupons": "Crawl brands' official promotions pages for first-party promo codes (Apify, budget-capped).",
+  "commerce-validate-links": "Check offer destination links not checked in 24 h (FRESH first; COMMERCE_LINK_CHECKS_PER_RUN, default 60; robots.txt respected, one request at a time per site). Broken, off-site and repeatedly unreachable links are hidden publicly; offers are never deleted.",
+  "commerce-official-verify": "Label products VERIFIED only when an exact-matched page on the brand's official domain exists; otherwise MISMATCH (official page is another variant), NOT_FOUND (brand crawled in 30 days, no match) or unchecked.",
+  "data-audit": "Scan published content and commerce data for unverified, stale, conflicting, duplicate, broken and unsourced items (Admin → Data audit); only fixes are FRESH→STALE for offers past 48 h and VERIFIED→EXPIRED for expired coupons, both audited. Never deletes or rewrites.",
 };
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {

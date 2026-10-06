@@ -9,6 +9,7 @@ import { ReviewGrid } from "@/components/review-card";
 import SectionHeader from "@/components/section-header";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { displayText } from "@/lib/public/display";
 import { cardSelect, LATEST_FIRST } from "@/lib/public/queries";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
@@ -97,6 +98,7 @@ export default async function ProductPage({
     (c) => c.kind === "BUYING_GUIDE" || c.kind === "AI_GUIDE",
   );
   const cat = entity.categorySlug;
+  const aliases = entity.aliases.map((a) => displayText(a)).filter((a): a is string => Boolean(a) && a !== entity.name);
   const crumbs = [
     { name: "Home", href: "/" },
     ...(cat
@@ -113,7 +115,7 @@ export default async function ProductPage({
           <h1>{entity.name}</h1>
           <p className="lede">
             {[
-              entity.brand && !entity.name.startsWith(entity.brand)
+              displayText(entity.brand) && !entity.name.startsWith(entity.brand!)
                 ? `By ${entity.brand}.`
                 : null,
               cat
@@ -126,9 +128,9 @@ export default async function ProductPage({
               .filter(Boolean)
               .join(" ")}
           </p>
-          {entity.aliases.length > 0 && (
+          {aliases.length > 0 && (
             <p className="small muted">
-              Also written as: {entity.aliases.join(", ")}
+              Also written as: {aliases.join(", ")}
             </p>
           )}
         </div>

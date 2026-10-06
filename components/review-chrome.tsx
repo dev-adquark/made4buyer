@@ -33,6 +33,9 @@ export function SectionNav({ items }: { items: Array<{ id: string; label: string
   );
 }
 
+/** Caption for every image that is not the exact product (topic photo or category illustration). */
+export const ILLUSTRATIVE_CAPTION = "Illustrative image — not the reviewed product";
+
 /** Hero image with pointer tilt and gentle scroll parallax (disabled for reduced motion / touch). */
 export function ParallaxFigure({ src, fallback, alt, width, height, caption, captionUrl, illustrative }: { src: string; fallback: string; alt: string; width: number; height: number; caption?: string | null; captionUrl?: string | null; illustrative?: boolean }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -82,16 +85,19 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption, cap
           decoding="async"
         />
       </div>
-      {caption && (
+      {(caption || illustrative) && (
         <figcaption className="figcaption">
-          {illustrative ? "Illustrative photo, not the reviewed product. " : "Image: "}
-          {captionUrl ? (
-            <a href={captionUrl} rel="noopener" target="_blank">
-              {caption}
-            </a>
-          ) : (
-            caption
-          )}
+          {/* Any image that isn't the exact product says so, with or without an attribution. */}
+          {illustrative ? `${ILLUSTRATIVE_CAPTION}${caption ? ". " : ""}` : "Image: "}
+          {caption ? (
+            captionUrl ? (
+              <a href={captionUrl} rel="noopener" target="_blank">
+                {caption}
+              </a>
+            ) : (
+              caption
+            )
+          ) : null}
         </figcaption>
       )}
     </figure>

@@ -62,22 +62,34 @@ export function classifyFetch(result: SafeFetchResult, expectedDestination?: str
   return { ...base, status: "VERIFIED_OK", reason: `HTTP ${status} after ${Math.max(0, result.chain.length - 1)} redirect(s)` };
 }
 
-export async function verifyAffiliateLink(affiliateUrl: string, expectedDestination?: string | null): Promise<VerificationOutcome> {
+export const LINK_CHECK_USER_AGENT = () => `Made4BuyersLinkVerifier/1.0 (+${config.siteUrl()}/about)`;
+
+/**
+ * HEAD first; when `fallback(headResult)` says so, the same chain again as a minimal ranged GET
+ * (many merchants reject or mishandle HEAD). A 206 to the ranged GET counts as 200.
+ */
+export async function headThenGet(
+  url: string,
+  opts: { timeoutMs: number; maxRedirects: number; fallback: (head: SafeFetchResult) => boolean },
+): Promise<SafeFetchResult> {
   const common = {
+    timeoutMs: opts.timeoutMs,
+    maxRedirects: opts.maxRedirects,
+    standardPortsOnly: true,
+    headers: { "User-Agent": LINK_CHECK_USER_AGENT(), Accept: "text/html,application/xhtml+xml,*/*;q=0.8" },
+  };
+  const head = await safeFetch(url, { ...common, method: "HEAD" });
+  if (!opts.fallback(head)) return head;
+  const get = await safeFetch(url, { ...common, method: "GET", headers: { ...common.headers, Range: "bytes=0-0" } });
+  return get.status === 206 ? { ...get, ok: true, status: 200 } : get;
+}
+
+export async function verifyAffiliateLink(affiliateUrl: string, expectedDestination?: string | null): Promise<VerificationOutcome> {
+  const result = await headThenGet(affiliateUrl, {
     timeoutMs: config.links.timeoutMs(),
     maxRedirects: config.links.maxRedirects(),
-    standardPortsOnly: true,
-    headers: {
-      "User-Agent": `Made4BuyersLinkVerifier/1.0 (+${config.siteUrl()}/about)`,
-      Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
-    },
-  };
-  let result = await safeFetch(affiliateUrl, { ...common, method: "HEAD" });
-  // Many merchants reject HEAD; retry the chain with a minimal ranged GET.
-  if (!result.error && [400, 403, 405, 501].includes(result.status)) {
-    result = await safeFetch(affiliateUrl, { ...common, method: "GET", headers: { ...common.headers, Range: "bytes=0-0" } });
-    if (result.status === 206) result = { ...result, ok: true, status: 200 };
-  }
+    fallback: (head) => !head.error && [400, 403, 405, 501].includes(head.status),
+  });
   const outcome = classifyFetch(result, expectedDestination);
   return { ...outcome, retryable: RETRYABLE.includes(outcome.status) };
 }

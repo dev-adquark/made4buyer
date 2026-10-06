@@ -721,6 +721,28 @@ model JobLock {
   @@map("job_locks")
 }
 
+/// One execution of a scheduled job (cron, GitHub Actions or Admin "Run now"), written by runJob.
+model JobRun {
+  id         String    @id @default(cuid())
+  job        String
+  /// "cron", "admin:<email>", "test" …
+  trigger    String
+  /// RUNNING | SUCCEEDED | SKIPPED | PAUSED | FAILED | LOCK_HELD
+  status     String    @default("RUNNING")
+  /// The job's own result status (OK, NOT_DUE, NOT_CONFIGURED …), when it returned one.
+  outcome    String?
+  reason     String?
+  /// Error summary (redacted, truncated) for FAILED runs.
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  durationMs Int?
+
+  @@index([job, startedAt])
+  @@index([status, startedAt])
+  @@map("job_runs")
+}
+
 // ─── Analytics / sponsored / indexing ───────────────────────────────────────
 
 model AnalyticsEvent {

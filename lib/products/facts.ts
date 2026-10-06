@@ -239,7 +239,7 @@ const VARIANT_WORDS = new Set([
   "+",
 ]);
 
-function isVariantToken(token: string): boolean {
+export function isVariantToken(token: string): boolean {
   if (VARIANT_WORDS.has(token)) return true;
   if (/\d/.test(token)) return true; // generation/version numbers, years, capacities (128gb), model codes (s24+)
   if (/\+$/.test(token)) return true;

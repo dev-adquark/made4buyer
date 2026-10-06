@@ -1,6 +1,7 @@
 import type { ImageSourceType, LicenseState, Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { canonicalDestination, displayText, displayUrl } from "@/lib/public/display";
 import { freshOffersForReview, offerDomain, type PublicOffer } from "@/lib/public/offers";
 import { loadRetailerLinks, type RetailerLink } from "@/lib/public/retailer-links";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
@@ -17,7 +18,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 9;
+export const RENDER_MODEL_VERSION = 10;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -128,13 +129,12 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
   const shown = relevantImage(image, { productName: review.productName, title: review.canonicalTitle, categorySlug: review.categorySlug, subcategorySlug: review.subcategorySlug, singleProduct: (review.kind ?? "REVIEW") === "REVIEW" || products.some((p) => p.role === "PRIMARY") });
   const pub = publicImageUrl(shown, review.categorySlug);
 
+  // Only values that say something: "Unknown", "N/A", "null" and the like are left out.
   const keyEntities: Array<{ label: string; value: string }> = [];
-  if (e?.brand) keyEntities.push({ label: "Brand", value: e.brand });
-  if (e?.productName) keyEntities.push({ label: "Product", value: e.productName });
-  if (e?.modelNumber) keyEntities.push({ label: "Model", value: e.modelNumber });
-  if (e?.deviceType) keyEntities.push({ label: "Type", value: e.deviceType });
-  if (e?.platform) keyEntities.push({ label: "Platform", value: e.platform });
-  if (e?.useCase) keyEntities.push({ label: "Best for", value: e.useCase });
+  for (const [label, raw] of [["Brand", e?.brand], ["Product", e?.productName], ["Model", e?.modelNumber], ["Type", e?.deviceType], ["Platform", e?.platform], ["Best for", e?.useCase]] as const) {
+    const value = displayText(raw);
+    if (value) keyEntities.push({ label, value });
+  }
 
   const categorySlug = review.categorySlug;
   return {
@@ -181,16 +181,25 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     offers,
     retailerLinks: dedupeRetailerLinks(retailerLinks, offers).map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
-    source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
+    source: { name: displayText(e?.source) ?? review.source, url: displayUrl(review.sourceUrl), author: displayText(review.author), publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
   };
 }
 
-/** "Where to buy" links whose domain already has a commerce offer are dropped (the offer link wins). */
+/**
+ * "Where to buy" links whose domain or canonical destination already has a commerce offer are
+ * dropped (the offer link wins); a link that repeats an earlier one's destination is dropped too.
+ */
 export function dedupeRetailerLinks<T extends Pick<RetailerLink, "url" | "merchant">>(links: T[], offers: Array<Pick<PublicOffer, "url">>): T[] {
   const domains = new Set(offers.map((o) => offerDomain(o.url)).filter((d): d is string => Boolean(d)));
-  return links.filter((l) => !domains.has(l.merchant) && !domains.has(offerDomain(l.url) ?? ""));
+  const seen = new Set(offers.map((o) => canonicalDestination(o.url)).filter((d): d is string => Boolean(d)));
+  return links.filter((l) => {
+    const key = canonicalDestination(l.url);
+    if (!key || seen.has(key) || domains.has(l.merchant) || domains.has(offerDomain(l.url) ?? "")) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export async function buildPageRenderModel(reviewId: string): Promise<PageRenderModel> {

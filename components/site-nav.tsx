@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { Wordmark } from "./brand-mark";
 import CategoryIcon from "./category-icon";
 import SearchCombobox from "./search-combobox";
+import { displayPrice } from "@/lib/public/display";
 import type { NavFeed } from "@/lib/public/queries";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
@@ -27,18 +28,14 @@ export function byDepartment(categories: NavCategory[]) {
 // Order: Reviews · Categories (menu) · Deals · Compare · Guides
 const BEFORE: Array<[string, string]> = [["/reviews", "Reviews"]];
 const LINKS: Array<[string, string, boolean?]> = [
-  ["/deals", "Prices"],
+  ["/deals", "Deals"],
   ["/compare", "Compare"],
   ["/guides", "Guides"],
 ];
 
+/** A real price (positive amount, ISO currency), exactly as stored (never rounded up), or null. */
 function money(price: number | null, currency: string | null) {
-  if (price === null) return null;
-  try {
-    return new Intl.NumberFormat("en-US", { style: "currency", currency: currency ?? "USD", maximumFractionDigits: 0 }).format(price);
-  } catch {
-    return null;
-  }
+  return displayPrice(price, currency);
 }
 
 function Chevron() {

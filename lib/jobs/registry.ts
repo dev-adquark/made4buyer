@@ -5,9 +5,13 @@ import { runCollectScrapes, runScrapeSources } from "@/lib/pipeline/apify";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
-import { withLock } from "./lock";
+import { LockHeldError, withLock } from "./lock";
+import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } from "./run-log";
+import { runDataAudit } from "@/lib/ops/data-audit";
 import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline";
 import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
+import { runLinkValidation } from "@/lib/commerce/link-check";
+import { runOfficialVerify } from "@/lib/commerce/official";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfillWithCorrection } from "@/lib/images/hero-correction";
@@ -68,6 +72,11 @@ export const JOBS = {
   "commerce-discover": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCommerceDiscover(trigger), locked: true },
   "commerce-collect": { lockTtlMs: 20 * 60_000, run: async (trigger: string) => ({ ...(await runCommerceCollect(trigger)), coupons: await collectCouponRuns(trigger) }), locked: true },
   "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
+  // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
+  "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },
+  "commerce-official-verify": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runOfficialVerify(trigger), locked: true },
+  // Data-integrity audit (lib/ops/data-audit.ts): flags only, plus two safe audited status fixes.
+  "data-audit": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runDataAudit(trigger), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -77,7 +86,7 @@ export function isJobName(name: string): name is JobName {
 }
 
 /** Admin switches that govern each scheduled job (the master switch always applies). */
-const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
+export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   ingest: ["external_ingestion"],
   "scrape-sources": ["external_ingestion"],
   "collect-scrapes": ["external_ingestion"],
@@ -89,6 +98,8 @@ const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-discover": ["commerce_engine"],
   "commerce-collect": ["commerce_engine"],
   "commerce-coupons": ["commerce_engine"],
+  "commerce-validate-links": ["commerce_engine"],
+  "commerce-official-verify": ["commerce_engine"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED"]);
@@ -100,15 +111,29 @@ export function jobOutcome(result: unknown): { ran: boolean; status: string; rea
   return { ran: !DID_NOT_RUN.has(status), status, reason: typeof r.reason === "string" ? r.reason : undefined };
 }
 
-/** Runs a job under its lock. Ingestion manages its own lock inside runIngestion. */
+/**
+ * Runs a job under its lock. Ingestion manages its own lock inside runIngestion. Every execution
+ * (including paused, overlapping and failed ones) is recorded as one JobRun row (lib/jobs/run-log.ts).
+ */
 export async function runJob(name: JobName, trigger: string): Promise<unknown> {
   // Scheduled runs respect the admin switches; a manual "Run now" from Admin always runs.
   if (!trigger.startsWith("admin:")) {
     const gate = await allowed(...(JOB_SWITCHES[name] ?? []));
-    if (!gate.ok) return { status: "PAUSED", reason: gate.reason };
+    if (!gate.ok) {
+      await recordJobRun(name, trigger, { status: "PAUSED", outcome: "PAUSED", reason: gate.reason });
+      return { status: "PAUSED", reason: gate.reason };
+    }
   }
   const job = JOBS[name];
   const run = job.run as (trigger: string) => Promise<unknown>;
-  if (!job.locked) return run(trigger);
-  return withLock(`job:${name}`, job.lockTtlMs, () => run(trigger));
+  const record = await startJobRun(name, trigger);
+  try {
+    const result = job.locked ? await withLock(`job:${name}`, job.lockTtlMs, () => run(trigger)) : await run(trigger);
+    const outcome = jobOutcome(result);
+    await finishJobRun(record, { status: runStatusFor(outcome), outcome: outcome.status, reason: outcome.reason });
+    return result;
+  } catch (error) {
+    await finishJobRun(record, error instanceof LockHeldError ? { status: "LOCK_HELD", error: error.message } : { status: "FAILED", error: errorSummary(error) });
+    throw error;
+  }
 }

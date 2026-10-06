@@ -883,3 +883,13 @@ details summary { cursor: pointer; font-weight: 600; }
 .doc-page h1 { font-size: clamp(56px, 10vw, 156px); line-height: 0.85; text-transform: uppercase; font-variation-settings: "wdth" 62; margin: 8px 0 28px; }
 .doc-page .lede, .doc-page .prose > p:first-of-type { font-size: clamp(21px, 1.8vw, 26px); }
 .doc-page .prose a { text-decoration-thickness: 1px; }
+
+/* ── Official deals (price drops, promo codes) ── */
+.deal-card.no-media .dc-main { grid-template-columns: minmax(0, 1fr); }
+.deal-card .dc-main .label { display: block; margin-top: 6px; }
+.deal-card .dc-was { display: block; margin-top: 6px; font: 14px var(--f-ui); color: var(--muted); }
+.deal-card .dc-save { display: block; margin-top: 4px; font: 700 15px var(--f-ui); color: var(--ok); }
+.deal-card .dc-code { display: block; margin-top: 10px; }
+.deal-card .dc-code code { display: inline-block; font: 800 20px/1.1 var(--f-mono); letter-spacing: 0.06em; padding: 6px 10px; border: 1px dashed var(--ink); overflow-wrap: anywhere; }
+.deals-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.deals-filter select { flex: 0 1 240px; min-height: 40px; max-width: 100%; }

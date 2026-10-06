@@ -3,7 +3,7 @@ import { ActionForm, Badge, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
-import { BRAND_LIMITS, brandCounts, listBrands, readBrandSeed } from "@/lib/commerce/brands";
+import { BRAND_LIMITS, brandCounts, DEFAULT_BRAND_TIMEZONE, inCrawlWindow, listBrands, readBrandSeed, windowLabel, windowOverdue } from "@/lib/commerce/brands";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,35 @@ function BrandForm({ brand, returnTo }: { brand?: CommerceBrand; returnTo: strin
           <label htmlFor={`${p}-enabled`}>
             <input id={`${p}-enabled`} name="enabled" type="checkbox" value="1" defaultChecked={brand?.enabled ?? true} /> Enabled
           </label>
+        </div>
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor={`${p}-wstart`}>Crawl window start (hour 0–23)</label>
+          <input
+            id={`${p}-wstart`}
+            name="crawlWindowStartHour"
+            type="number"
+            min={BRAND_LIMITS.crawlWindowStartHour.min}
+            max={BRAND_LIMITS.crawlWindowStartHour.max}
+            defaultValue={brand && brand.crawlWindowStartHour !== null && brand.crawlWindowHours < 24 ? brand.crawlWindowStartHour : ""}
+            placeholder="Any time"
+          />
+          <p className="field-hint">Blank = any time. Staggers brands across the day.</p>
+        </div>
+        <div className="field">
+          <label htmlFor={`${p}-whours`}>Window length (hours 1–24)</label>
+          <input id={`${p}-whours`} name="crawlWindowHours" type="number" min={BRAND_LIMITS.crawlWindowHours.min} max={BRAND_LIMITS.crawlWindowHours.max} defaultValue={brand?.crawlWindowHours ?? 24} />
+          <p className="field-hint">A brand that misses its window for longer than its crawl frequency is crawled anyway.</p>
+        </div>
+        <div className="field">
+          <label htmlFor={`${p}-tz`}>Time zone (IANA)</label>
+          <input id={`${p}-tz`} name="timezone" maxLength={64} defaultValue={brand?.timezone ?? DEFAULT_BRAND_TIMEZONE} placeholder={DEFAULT_BRAND_TIMEZONE} />
+        </div>
+        <div className="field">
+          <label htmlFor={`${p}-store`}>Official store URL (optional)</label>
+          <input id={`${p}-store`} name="officialStoreUrl" type="url" maxLength={300} defaultValue={brand?.officialStoreUrl ?? ""} placeholder="https://www.example.com/shop" />
+          <p className="field-hint">https, on the official domain or its subdomains.</p>
         </div>
       </div>
       <div className="field">
@@ -184,6 +213,7 @@ export default async function CommerceBrandsPage({ searchParams }: { searchParam
               <th>Robots.txt</th>
               <th>Last crawl</th>
               <th>Next crawl</th>
+              <th>Crawl window</th>
               <th>Crawl status</th>
               <th className="num">Failures</th>
               <th>Last error</th>
@@ -229,6 +259,19 @@ export default async function CommerceBrandsPage({ searchParams }: { searchParam
                   {b.nextCrawlAt ? when(b.nextCrawlAt) : "Due (never scheduled)"}
                   {b.nextCrawlAt && b.nextCrawlAt > now && b.consecutiveFailures > 0 && <div className="small muted">backing off after failures</div>}
                 </td>
+                <td data-label="Crawl window" className="small">
+                  {windowLabel(b)}
+                  {b.crawlWindowStartHour !== null && b.crawlWindowHours < 24 && (
+                    <div className="muted">{inCrawlWindow(b, now) ? "in window now" : windowOverdue(b, now) && (!b.nextCrawlAt || b.nextCrawlAt <= now) ? "window missed: due anyway" : "outside window"}</div>
+                  )}
+                  {b.officialStoreUrl && (
+                    <div>
+                      <a href={b.officialStoreUrl} rel="noopener noreferrer nofollow" target="_blank">
+                        Official store
+                      </a>
+                    </div>
+                  )}
+                </td>
                 <td data-label="Crawl status">{b.crawlStatus ? <Badge value={b.crawlStatus} tone={crawlTone(b.crawlStatus)} /> : "—"}</td>
                 <td className="num" data-label="Failures">
                   {b.consecutiveFailures}
@@ -249,7 +292,7 @@ export default async function CommerceBrandsPage({ searchParams }: { searchParam
             ))}
             {!brands.length && (
               <tr>
-                <td colSpan={11}>{counts.total ? "No brands match the filter." : "No brands yet. Import the seed brands or add one below."}</td>
+                <td colSpan={12}>{counts.total ? "No brands match the filter." : "No brands yet. Import the seed brands or add one below."}</td>
               </tr>
             )}
           </tbody>

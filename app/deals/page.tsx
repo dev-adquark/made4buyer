@@ -1,151 +1,166 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Breadcrumbs from "@/components/breadcrumbs";
-import DealLedger from "@/components/deal-ledger";
+import { DealCard, dealRowShowable } from "@/components/deal-ledger";
+import DealsFilter from "@/components/deals-filter";
 import EmptyState from "@/components/empty-state";
+import JsonLd from "@/components/json-ld";
+import { PriceDropGrid, PromoCodeGrid } from "@/components/official-deals";
 import SectionHeader from "@/components/section-header";
-import { dealLedgerSummary, dealMerchants, freshDealRows, lapsedOffers } from "@/lib/public/queries";
-import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
-import { themeStyle } from "@/lib/taxonomy/themes";
-import { dateline, shortDate } from "@/lib/util/format";
+import { config } from "@/lib/config";
+import { officialDeals, type OfficialDeals } from "@/lib/public/deals";
+import { NO_VERIFIED_OFFER } from "@/lib/public/display";
+import { prerenderNeedsDatabase } from "@/lib/public/isr";
+import { freshDealRows } from "@/lib/public/queries";
+import { categoryName } from "@/lib/taxonomy/definitions";
+import { dateline } from "@/lib/util/format";
 
-export const dynamic = "force-dynamic";
-type Search = { category?: string; merchant?: string; q?: string };
+/**
+ * Deals: official price drops and official promo codes, read by the commerce engine from brands'
+ * own sites (lib/public/deals.ts), plus recently checked prices for reviewed products. Cached (ISR,
+ * 5 minutes; the data is tagged "deals" so the commerce engine can refresh it on demand). Filters
+ * run in the browser so the page stays cacheable.
+ */
+export const revalidate = 300;
 
-export async function generateMetadata({ searchParams }: { searchParams: Promise<Search> }): Promise<Metadata> {
-  const sp = await searchParams;
-  // Filtered views and an empty ledger are not useful search results.
-  const thin = Boolean(sp.category || sp.merchant || sp.q) || (await freshDealRows({ take: 1 })).length === 0;
-  return { title: "Current prices", description: "Recently checked prices for reviewed products, from the maker's own store and retailers, with the date of each check.", alternates: { canonical: "/deals" }, robots: thin ? { index: false, follow: true } : undefined };
+export async function generateMetadata(): Promise<Metadata> {
+  await prerenderNeedsDatabase();
+  const { drops, codes } = await officialDeals();
+  return {
+    title: "Deals",
+    description: "Official price drops and promo codes read from brands’ own sites, each with the date we checked it. Only verified, current offers are listed.",
+    alternates: { canonical: "/deals" },
+    // An empty deals page is not a useful search result.
+    robots: drops.length + codes.length === 0 ? { index: false, follow: true } : undefined,
+  };
 }
 
-export default async function Deals({ searchParams }: { searchParams: Promise<Search> }) {
-  const sp = await searchParams;
-  const category = sp.category && CATEGORY_BY_SLUG.has(sp.category) ? sp.category : undefined;
-  const merchant = sp.merchant ? sp.merchant.slice(0, 120) : undefined;
-  const q = (sp.q ?? "").trim().slice(0, 80);
-  const [rows, { counts, newest }, merchants, lapsed] = await Promise.all([freshDealRows({ categorySlug: category, merchant, q, take: 80 }), dealLedgerSummary(), dealMerchants(), lapsedOffers(8, category)]);
-  const filtered = Boolean(category || merchant || q);
-  const href = (patch: Partial<Search>) => {
-    const p = new URLSearchParams();
-    const next = { category, merchant, q: q || undefined, ...patch };
-    for (const [k, v] of Object.entries(next)) if (v) p.set(k, v);
-    const s = p.toString();
-    return `/deals${s ? `?${s}` : ""}`;
+/** ItemList of Product + Offer, only for fresh priced drops (no priceValidUntil: none is stated). */
+function dealsJsonLd(deals: OfficialDeals, site: string) {
+  if (!deals.drops.length) return null;
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Official price drops",
+    url: new URL("/deals", site).toString(),
+    itemListElement: deals.drops.slice(0, 50).map((d, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Product",
+        name: d.productName,
+        ...(d.brandName ? { brand: { "@type": "Brand", name: d.brandName } } : {}),
+        ...(d.review ? { url: new URL(`/review/${d.review.slug}`, site).toString() } : {}),
+        offers: { "@type": "Offer", price: d.price, priceCurrency: d.currency, url: d.url, seller: { "@type": "Organization", name: d.official ? d.brandName : d.seller } },
+      },
+    })),
   };
+}
+
+function options(entries: Array<[string, string]>): Array<{ value: string; label: string; count: number }> {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const [value, label] of entries) counts.set(value, { label, count: (counts.get(value)?.count ?? 0) + 1 });
+  return [...counts.entries()].map(([value, { label, count }]) => ({ value, label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export default async function Deals() {
+  await prerenderNeedsDatabase();
+  const [deals, priceRows] = await Promise.all([officialDeals(), freshDealRows({ take: 60 })]);
+  const { drops, codes, checkedAt } = deals;
+  const prices = priceRows.filter(dealRowShowable);
+  const site = config.siteUrl();
+  const ld = dealsJsonLd(deals, site);
+  const categoryOptions = options([
+    ...drops.flatMap((d) => d.categories.map((c) => [c, categoryName(c) ?? ""] as [string, string])),
+    ...codes.flatMap((c) => c.categories.map((x) => [x, categoryName(x) ?? ""] as [string, string])),
+    ...prices.flatMap((p) => (p.review.categorySlug ? [[p.review.categorySlug, categoryName(p.review.categorySlug) ?? ""] as [string, string]] : [])),
+  ]).filter((o) => o.label);
+  const brandOptions = options([...drops.flatMap((d) => (d.brandSlug && d.brandName ? [[d.brandSlug, d.brandName] as [string, string]] : [])), ...codes.map((c) => [c.brandSlug, c.brandName] as [string, string])]);
+  const nothing = drops.length + codes.length === 0;
 
   return (
-    <main style={themeStyle(category) as React.CSSProperties}>
+    <main id="deals-root">
+      {ld && <JsonLd data={ld} />}
       <section className="page-hero">
         <div className="wrap">
           <div className="ph-top">
-            <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Current prices", href: "/deals" }]} />
-            <span className="label muted">{newest ? `Last check ${dateline(newest)}` : "No checks yet"}</span>
+            <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Deals", href: "/deals" }]} />
+            {dateline(checkedAt) && <span className="label muted">Last check {dateline(checkedAt)}</span>}
           </div>
           <h1>
-            Current prices.
-            <span style={{ display: "block", fontSize: "0.4em", lineHeight: 0.95, marginTop: "0.14em", fontVariationSettings: "\"wdth\" 88", letterSpacing: "0.005em" }}>Shown only while recently checked.</span>
+            Deals.
+            <span style={{ display: "block", fontSize: "0.4em", lineHeight: 0.95, marginTop: "0.14em", fontVariationSettings: "\"wdth\" 88", letterSpacing: "0.005em" }}>Official and verified, or not listed.</span>
           </h1>
-          <p className="lede">Prices we recently read on the maker’s own store or a retailer’s product page. An older price is never shown. Prices and availability can change at the seller; every card says when we last checked.</p>
-          <form action="/deals" role="search" className="searchbox wide" style={{ maxWidth: 720, marginTop: 18, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {category && <input type="hidden" name="category" value={category} />}
-            <label htmlFor="deal-q" className="visually-hidden">
-              Search prices
-            </label>
-            <svg className="search-glyph" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="M20 20l-3.5-3.5" />
-            </svg>
-            <input id="deal-q" name="q" type="search" defaultValue={q} maxLength={80} placeholder="Search prices by product or brand" style={{ flex: "1 1 240px" }} />
-            {merchants.length > 0 && (
-              <>
-                <label htmlFor="deal-m" className="visually-hidden">
-                  Merchant
-                </label>
-                <select id="deal-m" name="merchant" defaultValue={merchant ?? ""} style={{ flex: "0 1 220px" }}>
-                  <option value="">All sellers</option>
-                  {merchants.map((m) => (
-                    <option key={m.name} value={m.name}>
-                      {m.name} ({m.count})
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-            <button className="btn primary" type="submit">
-              Show prices
-            </button>
-          </form>
-          <nav aria-label="Filter prices by category">
-            <ul className="chips" style={{ marginTop: 16 }}>
-              <li>
-                <Link className="chip" href={href({ category: undefined })} aria-current={!category ? "true" : undefined}>
-                  All
-                </Link>
-              </li>
-              {CATEGORIES.filter((c) => counts.get(c.slug)).map((c) => (
-                <li key={c.slug}>
-                  <Link className="chip" href={href({ category: c.slug })} aria-current={category === c.slug ? "true" : undefined}>
-                    {c.name} ({counts.get(c.slug)})
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <p className="lede">Price drops and promo codes read from brands’ own sites. A price drop is listed only when the seller’s page states both the current price and a higher regular price; the saving is worked out from those two numbers. Every offer says when we checked it, and nothing older than 48 hours is shown.</p>
+          {!nothing && <DealsFilter categories={categoryOptions} brands={brandOptions} />}
         </div>
       </section>
-      <section className="section" aria-labelledby="deal-results">
-        <div className="wrap">
-          <div className="result-bar">
-            <h2 id="deal-results" className="label" style={{ margin: 0 }} aria-live="polite">
-              {rows.length === 1 ? "1 product with a current price" : `${rows.length} products with a current price`}
-              {q ? ` matching “${q}”` : ""}
-              {merchant ? ` at ${merchant}` : ""}
-            </h2>
-            {filtered && (
-              <Link className="btn small" href="/deals">
-                Clear filters
-              </Link>
-            )}
-          </div>
-          {rows.length ? (
-            <DealLedger rows={rows} />
-          ) : (
-            <EmptyState title={filtered ? "No current price matches." : "No current prices yet."} label="Prices" action={filtered ? <Link className="btn" href="/deals">Show all prices</Link> : <Link className="btn" href="/reviews">Browse all reviews</Link>}>
-              {filtered ? "Nothing matches these filters right now." : "We list a price only while we have checked it recently at the maker or a retailer. Every review is still available."}
-            </EmptyState>
-          )}
-        </div>
-      </section>
-      {lapsed.length > 0 && (
-        <section className="section tight" aria-labelledby="lapsed-title">
+
+      {nothing && (
+        <section className="section" aria-label="Deals">
           <div className="wrap">
-            <SectionHeader id="lapsed-title" label={`${lapsed.length} out of date`} title="Prices no longer current">
-              We had prices for these products, but none was checked recently enough to show. We’ll show a price again once it is re-checked.
-            </SectionHeader>
-            <ul className="ledger">
-              {lapsed.map((r) => (
-                <li key={r.id} style={themeStyle(r.categorySlug) as React.CSSProperties}>
-                  <div className="ledger-row unavailable" style={{ gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr)" }}>
-                    <Link className="l-title" href={`/review/${r.slug}`}>
-                      {r.productName}
-                    </Link>
-                    <div className="l-meta">
-                      Price currently unavailable.
-                      {r.dealCheckedAt ? (
-                        <>
-                          {" "}
-                          Last checked <time dateTime={r.dealCheckedAt.toISOString()}>{shortDate(r.dealCheckedAt)}</time>.
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <EmptyState title={NO_VERIFIED_OFFER} label="Deals" action={<Link className="btn" href="/reviews">Browse all reviews</Link>}>
+              We list a deal only when a brand’s own site states it and we have checked it recently. New offers appear here automatically once verified.
+            </EmptyState>
           </div>
         </section>
       )}
+
+      {drops.length > 0 && (
+        <section className="section" aria-labelledby="drops-title" data-deal-section="">
+          <div className="wrap">
+            <SectionHeader id="drops-title" label={`${drops.length} verified`} title="Official price drops">
+              Current price and regular price as stated on the seller’s page, biggest saving first.
+            </SectionHeader>
+            <PriceDropGrid drops={drops} />
+            <p className="muted" data-deal-empty="" hidden>
+              {NO_VERIFIED_OFFER}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {codes.length > 0 && (
+        <section className="section" aria-labelledby="codes-title" data-deal-section="">
+          <div className="wrap">
+            <SectionHeader id="codes-title" label={`${codes.length} verified`} title="Official promo codes">
+              Codes published by the brand on its own site, still listed there at our last check and not expired. The discount is quoted exactly as the brand states it.
+            </SectionHeader>
+            <PromoCodeGrid codes={codes} />
+            <p className="muted" data-deal-empty="" hidden>
+              {NO_VERIFIED_OFFER}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {prices.length > 0 && (
+        <section className="section tight" aria-labelledby="prices-title" data-deal-section="">
+          <div className="wrap">
+            <SectionHeader id="prices-title" label={`${prices.length} current`} title="Current prices on reviewed products">
+              Recently checked prices at the maker’s store or a retailer, for products we have reviews of. Not necessarily a discount.
+            </SectionHeader>
+            <ul className="deal-grid">
+              {prices.map((d) => (
+                <li key={d.offerId} data-deal="" data-categories={d.review.categorySlug ?? ""} data-brand={d.review.brandSlug ?? ""}>
+                  <DealCard d={d} />
+                </li>
+              ))}
+            </ul>
+            <p className="muted" data-deal-empty="" hidden>
+              No current price matches this filter.
+            </p>
+          </div>
+        </section>
+      )}
+
+      <section className="section tight" aria-label="About these offers">
+        <div className="wrap">
+          <p className="small muted">
+            Prices and codes can change at the seller; always confirm the final price there. Links go directly to the seller unless marked as affiliate links. <Link href="/disclosure">Affiliate disclosure</Link>
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

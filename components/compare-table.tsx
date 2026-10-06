@@ -9,7 +9,8 @@ export type CompareSection = { title: string; rows: string[] };
 
 /**
  * Comparison board: sticky product headers, collapsible sections, rows whose known values
- * differ are marked "Differs". Unknown facts are shown as "Not available", never guessed.
+ * differ are marked "Differs". A row no product has a value for is left out; a value one product
+ * lacks is marked "Not stated", never guessed.
  */
 export default function CompareTable({ columns, sections, removeHref, addSlot }: { columns: CompareColumn[]; sections: CompareSection[]; removeHref: Record<string, string>; addSlot?: React.ReactNode }) {
   const [onlyDiff, setOnlyDiff] = useState(false);
@@ -41,7 +42,7 @@ export default function CompareTable({ columns, sections, removeHref, addSlot }:
               <Link className="name" href={`/review/${c.slug}`}>
                 {c.name}
               </Link>
-              <span className="small muted">{c.categoryName}</span>
+              {c.categoryName && <span className="small muted">{c.categoryName}</span>}
               <div>
                 <Link className="btn small remove" href={removeHref[c.id]}>
                   Remove<span className="visually-hidden"> {c.name}</span>
@@ -51,7 +52,9 @@ export default function CompareTable({ columns, sections, removeHref, addSlot }:
           ))}
         </div>
         {sections.map((s) => {
-          const rows = onlyDiff ? s.rows.filter(differs) : s.rows;
+          // A row with no value for any product says nothing: leave it out.
+          const known = s.rows.filter((label) => columns.some((c) => c.facts[label]));
+          const rows = onlyDiff ? known.filter(differs) : known;
           if (!rows.length) return null;
           return (
             <details key={s.title} className="compare-section" open>
@@ -63,7 +66,7 @@ export default function CompareTable({ columns, sections, removeHref, addSlot }:
                     {columns.map((c) => (
                       <div key={c.id}>
                         <span className="visually-hidden">{c.name}: </span>
-                        {c.facts[label] ?? <span className="na">Not available</span>}
+                        {c.facts[label] || <span className="na">Not stated</span>}
                       </div>
                     ))}
                   </div>

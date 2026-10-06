@@ -8,7 +8,9 @@ import { safeFetch } from "@/lib/net/safe-fetch";
 import { apifyConfigured, checkRobots, hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
 import { sha256 } from "@/lib/util/text";
 import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, parseCouponPage, recordDisappearances, upsertCoupons, type CouponRawPage, type NormalizedCoupon } from "./coupons";
+import { commerceAudit } from "./audit";
 import { COUPON_PAGE_FUNCTION } from "./page-functions/coupon";
+import { revalidateCommerce } from "./revalidate";
 import { sourceRunnable } from "./sources";
 
 /**
@@ -134,7 +136,8 @@ async function startRun(target: { brandId?: string; sourceId?: string; name: str
     return { target: target.name, status: "STARTED", runId: data.id, ...(skipped.length ? { skipped } : {}) };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
-    await db.commerceRun.create({ data: { ...base, status: "START_FAILED", startUrls: ok.length, errors: [{ code: e.code, message: e.message.slice(0, 300) }, ...skipped], finishedAt: new Date() } });
+    const failed = await db.commerceRun.create({ data: { ...base, status: "START_FAILED", startUrls: ok.length, errors: [{ code: e.code, message: e.message.slice(0, 300) }, ...skipped], finishedAt: new Date() } });
+    await commerceAudit("APIFY_RUN_FAILED", "commerce_run", failed.id, { metadata: { purpose: COUPON_PURPOSE, target: target.name, stage: "start", code: e.code, reason: e.message } });
     return { target: target.name, status: e.code, reason: e.message };
   }
 }
@@ -176,7 +179,7 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
 
 // ── Collect ──────────────────────────────────────────────────────────────
 
-export type CouponCollectResult = { runId: string; status: string; pages?: number; candidates?: number; coupons?: number; dropped?: number; invalidated?: number; error?: string };
+export type CouponCollectResult = { runId: string; status: string; pages?: number; candidates?: number; coupons?: number; dropped?: number; invalidated?: number; changed?: number; error?: string };
 
 async function refresh(run: CommerceRun): Promise<CommerceRun> {
   const { data } = await apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId!)}`);
@@ -238,6 +241,7 @@ async function collectOne(run: CommerceRun & { brand: CommerceBrand | null; sour
     let dropped = 0;
     let invalidated = 0;
     let couponCount = 0;
+    let changed = 0;
     if (run.brand) {
       const brand = run.brand;
       const official = pages.filter((p) => {
@@ -253,7 +257,7 @@ async function collectOne(run: CommerceRun & { brand: CommerceBrand | null; sour
         all.push(...n.coupons);
       }
       markCrossPageConflicts(all);
-      await upsertCoupons({ brandId: brand.id, coupons: all, observedAt: now, rawIds, now });
+      changed += (await upsertCoupons({ brandId: brand.id, coupons: all, observedAt: now, rawIds, now })).changed;
       couponCount = all.length;
       for (const p of official) {
         const present = all.filter((c) => c.sourceUrl === p.url).map((c) => c.code);
@@ -269,22 +273,24 @@ async function collectOne(run: CommerceRun & { brand: CommerceBrand | null; sour
         }
         candidates += p.candidates.length;
         for (const { brandId, coupon } of thirdPartyCoupons(p, brands)) {
-          await upsertCoupons({ brandId, coupons: [coupon], observedAt: now, rawIds, now });
+          changed += (await upsertCoupons({ brandId, coupons: [coupon], observedAt: now, rawIds, now })).changed;
           couponCount++;
         }
       }
     }
-    await markExpiredCoupons(now);
+    changed += invalidated + (await markExpiredCoupons(now));
     await db.commerceRun.update({
       where: { id: run.id },
       data: { status: "COLLECTED", collectedAt: now, pagesProcessed: pages.length, extracted: candidates, accepted: couponCount, rejected: dropped + errors.length, errors: errors.length ? errors.slice(0, 50) : undefined },
     });
     log.info("commerce coupon run collected", { stage: "COMMERCE", runId: run.apifyRunId, pages: pages.length, coupons: couponCount });
-    return { runId: run.apifyRunId!, status: "COLLECTED", pages: pages.length, candidates, coupons: couponCount, dropped, invalidated };
+    await commerceAudit("APIFY_RUN_COMPLETED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, target: run.brand?.slug ?? run.source?.slug ?? null, apifyRunId: run.apifyRunId, pages: pages.length, candidates, coupons: couponCount, dropped, invalidated, usageUsd: run.usageUsd ?? null } });
+    return { runId: run.apifyRunId!, status: "COLLECTED", pages: pages.length, candidates, coupons: couponCount, dropped, invalidated, changed };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
     // Release the claim so the next collect retries (raw records and coupons are idempotent per run/URL).
     await db.commerceRun.update({ where: { id: run.id }, data: { status: e.retryable ? "SUCCEEDED" : "COLLECT_FAILED", errors: [{ code: e.code, message: e.message.slice(0, 300) }] } });
+    if (!e.retryable) await commerceAudit("APIFY_RUN_FAILED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, apifyRunId: run.apifyRunId, stage: "collect", code: e.code, reason: e.message } });
     return { runId: run.apifyRunId!, status: e.code, error: e.message };
   }
 }
@@ -294,8 +300,13 @@ async function collectOne(run: CommerceRun & { brand: CommerceBrand | null; sour
  * upsert → disappearances) and marks expired coupons. Idempotent; safe to call on every
  * "commerce-collect" tick.
  */
-export async function collectCouponRuns(trigger = "commerce-collect"): Promise<{ status: string; checked: number; collected: number; results: CouponCollectResult[]; reason?: string }> {
-  if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", checked: 0, collected: 0, results: [], reason: "APIFY_API_TOKEN not configured" };
+export async function collectCouponRuns(trigger = "commerce-collect"): Promise<{ status: string; checked: number; collected: number; results: CouponCollectResult[]; expired?: number; reason?: string }> {
+  if (!apifyConfigured()) {
+    // Expiry needs no crawl: coupons whose stated end date passed stop being public on every collect.
+    const expired = await markExpiredCoupons();
+    if (expired) await revalidateCommerce();
+    return { status: "BLOCKED_BY_ENVIRONMENT", checked: 0, collected: 0, results: [], expired, reason: "APIFY_API_TOKEN not configured" };
+  }
   const runs = await db.commerceRun.findMany({ where: { purpose: COUPON_PURPOSE, apifyRunId: { not: null }, status: { in: [...ACTIVE, "SUCCEEDED"] } }, orderBy: { startedAt: "asc" }, take: 20, include: { brand: true, source: true } });
   const results: CouponCollectResult[] = [];
   for (const r of runs) {
@@ -317,6 +328,7 @@ export async function collectCouponRuns(trigger = "commerce-collect"): Promise<{
     }
   }
   const expired = await markExpiredCoupons();
+  if (expired || results.some((x) => (x.changed ?? 0) > 0)) await revalidateCommerce();
   log.info("commerce coupon collect", { stage: "COMMERCE", trigger, checked: runs.length, expired });
-  return { status: "OK", checked: runs.length, collected: results.filter((x) => x.status === "COLLECTED").length, results };
+  return { status: "OK", checked: runs.length, collected: results.filter((x) => x.status === "COLLECTED").length, results, expired };
 }

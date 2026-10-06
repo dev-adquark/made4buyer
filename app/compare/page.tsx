@@ -8,6 +8,7 @@ import { LATEST_FIRST } from "@/lib/public/queries";
 import { placeholderPath, publicImageUrl } from "@/lib/pipeline/images";
 import { freshOffersForReview } from "@/lib/public/offers";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
+import { displayText, displayUrl } from "@/lib/public/display";
 import { availabilityLabel, money, shortDate } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
   const selected = ids.map((id) => selectedRaw.find((r) => r.id === id)).filter((r): r is (typeof selectedRaw)[number] => Boolean(r));
   const deals = await Promise.all(selected.map((r) => freshOffersForReview(r.id)));
   const columns: CompareColumn[] = selected.map((r, i) => {
-    const best = deals[i].find((d) => d.price !== null);
+    const best = deals[i].find((d) => money(d.price, d.currency) !== null && displayUrl(d.url));
     const tags = (type: string) => r.assignments.filter((a) => a.tagType === type).map((a) => a.categoryTag.name);
     return {
       id: r.id,
@@ -46,18 +47,19 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       name: r.productName,
       image: publicImageUrl(r.images[0], r.categorySlug).url,
       fallback: placeholderPath(r.categorySlug),
-      categoryName: categoryName(r.categorySlug) ?? "General",
+      categoryName: categoryName(r.categorySlug) ?? "",
       facts: {
-        Brand: r.brand,
+        Brand: displayText(r.brand),
         Category: categoryName(r.categorySlug) ?? null,
-        Type: subcategoryName(r.categorySlug, r.subcategorySlug) ?? r.entities?.deviceType ?? null,
-        Model: r.entities?.modelNumber ?? null,
-        "Best for": tags("INTENT").slice(0, 3).join(", ") || r.entities?.useCase || null,
-        Platform: tags("PLATFORM").slice(0, 3).join(", ") || r.entities?.platform || null,
-        "Price tier": tags("PRICE_TIER")[0] ?? null,
-        Price: best ? money(best.price, best.currency) : "Price currently unavailable",
-        Seller: best?.seller ?? null,
-        Availability: best?.availability ? availabilityLabel(best.availability) : null,
+        Type: displayText(subcategoryName(r.categorySlug, r.subcategorySlug)) ?? displayText(r.entities?.deviceType),
+        Model: displayText(r.entities?.modelNumber),
+        "Best for": displayText(tags("INTENT").slice(0, 3).join(", ")) ?? displayText(r.entities?.useCase),
+        Platform: displayText(tags("PLATFORM").slice(0, 3).join(", ")) ?? displayText(r.entities?.platform),
+        "Price tier": displayText(tags("PRICE_TIER")[0]),
+        // A fresh, verified price or nothing (the row is left out when no product has one).
+        Price: best ? money(best.price, best.currency) : null,
+        Seller: best ? displayText(best.seller) : null,
+        Availability: best ? availabilityLabel(best.availability) : null,
         "Price last checked": best ? shortDate(best.observedAt) : null,
       },
     };
@@ -71,7 +73,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
         <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Compare", href: "/compare" }]} />
           <h1>Compare products</h1>
-          <p className="lede">Side by side, using only stored review data and recently checked prices. Anything we don’t know is marked as not available.</p>
+          <p className="lede">Side by side, using only stored review data and recently checked prices. Anything we don’t know is marked as not stated.</p>
         </div>
       </section>
       <section className="section">

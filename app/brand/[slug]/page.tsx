@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Breadcrumbs, { breadcrumbJsonLd } from "@/components/breadcrumbs";
 import JsonLd from "@/components/json-ld";
+import { displayText } from "@/lib/public/display";
 import { ReviewGrid } from "@/components/review-card";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -23,7 +24,8 @@ async function load(slug: string) {
   const { eligible } = await brandPageEligible(slug);
   if (!eligible) return null;
   const reviews = await db.normalizedReview.findMany({ where: { status: "PUBLISHED", brandSlug: slug }, orderBy: LATEST_FIRST, take: 60, select: cardSelect });
-  return { brand: reviews[0]?.brand ?? slug, reviews };
+  // The brand's stored name; the slug is only a last resort (never "null" or an empty name).
+  return { brand: reviews.map((r) => displayText(r.brand)).find(Boolean) ?? slug, reviews };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

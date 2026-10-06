@@ -7,14 +7,18 @@ import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { apifyConfigured, globToRegex, normalizeUrl } from "@/lib/pipeline/apify";
 import { factsFromPage, summarize, toFact, type FactSummary } from "@/lib/products/enrich";
-import { maxAgeMs } from "@/lib/products/facts";
-import { brandKey, classifySource, registrableDomain, sameProduct } from "@/lib/products/page-extract";
+import { isVariantToken, maxAgeMs } from "@/lib/products/facts";
+import { brandKey, classifySource, sameProduct } from "@/lib/products/page-extract";
 import type { Fact, FactSource, MatchResult, ProductIdentity } from "@/lib/products/types";
 import { sha256 } from "@/lib/util/text";
+import { commerceAudit, commerceAuditOnce } from "./audit";
 import { dueBrands, importSeedBrands } from "./brands";
 import { discoverProductUrls } from "./discovery";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
+import { verifyOfficial } from "./official";
 import { PRODUCT_PAGE_FUNCTION } from "./page-functions/product";
+import { revalidateCommerce } from "./revalidate";
+import { normalizeDestinationUrl, onDomain } from "./urls";
 
 /**
  * Commerce intelligence engine, product extraction (apify/web-scraper).
@@ -157,6 +161,7 @@ export async function startProductRun(brand: CommerceBrand, urls: string[], trig
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
     const runId = await recordSkip(brand, trigger, list.length, e.code, e.message, "FAILED");
     await brandFailed(brand.id, e.code, e.message);
+    await commerceAudit("APIFY_RUN_FAILED", "commerce_run", runId, { metadata: { purpose: "PRODUCT", brand: brand.slug, stage: "start", code: e.code, reason: e.message } });
     return { status: "FAILED", code: e.code, reason: e.message, runId };
   }
 }
@@ -179,7 +184,26 @@ async function brandFailed(brandId: string, status: string, reason: string, now 
 // ── Identity ─────────────────────────────────────────────────────────────────
 
 type Candidate = { id: string; name: string; brand: string | null; categorySlug: string | null; identity: ProductIdentity };
-type Decision = { status: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED"; entityId: string | null; basis: string | null; reason: string; match?: MatchResult; candidate?: Candidate };
+type Decision = {
+  status: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED";
+  entityId: string | null;
+  basis: string | null;
+  reason: string;
+  match?: MatchResult;
+  candidate?: Candidate;
+  /** On a rejection: the one Made4Buyers product this page is a different variant of (logged, never attached). */
+  nearEntityId?: string | null;
+};
+
+const nameTokens = (s: string | null | undefined) => (s ?? "").toLowerCase().replace(/[™®©℠]/g, "").split(/[^a-z0-9+]+/).filter(Boolean);
+
+/** Same product line, different variant: every non-variant word of the candidate's name (beyond the brand) is on the page. */
+export function isNearMiss(candidate: Pick<Candidate, "name" | "brand">, pageName: string | null | undefined): boolean {
+  const brand = new Set(nameTokens(candidate.brand));
+  const core = nameTokens(candidate.name).filter((t) => !brand.has(t) && !isVariantToken(t));
+  const page = new Set(nameTokens(pageName));
+  return core.length > 0 && core.every((t) => page.has(t));
+}
 
 const ID_FIELDS = ["gtin", "mpn", "model", "sku"] as const;
 const AUTHORITY: Record<string, number> = { MANUFACTURER: 0, STRUCTURED_FEED: 1, RETAILER: 2, WIKIDATA: 3, REVIEW_SOURCE: 4, SOVRN: 5, SECONDARY: 6 };
@@ -215,22 +239,13 @@ export function decideIdentity(product: NormalizedCommerceRecord & { ok: true },
   if (matches.length === 1) return { status: "MATCHED", entityId: matches[0].c.id, basis: matches[0].m.basis, reason: matches[0].m.reason, match: matches[0].m, candidate: matches[0].c };
   if (matches.length > 1) return { status: "MATCH_REJECTED", entityId: null, basis: null, reason: `ambiguous: ${matches.length} Made4Buyers products match (${matches.map((r) => r.c.name).slice(0, 5).join(", ")})` };
   const reasons = results.slice(0, 5).map((r) => `${r.c.name}: ${r.m.reason}`);
-  return { status: "MATCH_REJECTED", entityId: null, basis: null, reason: `no exact match among ${candidates.length} product(s) of this brand — ${reasons.join("; ")}`.slice(0, 2000) };
+  const near = candidates.filter((c) => isNearMiss(c, product.product.name));
+  return { status: "MATCH_REJECTED", entityId: null, basis: null, reason: `no exact match among ${candidates.length} product(s) of this brand — ${reasons.join("; ")}`.slice(0, 2000), nearEntityId: near.length === 1 ? near[0].id : null };
 }
 
 const confidenceOf = (basis: string) => (basis === "gtin" || basis === "mpn" || basis === "model" ? 1 : 0.9);
 
 // ── Writes ───────────────────────────────────────────────────────────────────
-
-function onDomain(url: string, domain: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    const d = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
-    return !!d && (host === d || host.endsWith(`.${d}`) || registrableDomain(host) === registrableDomain(d));
-  } catch {
-    return false;
-  }
-}
 
 const hostOf = (url: string) => new URL(url).hostname.toLowerCase().replace(/^www\./, "");
 
@@ -273,7 +288,9 @@ async function upsertProduct(brand: CommerceBrand, n: NormalizedCommerceRecord &
     lastRawId: raw.id,
     observedAt: now,
   };
-  return existing ? db.commerceProduct.update({ where: { id: existing.id }, data: cols }) : db.commerceProduct.create({ data: { canonicalUrl: n.canonicalUrl, ...cols } });
+  const product = existing ? await db.commerceProduct.update({ where: { id: existing.id }, data: cols }) : await db.commerceProduct.create({ data: { canonicalUrl: n.canonicalUrl, ...cols } });
+  if (!existing) await commerceAudit("PRODUCT_CREATED", "commerce_product", product.id, { metadata: { url: n.canonicalUrl, brand: brand.slug, name: product.name } });
+  return { product, previous: existing ? { identityStatus: existing.identityStatus, productEntityId: existing.productEntityId } : null };
 }
 
 /** Same upsert as lib/products/enrich.ts saveFacts, plus discovery/verification provenance. */
@@ -296,6 +313,18 @@ async function refreshSummary(entityId: string, now: Date) {
   const prev = (e.factSummary ?? {}) as Partial<FactSummary>;
   const summary = { ...summarize(facts, e.categorySlug, now), attempts: prev.attempts, wikidataCheckedAt: prev.wikidataCheckedAt ?? null, version: prev.version };
   await db.productEntity.update({ where: { id: entityId }, data: { factSummary: summary as unknown as Prisma.InputJsonValue, enrichmentStatus: summary.status } });
+  // A field that newly resolves to CONFLICTING (equal-authority sources disagree; not displayed): one event per change.
+  const conflictingIn = (fields: FactSummary["fields"] | undefined) => Object.entries(fields ?? {}).filter(([, f]) => f?.status === "CONFLICTING").map(([k]) => k as keyof FactSummary["fields"]);
+  const before = new Set(conflictingIn(prev.fields));
+  const conflictingNow = conflictingIn(summary.fields);
+  const fresh = conflictingNow.filter((f) => !before.has(f));
+  if (fresh.length) {
+    await commerceAudit("SOURCE_CONFLICT", "product_entity", entityId, {
+      before: { conflicting: [...before] },
+      after: { conflicting: conflictingNow },
+      metadata: { fields: fresh, notes: fresh.map((f) => `${f}: ${summary.fields[f]?.note ?? ""}`.slice(0, 200)).slice(0, 5) },
+    });
+  }
 }
 
 async function writeOffers(productId: string, brand: CommerceBrand, n: NormalizedCommerceRecord & { ok: true }, source: FactSource, raw: CommerceRawRecord, now: Date): Promise<number> {
@@ -303,9 +332,16 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
   let written = 0;
   for (const o of n.offers) {
     // A US-market brand shows US-dollar prices only; an offer in another currency belongs to another storefront.
-    if (brand.market === "US" && o.currency && o.currency.toUpperCase() !== "USD") continue;
+    const nonUsd = brand.market === "US" && o.currency && o.currency.toUpperCase() !== "USD";
+    const invalid = o.price != null && !(Number.isFinite(o.price) && o.price > 0);
+    if (nonUsd || invalid) {
+      const reason = nonUsd ? `currency ${o.currency} is not USD for a US-market brand` : `invalid price ${o.price}`;
+      await commerceAuditOnce("PRICE_REJECTED", "commerce_product", productId, `${o.url ?? n.canonicalUrl}|${o.price}|${o.currency ?? ""}`, { metadata: { url: o.url ?? n.canonicalUrl, price: o.price ?? null, currency: o.currency ?? null, reason } });
+      continue;
+    }
     // Only an offer on this same site; an offer URL elsewhere is never used as a destination.
-    const dest = o.url && onDomain(o.url, hostOf(n.pageUrl)) ? normalizeUrl(o.url) : n.canonicalUrl;
+    // Normalized (no fragment, utm_*, gclid, fbclid …) so tracking variants never create a second row.
+    const dest = normalizeDestinationUrl(o.url && onDomain(o.url, hostOf(n.pageUrl)) ? o.url : n.canonicalUrl);
     if (!dest || seen.has(dest)) continue;
     seen.add(dest);
     const fields = {
@@ -319,18 +355,23 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
       sourceRawId: raw.id,
       status: "FRESH",
     };
-    await db.commerceOffer.upsert({
-      where: { productId_destinationUrl: { productId, destinationUrl: dest } },
+    const key = { productId_destinationUrl: { productId, destinationUrl: dest } };
+    const before = await db.commerceOffer.findUnique({ where: key, select: { price: true, currency: true } });
+    const offer = await db.commerceOffer.upsert({
+      where: key,
       // Affiliate fields are set only by a real affiliate provider; this pipeline never invents one.
       create: { productId, destinationUrl: dest, affiliateUrl: null, affiliateProvider: null, affiliateStatus: "NONE", ...fields },
       update: fields,
     });
+    if ((before?.price ?? null) !== fields.price && (before || fields.price != null)) {
+      await commerceAudit("PRICE_UPDATED", "commerce_offer", offer.id, { before: { price: before?.price ?? null, currency: before?.currency ?? null }, after: { price: fields.price, currency: fields.currency }, metadata: { url: dest, created: !before } });
+    }
     written++;
   }
   return written;
 }
 
-type ItemOutcome = { url: string; result: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED" | "NOT_EXTRACTED" | "ERROR"; reason?: string };
+type ItemOutcome = { url: string; result: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED" | "NOT_EXTRACTED" | "ERROR"; reason?: string; entityIds?: string[] };
 
 async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Date, cache: Map<string, Candidate[]>): Promise<ItemOutcome> {
   const n = normalizeCommerceRecord(raw.payload);
@@ -342,23 +383,28 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
   // The brand's own official site names its own products: a page there that omits "brand" in its
   // structured data is still that brand's product (provenance: the official domain).
   if (!n.product.brand && onDomain(n.pageUrl, brand.officialDomain)) n.product.brand = brand.name;
-  const product = await upsertProduct(brand, n, raw, now);
+  const { product, previous } = await upsertProduct(brand, n, raw, now);
   const keys = [...new Set([brandKey(brand.name), brandKey(n.product.brand)].filter(Boolean))];
   const decision = decideIdentity(n, await candidatesFor(keys, cache));
   await db.commerceProduct.update({ where: { id: product.id }, data: { identityStatus: decision.status, identityReason: decision.reason.slice(0, 2000), productEntityId: decision.entityId } });
-  await db.commerceMatchLog.create({ data: { commerceProductId: product.id, productEntityId: decision.entityId, result: decision.status, basis: decision.basis, reason: decision.reason.slice(0, 2000) } });
-  if (decision.status !== "MATCHED" || !decision.entityId || !decision.basis) return { url: n.canonicalUrl, result: decision.status, reason: decision.reason };
+  await db.commerceMatchLog.create({ data: { commerceProductId: product.id, productEntityId: decision.entityId ?? decision.nearEntityId ?? null, result: decision.status, basis: decision.basis, reason: decision.reason.slice(0, 2000) } });
+  if (previous && (previous.identityStatus !== decision.status || previous.productEntityId !== decision.entityId)) {
+    await commerceAudit("PRODUCT_UPDATED", "commerce_product", product.id, { before: previous, after: { identityStatus: decision.status, productEntityId: decision.entityId }, metadata: { url: n.canonicalUrl, reason: decision.reason } });
+  }
+  // Products whose official status may have changed with this decision.
+  const entityIds = [decision.entityId, decision.nearEntityId, previous?.productEntityId].filter((x): x is string => !!x);
+  if (decision.status !== "MATCHED" || !decision.entityId || !decision.basis) return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds };
 
   const facts = factsFromPage(n.product, { source, sourceName: hostOf(n.pageUrl), sourceUrl: n.canonicalUrl, observedAt: now, matchBasis: decision.basis });
   await saveCommerceFacts(decision.entityId, facts, { confidence: confidenceOf(decision.basis), extractionMethod: n.extractionMethod, now });
   await writeOffers(product.id, brand, n, source, raw, now);
   await refreshSummary(decision.entityId, now);
-  return { url: n.canonicalUrl, result: "MATCHED", reason: decision.reason };
+  return { url: n.canonicalUrl, result: "MATCHED", reason: decision.reason, entityIds };
 }
 
 // ── Collect ──────────────────────────────────────────────────────────────────
 
-export type CommerceCollectResult = { runId: string; apifyRunId: string | null; status: string; items?: number; extracted?: number; accepted?: number; rejected?: number; reason?: string };
+export type CommerceCollectResult = { runId: string; apifyRunId: string | null; status: string; items?: number; extracted?: number; accepted?: number; rejected?: number; reason?: string; entityIds?: string[] };
 
 const itemUrl = (item: unknown, i: number): string => {
   if (item && typeof item === "object") {
@@ -412,19 +458,22 @@ async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null
     if (extracted > 0) await brandSucceeded(brand.id, "OK", now);
     else await brandFailed(brand.id, "EMPTY", `run ${run.apifyRunId} returned ${raws.length} item(s) and no readable product page`, now);
     log.info("commerce run collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.apifyRunId, items: raws.length, extracted, accepted });
-    return { runId: run.id, apifyRunId: run.apifyRunId, status: "COLLECTED", items: raws.length, extracted, accepted, rejected };
+    await commerceAudit("APIFY_RUN_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, apifyRunId: run.apifyRunId, items: raws.length, extracted, accepted, rejected, usageUsd: data.usageTotalUsd ?? run.usageUsd ?? null } });
+    const entityIds = [...new Set(outcomes.flatMap((o) => o.entityIds ?? []))];
+    return { runId: run.id, apifyRunId: run.apifyRunId, status: "COLLECTED", items: raws.length, extracted, accepted, rejected, entityIds };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
     // Retryable: release the claim (raws and upserts are idempotent). Otherwise record and back off.
     await db.commerceRun.update({ where: { id: run.id }, data: { status: e.retryable ? "SUCCEEDED" : "COLLECT_FAILED", errors: [{ code: e.code, reason: e.message.slice(0, 500) }] } });
     if (!e.retryable && brand) await brandFailed(brand.id, "COLLECT_FAILED", e.message, now);
+    if (!e.retryable) await commerceAudit("APIFY_RUN_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand?.slug ?? null, apifyRunId: run.apifyRunId, stage: "collect", code: e.code, reason: e.message } });
     return { runId: run.id, apifyRunId: run.apifyRunId, status: e.code, reason: e.message };
   }
 }
 
 /** Polls running product runs and collects finished ones. Failed runs keep every existing record and back the brand off. */
 export async function collectCommerceRuns(trigger: string, now = new Date()) {
-  if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", checked: 0, collected: 0 };
+  if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", checked: 0, collected: 0, results: [] as CommerceCollectResult[] };
   const runs = await db.commerceRun.findMany({ where: { purpose: "PRODUCT", apifyRunId: { not: null }, status: { in: [...ACTIVE, "SUCCEEDED"] } }, orderBy: { startedAt: "asc" }, take: 20, include: { brand: true } });
   const results: CommerceCollectResult[] = [];
   for (const run of runs) {
@@ -436,6 +485,7 @@ export async function collectCommerceRuns(trigger: string, now = new Date()) {
         const reason = (data.statusMessage ?? data.status).slice(0, 500);
         await db.commerceRun.update({ where: { id: run.id }, data: { status: data.status, usageUsd: data.usageTotalUsd ?? run.usageUsd, finishedAt: data.finishedAt ? new Date(data.finishedAt) : now, errors: [{ code: "APIFY_RUN_FAILED", reason }] } });
         if (run.brandId) await brandFailed(run.brandId, data.status, `run ${run.apifyRunId} ended ${data.status}: ${reason}`, now);
+        await commerceAudit("APIFY_RUN_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: run.brand?.slug ?? null, apifyRunId: run.apifyRunId, status: data.status, reason } });
         results.push({ runId: run.id, apifyRunId: run.apifyRunId, status: data.status, reason });
       } else {
         if (data.usageTotalUsd != null) await db.commerceRun.update({ where: { id: run.id }, data: { usageUsd: data.usageTotalUsd } });
@@ -446,7 +496,19 @@ export async function collectCommerceRuns(trigger: string, now = new Date()) {
       results.push({ runId: run.id, apifyRunId: run.apifyRunId, status: e.code, reason: e.message });
     }
   }
-  return { status: "OK", trigger, checked: runs.length, collected: results.filter((r) => r.status === "COLLECTED").length, results };
+  // Official-source status of the products this collect touched (cheap: only those), then purge public pages.
+  const touched = [...new Set(results.flatMap((r) => r.entityIds ?? []))];
+  let official: Awaited<ReturnType<typeof verifyOfficial>> | undefined;
+  if (touched.length) {
+    try {
+      official = await verifyOfficial(touched, now);
+    } catch (error) {
+      log.warn("inline official verification failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
+    }
+  }
+  const collected = results.filter((r) => r.status === "COLLECTED").length;
+  if (collected) await revalidateCommerce(touched);
+  return { status: "OK", trigger, checked: runs.length, collected, results: results.map((r) => ({ ...r, entityIds: undefined })), official: official ?? null };
 }
 
 // ── Freshness ────────────────────────────────────────────────────────────────
@@ -491,5 +553,7 @@ export async function runCommerceDiscover(trigger: string, now = new Date()) {
 export async function runCommerceCollect(trigger: string, now = new Date()) {
   const collected = await collectCommerceRuns(trigger, now);
   const stale = await markStaleOffers(now);
+  // Offers that just went stale stop being shown as current: refresh the public pages.
+  if (stale && !collected.collected) await revalidateCommerce();
   return { ...collected, staleOffers: stale };
 }
