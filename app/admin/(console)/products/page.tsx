@@ -32,7 +32,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
       <h1>Product data</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        Every product field is enriched on its own from the sources that can state it: the review source, known manufacturer and retailer pages for that exact product, and Sovrn offers. Each value keeps its source and check time. A value is used only after an exact-product match, and a field no source states stays &ldquo;Not available&rdquo;. Nothing is guessed.
+        Every product field is enriched on its own from the sources that can state it: the review source, and known manufacturer and retailer pages for that exact product. Each value keeps its source and check time. A value is used only after an exact-product match, and a field no source states stays &ldquo;Not available&rdquo;. Nothing is guessed.
       </p>
       <div className="stats">
         <Stat label="Complete" value={count("COMPLETE")} />

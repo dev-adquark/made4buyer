@@ -1,11 +1,8 @@
-import type { AffiliateLink, NormalizedReview, Prisma } from "@prisma/client";
+import type { NormalizedReview } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
-import { fetchSovrnOffers } from "@/lib/sovrn/client";
-import { generateAffiliateUrl } from "@/lib/sovrn/affiliate";
-import { checkLink } from "@/lib/sovrn/link-check";
-import { rankOffers, selectionReason, type RankedOffer } from "@/lib/sovrn/offers";
+import { freshOffersForProduct, primaryProductId } from "@/lib/public/offers";
 import { classify } from "@/lib/taxonomy/classify";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { ensureTaxonomySeeded, persistClassification } from "@/lib/taxonomy/persist";
@@ -20,7 +17,6 @@ import { commonsImagesFor, primaryProductOf } from "@/lib/products/commons-image
 import type { PexelsSearchResult } from "./pexels";
 import { normalizeContent } from "./normalize";
 import { validateContentItem, type ValidatedContent } from "./validate";
-import { nextVerificationDelayMs, verifyAffiliateLink } from "./verify-link";
 
 /**
  * Per-review stage runners. Each stage persists its output, resolves its previous failures
@@ -318,239 +314,30 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   return Object.assign(asset, { providerStatus });
 }
 
-// ─── OFFER_MATCHING ─────────────────────────────────────────────────────────
+// ─── OFFER_MATCHING (commerce engine) ───────────────────────────────────────
 
-export type OfferStageResult = { status: NormalizedReview["dealStatus"]; reason: string; selected: Array<{ matchId: string; ranked: RankedOffer; isBest: boolean }> };
+export type OfferStageResult = { status: NormalizedReview["dealStatus"]; reason: string; offers: number };
 
-export async function runOfferStage(reviewId: string, opts: { bypassCache?: boolean } = {}): Promise<OfferStageResult> {
-  const review = await db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId }, include: { entities: true } });
-  const query = {
-    productName: review.entities?.productName ?? review.productName,
-    brand: review.entities?.brand ?? review.brand,
-    deviceType: review.entities?.deviceType,
-    categorySlug: review.categorySlug,
-    modelNumber: review.entities?.modelNumber,
+/**
+ * Derives the review's deal status from commerce-engine offers of its PRIMARY product. No
+ * provider is queried here: the commerce engine observes prices on its own schedule; this
+ * stage only records what is currently stored (fresh offers within PRODUCT_PRICE_MAX_AGE_HOURS).
+ */
+export async function runOfferStage(reviewId: string): Promise<OfferStageResult> {
+  const review = await db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId }, select: { kind: true } });
+  // Failures recorded by the retired offer provider no longer apply.
+  await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId });
+  const setDeal = async (status: NormalizedReview["dealStatus"], reason: string, offers = 0): Promise<OfferStageResult> => {
+    await db.normalizedReview.update({ where: { id: reviewId }, data: { dealStatus: status, dealStatusReason: reason.slice(0, 500), dealCheckedAt: new Date() } });
+    return { status, reason, offers };
   };
-  const now = new Date();
-  const setDeal = (status: NormalizedReview["dealStatus"], reason: string) =>
-    db.normalizedReview.update({ where: { id: reviewId }, data: { dealStatus: status, dealStatusReason: reason.slice(0, 500), dealCheckedAt: now } });
-
-  // Admin switch: affiliate enrichment paused → no Sovrn call, an honest "unavailable" state.
-  if (!(await getSwitches()).affiliate_enrichment) {
-    await setDeal("UNAVAILABLE", "affiliate enrichment is paused in Admin → Automation");
-    return { status: "UNAVAILABLE", reason: "affiliate enrichment paused", selected: [] };
-  }
-  // Offers attach to one product. A comparison or guide covers several, so a single offer
-  // would be wrong for the page: no Sovrn query, and any previous links are retired.
-  if (review.kind !== "REVIEW") {
-    await setDeal("NO_MATCH", "Not matched: comparisons and guides cover several products; offers appear on each product's own review");
-    await db.affiliateLink.updateMany({ where: { normalizedReviewId: reviewId, isActive: true }, data: { isActive: false } });
-    return { status: "NO_MATCH", reason: "content covers several products", selected: [] };
-  }
-  const outcome = await fetchSovrnOffers(query, opts);
-  if (outcome.status === "UNAVAILABLE") {
-    await setDeal("UNAVAILABLE", outcome.reason);
-    await recordFailure({ stage: "OFFER_MATCHING", code: "SOVRN_NOT_CONFIGURED", entityType: REVIEW, entityId: reviewId, normalizedReviewId: reviewId });
-    return { status: "UNAVAILABLE", reason: outcome.reason, selected: [] };
-  }
-  if (outcome.status !== "OK" && outcome.status !== "EMPTY") {
-    const hadMatches = await db.sovrnOfferMatch.count({ where: { normalizedReviewId: reviewId, isBestOffer: true } });
-    if (hadMatches) await db.sovrnOfferMatch.updateMany({ where: { normalizedReviewId: reviewId, matchStatus: "MATCHED" }, data: { matchStatus: "STALE" } });
-    const status = hadMatches ? "STALE" : "FAILED";
-    await setDeal(status, outcome.message);
-    const code = outcome.status === "TIMEOUT" ? "SOVRN_TIMEOUT" : outcome.status === "INVALID_RESPONSE" ? "SOVRN_RESPONSE_INVALID" : outcome.status === "AUTH_FAILED" ? "SOVRN_AUTH_FAILED" : outcome.status === "RATE_LIMITED" ? "SOVRN_RATE_LIMITED" : "SOVRN_PROVIDER_ERROR";
-    await recordFailure({ stage: "OFFER_MATCHING", code, message: outcome.message, entityType: REVIEW, entityId: reviewId, normalizedReviewId: reviewId });
-    return { status, reason: outcome.message, selected: [] };
-  }
-  await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId, codes: ["SOVRN_NOT_CONFIGURED", "SOVRN_TIMEOUT", "SOVRN_PROVIDER_ERROR", "SOVRN_AUTH_FAILED", "SOVRN_RATE_LIMITED", "SOVRN_RESPONSE_INVALID"] });
-
-  const ranked = rankOffers(query, outcome.offers, { minScore: config.sovrn.minScore(), trustedMerchants: config.sovrn.trustedMerchants() });
-  let viable = ranked.filter((r) => r.viable);
-  let reasonPrefix = "";
-
-  if (review.sovrnDealIdOverride) {
-    const forced = ranked.find((r) => r.offer.offerId === review.sovrnDealIdOverride);
-    if (!forced) {
-      await recordFailure({
-        stage: "OFFER_MATCHING",
-        code: "SOVRN_DEAL_ID_NOT_FOUND",
-        message: `Deal ID override "${review.sovrnDealIdOverride}" not found among ${ranked.length} provider offers for "${outcome.queryKey}"`,
-        entityType: REVIEW,
-        entityId: reviewId,
-        normalizedReviewId: reviewId,
-      });
-      viable = [];
-      reasonPrefix = "deal ID override not found; ";
-    } else {
-      await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId, codes: ["SOVRN_DEAL_ID_NOT_FOUND"] });
-      viable = [forced, ...viable.filter((r) => r !== forced)];
-      reasonPrefix = "admin deal ID override; ";
-    }
-  }
-
-  const keepIds = new Set<string>();
-  const selected: OfferStageResult["selected"] = [];
-  const toPersist = [...viable.slice(0, 10), ...ranked.filter((r) => !r.viable && !viable.includes(r)).slice(0, 3)];
-  for (const [index, r] of toPersist.entries()) {
-    const isViable = viable.includes(r);
-    const isBest = isViable && index === 0;
-    const data = {
-      cacheId: outcome.cacheId,
-      title: r.offer.title,
-      merchantName: r.offer.merchantName ?? null,
-      merchantId: r.offer.merchantId ?? null,
-      offerUrl: r.offer.offerUrl,
-      providerAffiliateUrl: r.offer.providerAffiliateUrl ?? null,
-      price: r.offer.price ?? null,
-      currency: r.offer.currency ?? null,
-      availability: r.offer.availability ?? null,
-      imageUrl: r.offer.imageUrl ?? null,
-      score: r.breakdown.total,
-      scoreBreakdown: r.breakdown as unknown as Prisma.InputJsonValue,
-      isBestOffer: isBest,
-      rank: index + 1,
-      matchStatus: isViable ? ("MATCHED" as const) : ("BELOW_THRESHOLD" as const),
-      selectionReason: isBest ? reasonPrefix + selectionReason(r, viable[1]) : null,
-    };
-    const row = await db.sovrnOfferMatch.upsert({
-      where: { normalizedReviewId_offerId: { normalizedReviewId: reviewId, offerId: r.offer.offerId } },
-      create: { normalizedReviewId: reviewId, offerId: r.offer.offerId, ...data },
-      update: data,
-    });
-    keepIds.add(row.id);
-    if (isViable && selected.length < 1 + config.sovrn.alternates()) selected.push({ matchId: row.id, ranked: r, isBest });
-  }
-  await db.sovrnOfferMatch.updateMany({ where: { normalizedReviewId: reviewId, id: { notIn: [...keepIds] } }, data: { matchStatus: "SUPERSEDED", isBestOffer: false } });
-
-  if (!viable.length) {
-    const reason = `${reasonPrefix}${outcome.offers.length} offer(s) returned for "${outcome.queryKey}", none above match threshold ${config.sovrn.minScore()}`;
-    await setDeal("NO_MATCH", reason);
-    if (!review.sovrnDealIdOverride) {
-      await recordFailure({ stage: "OFFER_MATCHING", code: "SOVRN_NO_MATCH", message: reason, entityType: REVIEW, entityId: reviewId, normalizedReviewId: reviewId });
-    }
-    await db.affiliateLink.updateMany({ where: { normalizedReviewId: reviewId, isActive: true }, data: { isActive: false, isBest: false } });
-    return { status: "NO_MATCH", reason, selected: [] };
-  }
-  await resolveFailures({ stage: "OFFER_MATCHING", entityType: REVIEW, entityId: reviewId, codes: ["SOVRN_NO_MATCH"] });
-  const reason = `${reasonPrefix}best offer ${viable[0].offer.offerId} score ${viable[0].breakdown.total}${outcome.fromCache ? " (cached response)" : ""}`;
-  await setDeal("MATCHED", reason);
-  log.info("offers matched", { stage: "OFFER_MATCHING", reviewId, offers: outcome.offers.length, viable: viable.length, best: viable[0].offer.offerId, score: viable[0].breakdown.total });
-  return { status: "MATCHED", reason, selected };
-}
-
-// ─── AFFILIATE_LINK ─────────────────────────────────────────────────────────
-
-export async function runAffiliateStage(reviewId: string, selected: OfferStageResult["selected"]): Promise<AffiliateLink[]> {
-  const links: AffiliateLink[] = [];
-  const keep: string[] = [];
-  for (const s of selected) {
-    const generated = generateAffiliateUrl(s.ranked.offer, { wrapperUrl: config.sovrn.linkWrapperUrl(), siteKey: config.sovrn.siteKey() });
-    if (!generated.ok) {
-      await recordFailure({
-        stage: "AFFILIATE_LINK",
-        code: "AFFILIATE_URL_INVALID",
-        message: `Offer ${s.ranked.offer.offerId}: ${generated.reason}`,
-        entityType: REVIEW,
-        entityId: `${reviewId}:${s.ranked.offer.offerId}`,
-        normalizedReviewId: reviewId,
-      });
-      continue;
-    }
-    // A wrapped merchant URL earns nothing if Sovrn cannot affiliate it for this site. Only a definite
-    // "not affiliatable" answer blocks the link; a failed check keeps today's behaviour (verification still runs).
-    if (generated.method === "LINK_WRAPPER" && config.sovrn.linkCheckEnabled()) {
-      const check = await checkLink(generated.destinationUrl).catch((error: unknown) => {
-        log.warn("sovrn link check errored", { stage: "AFFILIATE_LINK", reviewId, error: error instanceof Error ? error.message : String(error) });
-        return undefined;
-      });
-      if (check?.status === "OK" && !check.affiliatable) {
-        await recordFailure({
-          stage: "AFFILIATE_LINK",
-          code: "AFFILIATE_URL_INVALID",
-          message: "Sovrn reports this merchant is not affiliatable for this site (link check)",
-          entityType: REVIEW,
-          entityId: `${reviewId}:${s.ranked.offer.offerId}`,
-          normalizedReviewId: reviewId,
-        });
-        // Not kept: an existing link for this offer is deactivated below.
-        continue;
-      }
-    }
-    await resolveFailures({ stage: "AFFILIATE_LINK", entityType: REVIEW, entityId: `${reviewId}:${s.ranked.offer.offerId}` });
-    const existing = await db.affiliateLink.findUnique({ where: { normalizedReviewId_sovrnOfferId: { normalizedReviewId: reviewId, sovrnOfferId: s.ranked.offer.offerId } } });
-    const changed = !existing || existing.affiliateUrl !== generated.affiliateUrl;
-    const link = await db.affiliateLink.upsert({
-      where: { normalizedReviewId_sovrnOfferId: { normalizedReviewId: reviewId, sovrnOfferId: s.ranked.offer.offerId } },
-      create: {
-        normalizedReviewId: reviewId,
-        offerMatchId: s.matchId,
-        sovrnOfferId: s.ranked.offer.offerId,
-        affiliateUrl: generated.affiliateUrl,
-        destinationUrl: generated.destinationUrl,
-        generationMethod: generated.method,
-        isBest: s.isBest,
-        isActive: true,
-        nextVerificationAt: new Date(),
-      },
-      update: {
-        offerMatchId: s.matchId,
-        affiliateUrl: generated.affiliateUrl,
-        destinationUrl: generated.destinationUrl,
-        generationMethod: generated.method,
-        isBest: s.isBest,
-        isActive: true,
-        ...(changed ? { verificationStatus: "PENDING" as const, verificationReason: "affiliate URL changed; awaiting verification", nextVerificationAt: new Date() } : {}),
-      },
-    });
-    keep.push(link.id);
-    links.push(link);
-  }
-  await db.affiliateLink.updateMany({ where: { normalizedReviewId: reviewId, id: { notIn: keep }, isActive: true }, data: { isActive: false, isBest: false } });
-  log.info("affiliate links generated", { stage: "AFFILIATE_LINK", reviewId, links: links.length });
-  return links;
-}
-
-// ─── LINK_VERIFICATION ──────────────────────────────────────────────────────
-
-export async function verifyLinkRecord(link: Pick<AffiliateLink, "id" | "affiliateUrl" | "destinationUrl" | "normalizedReviewId" | "verificationAttempts">) {
-  const outcome = await verifyAffiliateLink(link.affiliateUrl, link.destinationUrl);
-  const attempts = outcome.status === "VERIFIED_OK" ? 0 : link.verificationAttempts + 1;
-  const now = new Date();
-  const updated = await db.affiliateLink.update({
-    where: { id: link.id },
-    data: {
-      verificationStatus: outcome.status,
-      verificationReason: outcome.reason.slice(0, 500),
-      httpStatus: outcome.httpStatus ?? null,
-      redirectChain: outcome.chain as unknown as Prisma.InputJsonValue,
-      finalUrl: outcome.finalUrl ?? null,
-      verificationAttempts: attempts,
-      lastVerifiedAt: now,
-      nextVerificationAt: new Date(now.getTime() + nextVerificationDelayMs(outcome.status, attempts)),
-    },
-  });
-  if (outcome.status === "VERIFIED_OK") {
-    await resolveFailures({ stage: "LINK_VERIFICATION", entityType: "affiliate_link", entityId: link.id });
-  } else {
-    await recordFailure({
-      stage: "LINK_VERIFICATION",
-      code: outcome.status === "TIMEOUT" ? "LINK_VERIFICATION_TIMEOUT" : "LINK_VERIFICATION_FAILED",
-      message: `${outcome.status}: ${outcome.reason}`,
-      entityType: "affiliate_link",
-      entityId: link.id,
-      normalizedReviewId: link.normalizedReviewId,
-      retryable: outcome.retryable,
-    });
-  }
-  log.info("link verified", { stage: "LINK_VERIFICATION", linkId: link.id, status: outcome.status, httpStatus: outcome.httpStatus, hops: outcome.chain.length });
-  return { link: updated, outcome };
-}
-
-export async function runVerificationStage(links: AffiliateLink[]) {
-  const results = [];
-  for (const link of links) {
-    if (link.verificationStatus !== "PENDING" && link.nextVerificationAt && link.nextVerificationAt > new Date()) continue;
-    results.push(await verifyLinkRecord(link));
-  }
-  return results;
+  // Offers attach to one product. A comparison or guide covers several.
+  if (review.kind !== "REVIEW") return setDeal("NO_MATCH", "Not matched: comparisons and guides cover several products; offers appear on each product's own review");
+  const productEntityId = await primaryProductId(reviewId);
+  if (!productEntityId) return setDeal("UNAVAILABLE", "commerce data comes from the commerce engine; this review has no primary product yet");
+  const fresh = (await freshOffersForProduct(productEntityId)).filter((o) => o.price != null);
+  if (fresh.length) return setDeal("MATCHED", `${fresh.length} fresh commerce offer(s) observed within ${config.commerce.priceMaxAgeHours()}h`, fresh.length);
+  const any = await db.commerceOffer.count({ where: { product: { productEntityId } } });
+  if (any) return setDeal("STALE", `commerce data comes from the commerce engine; no offer observed within ${config.commerce.priceMaxAgeHours()}h`);
+  return setDeal("UNAVAILABLE", "commerce data comes from the commerce engine; no offer observed for this product yet");
 }

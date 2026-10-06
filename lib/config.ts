@@ -76,59 +76,18 @@ export const config = {
     lowConfidenceThreshold: () => num("ENTITY_LOW_CONFIDENCE_THRESHOLD", 0.6, 0, 1),
   },
 
-  sovrn: {
-    /** Price-comparison URL. "{siteKey}" is filled from SOVRN_SITE_KEY, so a key change needs one variable. */
-    apiUrl: () => {
-      const url = str("SOVRN_API_URL");
-      // The guarded public key: a site key equal to the secret never goes into a URL.
-      const raw = str("SOVRN_SITE_KEY");
-      const site = raw && raw !== str("SOVRN_API_KEY") ? raw : undefined;
-      return url && url.includes("{siteKey}") ? (site ? url.replace("{siteKey}", encodeURIComponent(site)) : undefined) : url;
-    },
-    apiKey: () => str("SOVRN_API_KEY"),
-    authScheme: () => str("SOVRN_AUTH_SCHEME") ?? "secret",
-    queryParam: () => str("SOVRN_QUERY_PARAM") ?? "search-keywords",
-    /** Load the Sovrn Commerce (VigLink) script on public pages. Off unless explicitly enabled. */
-    commerceScript: () => bool("SOVRN_COMMERCE_SCRIPT", false),
-    /** Sovrn's own approval state for this site, copied from the Sovrn dashboard by the owner. Never inferred. */
-    siteStatus: (): "PENDING" | "APPROVED" | "DENIED" | "UNKNOWN" => {
-      const v = (str("SOVRN_SITE_STATUS") ?? "").toUpperCase();
-      return v === "PENDING" || v === "APPROVED" || v === "DENIED" ? v : "UNKNOWN";
-    },
-    /**
-     * PUBLIC site key (goes into browser script and redirect links). Returns nothing if it is
-     * the same value as the secret API key: a mixed-up variable must never leak the secret.
-     */
-    siteKey: () => {
-      const site = str("SOVRN_SITE_KEY");
-      return site && site === str("SOVRN_API_KEY") ? undefined : site;
-    },
-    /** True when SOVRN_SITE_KEY holds the secret key (reported by go-live checks and health). */
-    siteKeyIsSecret: () => Boolean(str("SOVRN_SITE_KEY") && str("SOVRN_SITE_KEY") === str("SOVRN_API_KEY")),
-    linkWrapperUrl: () => str("SOVRN_LINK_WRAPPER_URL") ?? "https://redirect.viglink.com",
-    /** Campaigns API (account → campaigns, with Sovrn's own approvalStatus). Auth: `secret <SOVRN_API_KEY>`. */
-    campaignsUrl: () => str("SOVRN_CAMPAIGNS_URL") ?? "https://rest.viglink.com/api/account/campaigns",
-    /** Link Check API: is a merchant URL monetisable for this site (public site key, no secret). */
-    linkCheckUrl: () => str("SOVRN_LINK_CHECK_URL") ?? "https://api.viglink.com/api/link/",
-    /** Skip link wrapping for merchants Sovrn reports as not affiliatable (default on). */
-    linkCheckEnabled: () => bool("SOVRN_LINK_CHECK_ENABLED", true),
-    /** Product Promo Codes API (needs separate registration with Sovrn Support). */
-    couponsUrl: () => str("SOVRN_COUPONS_URL") ?? "https://viglink.io/coupons/product",
-    /** Off unless enabled: the coupon API needs its own Sovrn registration. */
-    couponsEnabled: () => bool("SOVRN_COUPONS_ENABLED", false),
-    /** Unverified codes are not shown unless explicitly allowed. */
-    couponsIncludeUnverified: () => bool("SOVRN_COUPONS_INCLUDE_UNVERIFIED", false),
-    /** A code is displayed only while its last Sovrn verification is at most this many days old. */
-    couponMaxAgeDays: () => num("SOVRN_COUPON_MAX_AGE_DAYS", 7, 1, 60),
-    timeoutMs: () => num("SOVRN_TIMEOUT_MS", 12000, 1000, 60000),
-    cacheTtlMinutes: () => num("SOVRN_CACHE_TTL_MINUTES", 360, 5, 7 * 24 * 60),
-    minScore: () => num("SOVRN_MIN_MATCH_SCORE", 0.55, 0, 1),
-    alternates: () => num("SOVRN_ALTERNATE_OFFERS", 2, 0, 5),
-    trustedMerchants: () =>
-      (str("SOVRN_TRUSTED_MERCHANTS") ?? "amazon,best buy,walmart,target,newegg,b&h,adorama,apple,samsung,dell,lenovo,hp,microsoft")
-        .split(",")
-        .map((m) => m.trim().toLowerCase())
-        .filter(Boolean),
+  /** Commerce engine data shown publicly (prices, offers). */
+  commerce: {
+    /** A stored price is shown only while its observation is at most this many hours old. */
+    priceMaxAgeHours: () => num("PRODUCT_PRICE_MAX_AGE_HOURS", 48, 1, 24 * 30),
+  },
+
+  /**
+   * Affiliate provider for retailer links (lib/affiliate/provider.ts). Only "none" is implemented:
+   * links stay plain retailer URLs and no tracking parameter is ever added.
+   */
+  affiliate: {
+    provider: () => (str("AFFILIATE_PROVIDER") ?? "none").toLowerCase(),
   },
 
   links: {
@@ -203,8 +162,6 @@ export function integrationStatus() {
     contentApi: state(Boolean(config.contentApi.url())),
     apify: state(Boolean(config.apify.token())),
     aiGuides: state(Boolean(config.aiGuides.url() && config.aiGuides.key())),
-    sovrn: state(Boolean(config.sovrn.apiUrl() && config.sovrn.apiKey())),
-    sovrnLinkWrapper: state(Boolean(config.sovrn.siteKey())),
     imageProvider: state(Boolean(config.images.enrichmentUrl() || config.images.pexelsKey())),
     imageCdn: state(Boolean(config.images.cdnTemplate())),
     gsc: state(Boolean(config.gsc.siteUrl() && config.gsc.serviceAccountJson())),

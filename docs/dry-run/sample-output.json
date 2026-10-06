@@ -10,8 +10,6 @@
     "TAXONOMY",
     "IMAGE_ENRICHMENT",
     "OFFER_MATCHING",
-    "AFFILIATE_LINK",
-    "LINK_VERIFICATION",
     "PAGE_RENDER",
     "PUBLISH"
   ],
@@ -20,73 +18,73 @@
       "item": "s-001",
       "status": "QUEUED",
       "category": "laptops (0.99)",
-      "deal": "sv-mba-2"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-002",
       "status": "QUEUED",
-      "category": "laptops (0.99)",
-      "deal": "sv-xps-1"
+      "category": "laptops (0.98)",
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-003",
       "status": "QUEUED",
       "category": "laptops (0.97)",
-      "deal": "sv-x1-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-004",
       "status": "QUEUED",
       "category": "phones (0.99)",
-      "deal": "sv-px-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-005",
       "status": "QUEUED",
       "category": "phones (0.99)",
-      "deal": "sv-s26-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-006",
       "status": "QUEUED",
       "category": "ai-tools (0.99)",
-      "deal": "NO_MATCH"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-007",
       "status": "QUEUED",
       "category": "ai-tools (0.99)",
-      "deal": "NO_MATCH"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-008",
       "status": "QUEUED",
       "category": "developer-software (0.99)",
-      "deal": "NO_MATCH"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-009",
       "status": "QUEUED",
       "category": "developer-software (0.92)",
-      "deal": "NO_MATCH"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-010",
       "status": "QUEUED",
       "category": "accessories (0.99)",
-      "deal": "sv-mx4-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-011",
       "status": "QUEUED",
       "category": "accessories (0.94)",
-      "deal": "sv-ank-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-012",
       "status": "QUEUED",
       "category": "audio (0.99)",
-      "deal": "sv-sony-1"
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "s-013-dup",
@@ -95,9 +93,9 @@
     },
     {
       "item": "s-014",
-      "status": "NEEDS_REVIEW",
-      "category": "accessories (0.82)",
-      "deal": "NO_MATCH"
+      "status": "QUEUED",
+      "category": "accessories (0.7)",
+      "offers": "SKIPPED_DRY_RUN"
     },
     {
       "item": "#14",
@@ -150,7 +148,8 @@
             "imageAttribution": "Sample Publisher",
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -223,7 +222,34 @@
               "accessories": 2.5,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "laptops",
@@ -260,131 +286,16 @@
           "licenseEvidence": "Sample press image licence (fixture)"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Apple MacBook Air 13 (M4)",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-mba-2",
-              "title": "Apple MacBook Air 13 M4 Laptop - Midnight",
-              "merchant": "Amazon",
-              "price": 949,
-              "viable": true,
-              "score": 0.925,
-              "breakdown": {
-                "product": 1,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.925,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            },
-            {
-              "offerId": "sv-mba-1",
-              "title": "Apple MacBook Air 13-inch M4 16GB 256GB Laptop",
-              "merchant": "Best Buy",
-              "price": 999,
-              "viable": true,
-              "score": 0.925,
-              "breakdown": {
-                "product": 1,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.925,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            },
-            {
-              "offerId": "sv-mba-case",
-              "title": "MacBook Air 13 Hard Shell Case",
-              "merchant": "Amazon",
-              "price": 19.99,
-              "viable": false,
-              "score": 0.64,
-              "breakdown": {
-                "product": 0.771,
-                "brand": 0.3,
-                "model": 0.5,
-                "category": 0,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.64,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": [
-                  "offer looks like an accessory/replacement, not the reviewed product"
-                ]
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-mba-2 from Amazon: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; beat sv-mba-1 (0.925)"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-mba-2",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-mba-2",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-mba-2",
-              "method": "PROVIDER_DEEPLINK"
-            },
-            {
-              "offerId": "sv-mba-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-mba-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-mba-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 2
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-001",
+            "kind": "REVIEW",
             "slug": "apple-macbook-air-13-m4-review-the-thin-and-light-laptop-to-beat",
             "canonicalPath": "/review/apple-macbook-air-13-m4-review-the-thin-and-light-laptop-to-beat",
             "title": "Apple MacBook Air 13 (M4) review: the thin-and-light laptop to beat",
@@ -420,13 +331,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/laptops.svg",
-              "alt": "Laptops placeholder illustration",
+              "alt": "Laptops illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -450,8 +365,13 @@
                 "value": "Productivity"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-001",
@@ -461,7 +381,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -510,7 +430,8 @@
             "modelNumber": "9440",
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -584,16 +505,43 @@
               "accessories": 3,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 3.5
             },
             "category": {
               "slug": "laptops",
-              "confidence": 0.99,
-              "reason": "score 73.5 vs accessories 3; source category \"laptops\"; productName:\"xps\"(+12), title:\"laptop\"(+9), deviceType:\"laptop\"(+9), title:\"xps\"(+9)",
+              "confidence": 0.98,
+              "reason": "score 73.5 vs creative-software 3.5; source category \"laptops\"; productName:\"xps\"(+12), title:\"laptop\"(+9), deviceType:\"laptop\"(+9), title:\"xps\"(+9)",
               "source": "SOURCE_FIELD",
               "runnerUp": {
-                "slug": "accessories",
-                "score": 3
+                "slug": "creative-software",
+                "score": 3.5
               }
             },
             "priceTier": {
@@ -612,66 +560,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Dell XPS 14 9440",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-xps-1",
-              "title": "Dell XPS 14 9440 Laptop OLED Intel Core Ultra",
-              "merchant": "Dell",
-              "price": 1699,
-              "viable": true,
-              "score": 0.977,
-              "breakdown": {
-                "product": 0.933,
-                "brand": 1,
-                "model": 1,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.977,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-xps-1 from Dell: score 0.977, product 0.933, brand 1, model 1, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-xps-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-xps-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-xps-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-002",
+            "kind": "REVIEW",
             "slug": "dell-xps-14-review-a-premium-windows-laptop-for-creators",
             "canonicalPath": "/review/dell-xps-14-review-a-premium-windows-laptop-for-creators",
             "title": "Dell XPS 14 review — a premium Windows laptop for creators",
@@ -704,13 +602,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/laptops.svg",
-              "alt": "Laptops placeholder illustration",
+              "alt": "Laptops illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -738,8 +640,13 @@
                 "value": "Creator"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-002",
@@ -749,7 +656,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -792,7 +699,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -856,7 +764,34 @@
               "accessories": 6,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "laptops",
@@ -884,103 +819,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Lenovo ThinkPad X1 Carbon Gen 13",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-x1-1",
-              "title": "Lenovo ThinkPad X1 Carbon Gen 13 14\" Business Laptop",
-              "merchant": "Lenovo",
-              "price": 1849,
-              "viable": true,
-              "score": 0.925,
-              "breakdown": {
-                "product": 1,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.925,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            },
-            {
-              "offerId": "sv-x1-2",
-              "title": "ThinkPad X1 Carbon Gen 13 Laptop",
-              "merchant": "Newegg",
-              "price": 1799,
-              "viable": true,
-              "score": 0.72,
-              "breakdown": {
-                "product": 1,
-                "brand": 0.3,
-                "model": 0.5,
-                "category": 1,
-                "availability": 0,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.72,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": [
-                  "offer is out of stock"
-                ]
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-x1-1 from Lenovo: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; beat sv-x1-2 (0.72)"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-x1-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-x1-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-x1-1",
-              "method": "PROVIDER_DEEPLINK"
-            },
-            {
-              "offerId": "sv-x1-2",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-x1-2",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-x1-2",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 2
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-003",
+            "kind": "REVIEW",
             "slug": "lenovo-thinkpad-x1-carbon-gen-13-review",
             "canonicalPath": "/review/lenovo-thinkpad-x1-carbon-gen-13-review",
             "title": "Lenovo ThinkPad X1 Carbon Gen 13 review",
@@ -1008,13 +856,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/laptops.svg",
-              "alt": "Laptops placeholder illustration",
+              "alt": "Laptops illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -1038,8 +890,13 @@
                 "value": "Business"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-003",
@@ -1049,7 +906,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -1098,7 +955,8 @@
             "imageUrl": "https://images.sample.example/image/s-004.png",
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -1163,7 +1021,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "phones",
@@ -1196,96 +1081,16 @@
           "licenseEvidence": "none (would be LICENSE_UNVERIFIED)"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Google Pixel 10",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-px-1",
-              "title": "Google Pixel 10 128GB Unlocked Smartphone",
-              "merchant": "Best Buy",
-              "price": 799,
-              "viable": true,
-              "score": 0.902,
-              "breakdown": {
-                "product": 0.933,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.902,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            },
-            {
-              "offerId": "sv-px-case",
-              "title": "Pixel 10 Clear Phone Case",
-              "merchant": "Amazon",
-              "price": 14.99,
-              "viable": false,
-              "score": 0.706,
-              "breakdown": {
-                "product": 0.96,
-                "brand": 0.3,
-                "model": 0.5,
-                "category": 0,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.706,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": [
-                  "offer looks like an accessory/replacement, not the reviewed product"
-                ]
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-px-1 from Best Buy: score 0.902, product 0.933, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-px-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-px-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-px-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-004",
+            "kind": "REVIEW",
             "slug": "google-pixel-10-review-the-best-android-camera-phone",
             "canonicalPath": "/review/google-pixel-10-review-the-best-android-camera-phone",
             "title": "Google Pixel 10 review: the best Android camera phone",
@@ -1316,13 +1121,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/phones.svg",
-              "alt": "Phones placeholder illustration",
+              "alt": "Phones illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -1342,8 +1151,13 @@
                 "value": "Android"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-004",
@@ -1353,7 +1167,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -1396,7 +1210,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -1458,7 +1273,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "phones",
@@ -1482,66 +1324,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Samsung Galaxy S26 Ultra",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-s26-1",
-              "title": "Samsung Galaxy S26 Ultra 256GB Unlocked",
-              "merchant": "Samsung",
-              "price": 1299,
-              "viable": true,
-              "score": 0.925,
-              "breakdown": {
-                "product": 1,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.925,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-s26-1 from Samsung: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-s26-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-s26-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-s26-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-005",
+            "kind": "REVIEW",
             "slug": "samsung-galaxy-s26-ultra-review",
             "canonicalPath": "/review/samsung-galaxy-s26-ultra-review",
             "title": "Samsung Galaxy S26 Ultra review",
@@ -1569,13 +1361,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/phones.svg",
-              "alt": "Phones placeholder illustration",
+              "alt": "Phones illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -1591,8 +1387,13 @@
                 "value": "smartphone"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-005",
@@ -1602,7 +1403,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -1645,7 +1446,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -1711,7 +1513,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "ai-tools",
@@ -1735,29 +1564,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "OpenAI ChatGPT Plus",
-          "matchedSovrnOfferSet": [],
-          "bestOffer": null
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SKIPPED (no selected offer)",
-          "record": "affiliate_links",
-          "affiliateLinkSet": []
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 0
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-006",
+            "kind": "REVIEW",
             "slug": "chatgpt-plus-review-is-the-ai-assistant-worth-paying-for",
             "canonicalPath": "/review/chatgpt-plus-review-is-the-ai-assistant-worth-paying-for",
             "title": "ChatGPT Plus review: is the AI assistant worth paying for?",
@@ -1785,13 +1601,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/ai-tools.svg",
-              "alt": "AI Tools placeholder illustration",
+              "alt": "AI Tools illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -1815,8 +1635,13 @@
                 "value": "Productivity"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-006",
@@ -1826,7 +1651,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -1869,7 +1694,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -1933,7 +1759,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "ai-tools",
@@ -1957,29 +1810,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Anthropic Claude Pro",
-          "matchedSovrnOfferSet": [],
-          "bestOffer": null
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SKIPPED (no selected offer)",
-          "record": "affiliate_links",
-          "affiliateLinkSet": []
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 0
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-007",
+            "kind": "REVIEW",
             "slug": "claude-pro-review-an-ai-assistant-for-long-documents",
             "canonicalPath": "/review/claude-pro-review-an-ai-assistant-for-long-documents",
             "title": "Claude Pro review — an AI assistant for long documents",
@@ -2007,13 +1847,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/ai-tools.svg",
-              "alt": "AI Tools placeholder illustration",
+              "alt": "AI Tools illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -2037,8 +1881,13 @@
                 "value": "Productivity"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-007",
@@ -2048,7 +1897,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -2091,7 +1940,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -2167,7 +2017,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "developer-software",
@@ -2191,29 +2068,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Microsoft Visual Studio Code",
-          "matchedSovrnOfferSet": [],
-          "bestOffer": null
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SKIPPED (no selected offer)",
-          "record": "affiliate_links",
-          "affiliateLinkSet": []
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 0
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-008",
+            "kind": "REVIEW",
             "slug": "visual-studio-code-review-the-default-code-editor-for-developers",
             "canonicalPath": "/review/visual-studio-code-review-the-default-code-editor-for-developers",
             "title": "Visual Studio Code review: the default code editor for developers",
@@ -2249,13 +2113,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/developer-software.svg",
-              "alt": "Developer Software placeholder illustration",
+              "alt": "Developer Software illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -2279,8 +2147,13 @@
                 "value": "Developer"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-008",
@@ -2290,7 +2163,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -2333,7 +2206,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -2390,7 +2264,34 @@
               "accessories": 0,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "developer-software",
@@ -2418,29 +2319,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Docker Desktop",
-          "matchedSovrnOfferSet": [],
-          "bestOffer": null
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SKIPPED (no selected offer)",
-          "record": "affiliate_links",
-          "affiliateLinkSet": []
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 0
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-009",
+            "kind": "REVIEW",
             "slug": "docker-desktop-review-containers-on-your-laptop",
             "canonicalPath": "/review/docker-desktop-review-containers-on-your-laptop",
             "title": "Docker Desktop review: containers on your laptop",
@@ -2463,13 +2351,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/developer-software.svg",
-              "alt": "Developer Software placeholder illustration",
+              "alt": "Developer Software illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -2493,8 +2385,13 @@
                 "value": "Developer"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-009",
@@ -2504,7 +2401,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -2551,7 +2448,8 @@
             "currency": "USD",
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -2617,7 +2515,34 @@
               "accessories": 40.5,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "accessories",
@@ -2647,66 +2572,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Logitech MX Master 4",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-mx4-1",
-              "title": "Logitech MX Master 4 Wireless Mouse",
-              "merchant": "Amazon",
-              "price": 119.99,
-              "viable": true,
-              "score": 0.925,
-              "breakdown": {
-                "product": 1,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.925,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-mx4-1 from Amazon: score 0.925, product 1, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-mx4-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-mx4-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-mx4-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-010",
+            "kind": "REVIEW",
             "slug": "logitech-mx-master-4-review-the-productivity-mouse",
             "canonicalPath": "/review/logitech-mx-master-4-review-the-productivity-mouse",
             "title": "Logitech MX Master 4 review: the productivity mouse",
@@ -2737,13 +2612,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/accessories.svg",
-              "alt": "Accessories placeholder illustration",
+              "alt": "Accessories illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -2767,8 +2646,13 @@
                 "value": "Productivity"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-010",
@@ -2778,7 +2662,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -2825,7 +2709,8 @@
             "currency": "USD",
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -2882,7 +2767,34 @@
               "accessories": 52.5,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "accessories",
@@ -2916,66 +2828,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Anker Prime 100W Charger",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-ank-1",
-              "title": "Anker Prime 100W GaN USB-C Charger 3-Port",
-              "merchant": "Amazon",
-              "price": 84.99,
-              "viable": true,
-              "score": 0.917,
-              "breakdown": {
-                "product": 0.978,
-                "brand": 1,
-                "model": 0.5,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.917,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-ank-1 from Amazon: score 0.917, product 0.978, brand 1, model 0.5, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-ank-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-ank-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-ank-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-011",
+            "kind": "REVIEW",
             "slug": "anker-prime-100w-charger-anker-prime-100w-usb-c-charger-review",
             "canonicalPath": "/review/anker-prime-100w-charger-anker-prime-100w-usb-c-charger-review",
             "title": "Anker Prime 100W Charger: Anker Prime 100W USB-C charger review",
@@ -3001,13 +2863,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/accessories.svg",
-              "alt": "Accessories placeholder illustration",
+              "alt": "Accessories illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -3023,8 +2889,13 @@
                 "value": "accessory"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-011",
@@ -3034,7 +2905,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -3077,7 +2948,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -3133,7 +3005,34 @@
               "accessories": 0,
               "audio": 62.5,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 0,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "audio",
@@ -3157,66 +3056,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "MATCHED",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Sony WH-1000XM6",
-          "matchedSovrnOfferSet": [
-            {
-              "offerId": "sv-sony-1",
-              "title": "Sony WH-1000XM6 Wireless Noise Canceling Headphones",
-              "merchant": "Best Buy",
-              "price": 449.99,
-              "viable": true,
-              "score": 0.99,
-              "breakdown": {
-                "product": 0.971,
-                "brand": 1,
-                "model": 1,
-                "category": 1,
-                "availability": 1,
-                "price": 1,
-                "merchant": 1,
-                "total": 0.99,
-                "weights": {
-                  "product": 0.35,
-                  "brand": 0.15,
-                  "model": 0.15,
-                  "category": 0.1,
-                  "availability": 0.1,
-                  "price": 0.1,
-                  "merchant": 0.05
-                },
-                "notes": []
-              }
-            }
-          ],
-          "bestOffer": "Selected sv-sony-1 from Best Buy: score 0.99, product 0.971, brand 1, model 1, category 1, availability 1, price 1, merchant 1; only viable offer"
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SUCCESS",
-          "record": "affiliate_links",
-          "affiliateLinkSet": [
-            {
-              "offerId": "sv-sony-1",
-              "ok": true,
-              "affiliateUrl": "https://sample-offers.example/aff/sv-sony-1",
-              "destinationUrl": "https://sample-offers.example/merchant/sv-sony-1",
-              "method": "PROVIDER_DEEPLINK"
-            }
-          ]
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 1
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-012",
+            "kind": "REVIEW",
             "slug": "sony-wh-1000xm6-review-noise-cancelling-headphones",
             "canonicalPath": "/review/sony-wh-1000xm6-review-noise-cancelling-headphones",
             "title": "Sony WH-1000XM6 review: noise cancelling headphones",
@@ -3239,13 +3088,17 @@
             "bodyParagraphs": [
               "3 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/audio.svg",
-              "alt": "Audio placeholder illustration",
+              "alt": "Audio illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -3265,8 +3118,13 @@
                 "value": "audio device"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-012",
@@ -3276,7 +3134,7 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
           "outcome": "READY (review status QUEUED)",
@@ -3319,7 +3177,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -3368,7 +3227,8 @@
             "tags": [],
             "imageLicenseVerified": false,
             "author": "Sample Author",
-            "publisher": "Sample Publisher"
+            "publisher": "Sample Publisher",
+            "contentKind": "REVIEW"
           }
         },
         "NORMALIZATION": {
@@ -3411,7 +3271,7 @@
           }
         },
         "TAXONOMY": {
-          "outcome": "SUCCESS (auto-accepted)",
+          "outcome": "SUCCESS (CATEGORY_LOW_CONFIDENCE → QA)",
           "record": "review_category_assignments",
           "categoryTagSet": {
             "intents": [],
@@ -3422,19 +3282,46 @@
               "tablets": 0,
               "ai-tools": 0,
               "developer-software": 0,
-              "accessories": 30,
+              "accessories": 24,
               "audio": 0,
               "wearables": 0,
-              "networking": 0
+              "networking": 0,
+              "desktops": 0,
+              "pc-components": 0,
+              "monitors": 8,
+              "printers": 0,
+              "smart-home": 0,
+              "cameras": 0,
+              "gaming": 0,
+              "tv-home-entertainment": 0,
+              "streaming-devices": 0,
+              "productivity-software": 0,
+              "drones-gadgets": 0,
+              "automotive-tech": 0,
+              "mattresses": 0,
+              "furniture": 0,
+              "kitchen-appliances": 0,
+              "home-appliances": 0,
+              "fitness-equipment": 0,
+              "personal-care": 0,
+              "outdoor-garden": 0,
+              "tools-diy": 0,
+              "baby-kids": 0,
+              "pet-supplies": 0,
+              "luggage-travel": 0,
+              "security-software": 0,
+              "business-software": 0,
+              "website-ecommerce": 0,
+              "creative-software": 0
             },
             "category": {
               "slug": "accessories",
-              "confidence": 0.82,
-              "reason": "score 30 vs laptops 6; summary:\"laptop stand\"(+6), summary:\"webcam\"(+6), summary:\"keyboard\"(+4.5), summary:\"monitor\"(+4.5)",
+              "confidence": 0.7,
+              "reason": "score 24 vs monitors 8; summary:\"laptop stand\"(+6), summary:\"webcam\"(+6), summary:\"keyboard\"(+4.5), body:\"laptop stand\"(+2)",
               "source": "RULES",
               "runnerUp": {
-                "slug": "laptops",
-                "score": 6
+                "slug": "monitors",
+                "score": 8
               }
             },
             "subcategory": {
@@ -3453,29 +3340,16 @@
           "licenseState": "OWNED_PLACEHOLDER"
         },
         "OFFER_MATCHING": {
-          "outcome": "NO_MATCH (SOVRN_NO_MATCH)",
-          "note": "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-          "record": "sovrn_offer_matches",
-          "queryKey": "Our favourite gear for working from home this autumn",
-          "matchedSovrnOfferSet": [],
-          "bestOffer": null
-        },
-        "AFFILIATE_LINK": {
-          "outcome": "SKIPPED (no selected offer)",
-          "record": "affiliate_links",
-          "affiliateLinkSet": []
-        },
-        "LINK_VERIFICATION": {
           "outcome": "SKIPPED_DRY_RUN",
-          "note": "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.",
-          "wouldVerify": 0
+          "note": "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured."
         },
         "PAGE_RENDER": {
           "outcome": "SUCCESS",
           "record": "page_render_models",
           "pageRenderModel": {
-            "version": 1,
+            "version": 9,
             "reviewId": "dry-s-014",
+            "kind": "REVIEW",
             "slug": "our-favourite-gear-for-working-from-home-this-autumn",
             "canonicalPath": "/review/our-favourite-gear-for-working-from-home-this-autumn",
             "title": "Our favourite gear for working from home this autumn",
@@ -3498,13 +3372,17 @@
             "bodyParagraphs": [
               "2 paragraph(s)"
             ],
+            "textRights": "FULL",
+            "highlights": null,
             "image": {
               "url": "/placeholders/accessories.svg",
-              "alt": "Accessories placeholder illustration",
+              "alt": "Accessories illustration",
               "width": 1200,
               "height": 675,
               "attribution": null,
-              "isFallback": true
+              "attributionUrl": null,
+              "isFallback": true,
+              "subject": null
             },
             "keyEntities": [
               {
@@ -3516,8 +3394,13 @@
                 "value": "accessory"
               }
             ],
+            "articleType": null,
+            "approval": null,
+            "products": [],
+            "productData": null,
             "rating": null,
-            "deals": [],
+            "offers": [],
+            "retailerLinks": [],
             "source": {
               "name": "Sample Publisher",
               "url": "https://reviews.example.com/s-014",
@@ -3527,14 +3410,12 @@
             "publishedAt": null,
             "updatedAt": "2026-09-25T00:00:00.000Z"
           },
-          "note": "deals is empty: no link is VERIFIED_OK in a dry-run"
+          "note": "offers is empty: commerce offers are read from the database, which a dry-run does not use"
         },
         "PUBLISH": {
-          "outcome": "BLOCKED_BY_QA (review status NEEDS_REVIEW)",
+          "outcome": "READY (review status QUEUED)",
           "record": "publish_jobs",
-          "qaFailures": [
-            "ENTITIES_NEED_REVIEW"
-          ]
+          "qaFailures": []
         }
       }
     },

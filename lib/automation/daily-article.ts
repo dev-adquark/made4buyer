@@ -27,7 +27,7 @@ import { allowed } from "./settings";
  *   Relevant topic → exact-duplicate check (same topic + type; no API call on a repeat) →
  *   Keyword-to-Blog → exact-title check (same title + type) → store → publish as returned
  *
- * No quality, SEO or approval gate. Sovrn/images are optional enrichment and never block.
+ * No quality, SEO or approval gate. Commerce offers and images are optional enrichment and never block.
  * Runs are idempotent (one post per slot per day), serialised by a job lock, and bounded by the
  * provider's daily quota and a per-slot attempt cap.
  */

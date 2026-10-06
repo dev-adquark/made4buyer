@@ -1,5 +1,5 @@
 import { adminAction, field } from "@/lib/admin/route";
-import { confirmEntities, resolveCategorySlug, resolveSubcategorySlug, setCategoryOverride, setDealOverride, setEntityOverrides } from "@/lib/admin/overrides";
+import { confirmEntities, resolveCategorySlug, resolveSubcategorySlug, setCategoryOverride, setEntityOverrides } from "@/lib/admin/overrides";
 import { addContentEntity, removeContentEntity, ROLES, setContentKind, updateProductEntity } from "@/lib/admin/content-entities";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/security/audit";
@@ -7,7 +7,6 @@ import { processReview } from "@/lib/pipeline/process";
 import { publishReview, refreshQueueStatus, rejectReview, restoreReview, unpublishReview } from "@/lib/pipeline/publish";
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
-import { verifyLinkRecord } from "@/lib/pipeline/stages";
 import { cleanText } from "@/lib/util/text";
 
 export const dynamic = "force-dynamic";
@@ -103,7 +102,7 @@ export const POST = adminAction("/admin/qa", async ({ form, ctx }) => {
       await setEntityOverrides(id, values, ctx, "ADMIN");
       await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
       await afterChange(id);
-      return { ok: "Entity overrides saved; categorization and Sovrn matching re-run" };
+      return { ok: "Entity overrides saved; categorization and commerce offers re-checked" };
     }
     case "entity-add": {
       const role = field(form, "role") as (typeof ROLES)[number];
@@ -153,28 +152,11 @@ export const POST = adminAction("/admin/qa", async ({ form, ctx }) => {
       await processReview(id, { from: "ENTITY_EXTRACTION", skipImage: true });
       return changed ? { ok: "Low-confidence entities confirmed" } : { error: "No low-confidence entities to confirm" };
     }
-    case "override-deal": {
-      const dealId = field(form, "dealId");
-      if (dealId && !/^[A-Za-z0-9._:\-/]{1,300}$/.test(dealId)) return { error: "Deal ID contains invalid characters" };
-      await setDealOverride(id, dealId || null, ctx, "ADMIN");
-      const summary = await processReview(id, { from: "OFFER_MATCHING", skipImage: true, bypassOfferCache: true });
-      await afterChange(id);
-      return { ok: `Deal override ${dealId ? "set" : "cleared"}; matching result: ${summary.dealStatus ?? "unknown"}` };
-    }
     case "reprocess": {
-      const summary = await processReview(id, { bypassOfferCache: true });
+      const summary = await processReview(id);
       await audit(ctx, { action: "review.reprocess", entityType: "normalized_review", entityId: id, metadata: summary });
       await afterChange(id);
-      return { ok: `Pipeline re-run: status ${summary.status}, deals ${summary.dealStatus ?? "n/a"}, ${summary.linksVerified} verified link(s)` };
-    }
-    case "verify-links": {
-      const links = await db.affiliateLink.findMany({ where: { normalizedReviewId: id, isActive: true } });
-      if (!links.length) return { error: "This review has no active affiliate links to verify" };
-      const results = await Promise.all(links.map((l) => verifyLinkRecord(l)));
-      const summary = results.map((r) => r.outcome.status);
-      await audit(ctx, { action: "links.verify", entityType: "normalized_review", entityId: id, metadata: { results: summary } });
-      await afterChange(id);
-      return { ok: `Checked ${links.length} link(s): ${summary.join(", ")}` };
+      return { ok: `Pipeline re-run: status ${summary.status}, commerce offers ${summary.dealStatus ?? "n/a"}` };
     }
     default:
       return { error: `Unknown action "${action}"` };

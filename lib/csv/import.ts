@@ -3,27 +3,25 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { audit, type AuditContext } from "@/lib/security/audit";
-import { findReviewByKey, resolveCategorySlug, resolveSubcategorySlug, setCategoryOverride, setDealOverride, setEntityOverrides } from "@/lib/admin/overrides";
+import { findReviewByKey, resolveCategorySlug, resolveSubcategorySlug, setCategoryOverride, setEntityOverrides } from "@/lib/admin/overrides";
 import { recordFailure, resolveFailures } from "@/lib/pipeline/failures";
 import { processReview, type ReviewStage } from "@/lib/pipeline/process";
-import { sovrnConfigured } from "@/lib/sovrn/client";
 import { overrideAssignment } from "@/lib/taxonomy/persist";
 import { parseCsv, toCsv } from "./parse";
 
 /**
  * Bulk CSV override import:
  *   upload → validate headers → create job → create queue rows (validated per row) →
- *   preview → process (apply overrides, audit, re-run taxonomy / Sovrn / links /
- *   verification) → published pages reflect changes on the next render.
+ *   preview → process (apply overrides, audit, re-run taxonomy and the commerce-offer check)
+ *   → published pages reflect changes on the next render.
  */
 
 export const REQUIRED_COLUMN = "normalized_review_key";
-export const OVERRIDE_COLUMNS = ["override_primary_category", "entity_brand_override", "entity_product_name_override", "sovrn_deal_id_override"] as const;
+export const OVERRIDE_COLUMNS = ["override_primary_category", "entity_brand_override", "entity_product_name_override"] as const;
 export const OPTIONAL_COLUMNS = ["override_subcategory", "entity_model_number_override", "entity_device_type_override"] as const;
 export const ALL_COLUMNS = [REQUIRED_COLUMN, ...OVERRIDE_COLUMNS, ...OPTIONAL_COLUMNS];
 
 const ACCEPTED_TYPES = new Set(["text/csv", "application/csv", "text/plain", "application/vnd.ms-excel", "application/octet-stream", ""]);
-const DEAL_ID = /^[A-Za-z0-9._:\-/]{1,300}$/;
 
 export type UploadValidation = { ok: true; header: string[]; rows: string[][] } | { ok: false; errors: string[] };
 
@@ -61,7 +59,6 @@ type RowInput = {
   subcategory?: string;
   brand?: string;
   productName?: string;
-  dealId?: string;
   modelNumber?: string;
   deviceType?: string;
 };
@@ -79,7 +76,6 @@ function readRow(header: string[], cells: string[], rowNumber: number): RowInput
     subcategory: get("override_subcategory"),
     brand: get("entity_brand_override"),
     productName: get("entity_product_name_override"),
-    dealId: get("sovrn_deal_id_override"),
     modelNumber: get("entity_model_number_override"),
     deviceType: get("entity_device_type_override"),
   };
@@ -111,7 +107,7 @@ export async function createImportJob(file: { name: string; size: number; type: 
     } else if (!r.key) {
       errorCode = "CSV_ROW_INVALID";
       errorReason = "normalized_review_key is empty";
-    } else if (!r.category && !r.subcategory && !r.brand && !r.productName && !r.dealId && !r.modelNumber && !r.deviceType) {
+    } else if (!r.category && !r.subcategory && !r.brand && !r.productName && !r.modelNumber && !r.deviceType) {
       errorCode = "CSV_ROW_INVALID";
       errorReason = "Row has no override values";
     } else {
@@ -141,10 +137,6 @@ export async function createImportJob(file: { name: string; size: number; type: 
             errorReason = `Unknown subcategory "${r.subcategory}" for category "${parent ?? "none"}"`;
           }
         }
-        if (!errorCode && r.dealId && !DEAL_ID.test(r.dealId)) {
-          errorCode = "CSV_ROW_INVALID";
-          errorReason = "sovrn_deal_id_override contains invalid characters";
-        }
         for (const [name, value, max] of [["entity_brand_override", r.brand, 80], ["entity_product_name_override", r.productName, 160], ["entity_model_number_override", r.modelNumber, 80], ["entity_device_type_override", r.deviceType, 80]] as const) {
           if (!errorCode && value && value.length > max) {
             errorCode = "CSV_ROW_INVALID";
@@ -161,7 +153,6 @@ export async function createImportJob(file: { name: string; size: number; type: 
       overridePrimaryCategory: categorySlug ?? r.category ?? null,
       entityBrandOverride: r.brand ?? null,
       entityProductNameOverride: r.productName ?? null,
-      sovrnDealIdOverride: r.dealId ?? null,
       extraOverrides: subcategorySlug || r.subcategory || r.modelNumber || r.deviceType ? { subcategory: subcategorySlug ?? r.subcategory, modelNumber: r.modelNumber, deviceType: r.deviceType } : undefined,
       processingStatus: errorCode ? "INVALID" : "PENDING",
       errorCode: errorCode ?? null,
@@ -192,7 +183,7 @@ async function applyItem(item: CsvImportItem, ctx: AuditContext): Promise<{ note
   const extra = (item.extraOverrides ?? {}) as { subcategory?: string; modelNumber?: string; deviceType?: string };
   let from: ReviewStage | undefined;
   const earliest = (stage: ReviewStage) => {
-    const order: ReviewStage[] = ["ENTITY_EXTRACTION", "TAXONOMY", "OFFER_MATCHING"];
+    const order: ReviewStage[] = ["ENTITY_EXTRACTION", "TAXONOMY"];
     if (!from || order.indexOf(stage) < order.indexOf(from)) from = stage;
   };
 
@@ -212,24 +203,7 @@ async function applyItem(item: CsvImportItem, ctx: AuditContext): Promise<{ note
     await overrideAssignment(reviewId, "SUBCATEGORY", extra.subcategory, ctx.actor, "CSV");
     earliest("TAXONOMY");
   }
-  let previousDeal: string | null | undefined;
-  if (item.sovrnDealIdOverride) {
-    previousDeal = await setDealOverride(reviewId, item.sovrnDealIdOverride, ctx, "CSV");
-    earliest("OFFER_MATCHING");
-  }
-
-  const summary = await processReview(reviewId, { from: from ?? "TAXONOMY", skipImage: true, bypassOfferCache: Boolean(item.sovrnDealIdOverride) });
-
-  if (item.sovrnDealIdOverride) {
-    if (!sovrnConfigured()) return { note: "Deal ID override stored; Sovrn matching BLOCKED_BY_ENVIRONMENT until credentials are configured" };
-    const best = await db.sovrnOfferMatch.findFirst({ where: { normalizedReviewId: reviewId, isBestOffer: true }, select: { offerId: true } });
-    if (best?.offerId !== item.sovrnDealIdOverride) {
-      // Invalid deal ID: revert so a working deal is not replaced by a missing one.
-      await setDealOverride(reviewId, previousDeal ?? null, ctx, "CSV");
-      await processReview(reviewId, { from: "OFFER_MATCHING", skipImage: true });
-      throw Object.assign(new Error(`Sovrn deal ID "${item.sovrnDealIdOverride}" was not returned by Sovrn for this product (${summary.dealStatus ?? "unknown"}); override reverted`), { code: "SOVRN_DEAL_ID_NOT_FOUND" });
-    }
-  }
+  await processReview(reviewId, { from: from ?? "TAXONOMY", skipImage: true });
   return {};
 }
 
@@ -246,7 +220,7 @@ export async function processImportJob(jobId: string, ctx: AuditContext, limit =
       await db.csvImportItem.update({ where: { id: item.id }, data: { processingStatus: "APPLIED", processedAt: new Date(), errorCode: null, errorReason: note ?? null } });
       await resolveFailures({ stage: "CSV_IMPORT", entityType: "csv_item", entityId: item.id });
     } catch (error) {
-      const code = (error as { code?: string }).code === "SOVRN_DEAL_ID_NOT_FOUND" ? "SOVRN_DEAL_ID_NOT_FOUND" : "CSV_APPLY_FAILED";
+      const code = "CSV_APPLY_FAILED" as const;
       const message = error instanceof Error ? error.message : String(error);
       await db.csvImportItem.update({ where: { id: item.id }, data: { processingStatus: "FAILED", processedAt: new Date(), errorCode: code, errorReason: message.slice(0, 1000), retryCount: { increment: 1 } } });
       await recordFailure({ stage: "CSV_IMPORT", code, message, entityType: "csv_item", entityId: item.id, normalizedReviewId: item.normalizedReviewId ?? undefined, retryable: false });

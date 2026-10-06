@@ -6,14 +6,15 @@ import Breadcrumbs, { breadcrumbJsonLd, type Crumb } from "@/components/breadcru
 import DealImpression from "@/components/deal-impression";
 import JsonLd from "@/components/json-ld";
 import { KindPill, kindNoun, ReviewGrid } from "@/components/review-card";
-import TrustLabel from "@/components/trust-label";
 import { ParallaxFigure, SectionNav } from "@/components/review-chrome";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { placeholderPath } from "@/lib/pipeline/images";
 import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { buildPageRenderModel, couponIsCurrent, RENDER_MODEL_VERSION, verifiedDeals, type PageRenderModel, type PublicDeal } from "@/lib/pipeline/render-model";
+import VerifiedCoupons from "@/components/verified-coupons";
+import { buildPageRenderModel, dedupeRetailerLinks, RENDER_MODEL_VERSION, type PageRenderModel } from "@/lib/pipeline/render-model";
+import { commerceBrandIdForReview, freshOffersForReview, offerIsFresh, type PublicOffer } from "@/lib/public/offers";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
 import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
 
@@ -50,7 +51,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]) {
+/** schema.org availability for a stored availability value; undefined when it is not stated. */
+function schemaAvailability(v: string | null): string | undefined {
+  const k = (v ?? "").toLowerCase().replace(/^https?:\/\/schema\.org\//, "").replace(/[\s_-]/g, "");
+  if (k === "instock") return "https://schema.org/InStock";
+  if (k === "outofstock" || k === "soldout") return "https://schema.org/OutOfStock";
+  if (k === "preorder") return "https://schema.org/PreOrder";
+  if (k === "backorder") return "https://schema.org/BackOrder";
+  return undefined;
+}
+
+function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb[]) {
   const site = config.siteUrl();
   const url = new URL(m.canonicalPath, site).toString();
   const publisher = { "@type": "Organization", name: "Made4Buyers", url: site };
@@ -89,9 +100,10 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
       ...(excerpt && m.source.url ? { isBasedOn: m.source.url, citation: { "@type": "CreativeWork", url: m.source.url, ...(m.source.author ? { author: { "@type": "Person", name: m.source.author } } : {}), publisher: { "@type": "Organization", name: m.source.name } } } : {}),
     });
   }
-  // Product + Offer only when a verified offer with a real price exists.
-  const priced = m.kind === "REVIEW" ? deals.find((d) => d.isBest && d.price !== null && d.currency) : undefined;
+  // Product + Offer only when a fresh observed price exists (no priceValidUntil: we never invent one).
+  const priced = m.kind === "REVIEW" ? offers.find((o) => o.price !== null && o.currency && offerIsFresh(o)) : undefined;
   if (priced) {
+    const availability = schemaAvailability(priced.availability);
     out.push({
       "@context": "https://schema.org",
       ...product,
@@ -99,9 +111,9 @@ function structuredData(m: PageRenderModel, deals: PublicDeal[], crumbs: Crumb[]
         "@type": "Offer",
         price: priced.price,
         priceCurrency: priced.currency,
-        url,
-        ...(priced.availability === "in_stock" ? { availability: "https://schema.org/InStock" } : priced.availability === "out_of_stock" ? { availability: "https://schema.org/OutOfStock" } : {}),
-        ...(priced.merchant ? { seller: { "@type": "Organization", name: priced.merchant } } : {}),
+        url: priced.url,
+        ...(availability ? { availability } : {}),
+        seller: { "@type": "Organization", name: priced.seller },
       },
     });
   }
@@ -124,14 +136,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   if (!page) notFound();
   const { review, model: m } = page;
   const isGuide = m.kind === "AI_GUIDE";
-  const [deals, related, brand, guidesRaw] = await Promise.all([verifiedDeals(review.id), relatedReviews(review, 3), brandPageEligible(review.brandSlug), m.category ? latestByKind("AI_GUIDE", 4, m.category.slug) : Promise.resolve([])]);
+  const [liveOffers, commerceBrandId, related, brand, guidesRaw] = await Promise.all([m.kind === "REVIEW" ? freshOffersForReview(review.id) : Promise.resolve([]), m.kind === "REVIEW" ? commerceBrandIdForReview(review.id, m.brand) : Promise.resolve(null), relatedReviews(review, 3), brandPageEligible(review.brandSlug), m.category ? latestByKind("AI_GUIDE", 4, m.category.slug) : Promise.resolve([])]);
   const guides = guidesRaw.filter((g) => g.id !== review.id).slice(0, 3);
   const crumbs: Crumb[] = [{ name: "Home", href: "/" }];
   if (m.category) crumbs.push({ name: m.category.name, href: `/category/${m.category.slug}` });
   if (m.category && m.subcategory) crumbs.push({ name: m.subcategory.name, href: `/category/${m.category.slug}?sub=${m.subcategory.slug}` });
   crumbs.push({ name: m.productName, href: m.canonicalPath });
-  const best = deals.find((d) => d.isBest) ?? deals[0];
-  const alternates = deals.filter((d) => d !== best);
+  // Live offers at request time; a price is shown only while its observation is fresh.
+  const offers = liveOffers.filter((o) => offerIsFresh(o));
+  const priced = offers.filter((o) => o.price !== null);
+  const best = priced[0] ?? null;
+  const retailerLinks = dedupeRetailerLinks(m.retailerLinks ?? [], offers);
   const published = m.publishedAt ? new Date(m.publishedAt) : null;
   const sourceDate = m.source.publishedAt ? new Date(m.source.publishedAt) : null;
   const fact = (label: string) => m.keyEntities.find((e) => e.label === label)?.value ?? null;
@@ -189,14 +204,14 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
     ...(m.products?.length ? [{ id: "products", label: m.kind === "COMPARISON" ? "Products compared" : "Product" }] : []),
     { id: "facts", label: "Key facts" },
     ...(considerations ? [{ id: "considerations", label: "Buying considerations" }] : []),
-    { id: "deal", label: best ? "Verified offer" : "Offer" },
+    { id: "deal", label: "Where to buy" },
     ...(related.length ? [{ id: "alternatives", label: "Alternatives" }] : []),
     ...(guides.length ? [{ id: "guides", label: "Guides" }] : []),
   ];
 
   return (
     <main style={themeStyle(m.category?.slug) as React.CSSProperties}>
-      {structuredData(m, deals, crumbs).map((d, i) => (
+      {structuredData(m, offers, crumbs).map((d, i) => (
         <JsonLd key={i} data={d} />
       ))}
       <div className="progress-bar" aria-hidden="true" />
@@ -208,14 +223,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               <div className="meta-row">
                 {m.category && <span className="cat-tag">{m.category.name}</span>}
                 <KindPill kind={m.kind} articleType={m.articleType} />
-                {best && <TrustLabel kind="verified" />}
               </div>
               <h1>{m.title}</h1>
               <p className="lede">{m.summary}</p>
               <div className="btnrow">
                 {best ? (
-                  <a className="btn primary" href="#deal" data-cursor="View deal">
-                    {money(best.price, best.currency) ? `See the verified offer, ${money(best.price, best.currency)}` : "See the verified offer"}
+                  <a className="btn primary" href="#deal" data-cursor="Prices">
+                    {`See prices, from ${money(best.price, best.currency)}`}
                   </a>
                 ) : null}
                 <Link className="btn" href={`/compare?ids=${review.id}`} data-cursor="Compare">
@@ -254,8 +268,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               <dd>{m.rating ? `${m.rating.value} / ${m.rating.scale}, by ${m.source.name}` : <span className="na">{isGuide ? "Guides are never rated" : "Not given by the source"}</span>}</dd>
             </div>
             <div>
-              <dt>Offer</dt>
-              <dd>{best ? `Verified ${dateline(best.verifiedAt)}` : <span className="na">No verified offer</span>}</dd>
+              <dt>Price</dt>
+              <dd>{best ? `${money(best.price, best.currency)} at ${best.seller}, checked ${dateline(best.observedAt)}` : <span className="na">Price currently unavailable</span>}</dd>
             </div>
           </dl>
         </div>
@@ -273,7 +287,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   <strong>
                     {m.kind === "COMPARISON" ? "Comparison" : m.kind === "BUYING_GUIDE" ? "Buying guide" : "Review"} from {m.source.name}.
                   </strong>
-                  {m.source.author ? `Written by ${m.source.author}. ` : ""}We summarise and file it for buyers, and add offers only after checking their links.
+                  {m.source.author ? `Written by ${m.source.author}. ` : ""}We summarise and file it for buyers, and show prices only while recently checked.
                 </div>
               </aside>
             )}
@@ -471,59 +485,51 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
         </article>
 
         <aside className="doc-aside" aria-label="Offer and product details">
-          <section id="deal" className={`panel${best ? " offer-panel" : ""}`} aria-labelledby="deal-heading">
-            <h2 id="deal-heading" className={best ? "visually-hidden" : undefined}>
-              {best ? "Verified offer" : "Offer"}
-            </h2>
-            {best ? (
-              <>
-                <DealImpression linkId={best.linkId} reviewId={review.id} categorySlug={m.category?.slug}>
-                  <div className="verified-head">Verified offer</div>
-                  {money(best.price, best.currency) ? <div className="price">{money(best.price, best.currency)}</div> : <div className="small" style={{ marginTop: 8 }}>Price shown at the retailer</div>}
-                  <div className="merchant">{best.merchant ?? "Retailer not reported"}</div>
-                  <div className="small muted">{availabilityLabel(best.availability)}</div>
-                  <a className="btn primary large" href={`/go/${best.linkId}`} rel="sponsored nofollow noopener" target="_blank">
-                    View deal<span className="visually-hidden"> for {m.productName} at {best.merchant ?? "the retailer"} (opens in a new tab)</span>
-                  </a>
-                </DealImpression>
-                <p className="small muted" style={{ margin: "12px 0 0" }}>
-                  Link checked <time dateTime={best.verifiedAt}>{shortDate(best.verifiedAt)}</time>. Prices and availability can change at the retailer.
-                </p>
-                {alternates.length > 0 && (
-                  <div style={{ marginTop: 14 }}>
-                    <h3 style={{ font: "700 15px var(--font-body)", margin: "0 0 4px" }}>Other verified offers</h3>
-                    {alternates.map((d) => (
-                      <DealImpression key={d.linkId} linkId={d.linkId} reviewId={review.id} categorySlug={m.category?.slug}>
-                        <div className="offer-alt">
-                          <div>
-                            <div className="small" style={{ fontWeight: 700 }}>
-                              {d.merchant ?? "Retailer not reported"}
-                            </div>
-                            <div className="small muted">{money(d.price, d.currency) ?? "Price at retailer"}</div>
+          <section id="deal" className="panel" aria-labelledby="deal-heading">
+            <h2 id="deal-heading">Where to buy</h2>
+            {offers.length > 0 ? (
+              <ul className="offer-list" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 10 }}>
+                {offers.map((o) => (
+                  <li key={o.id}>
+                    <DealImpression offerId={o.id} reviewId={review.id} categorySlug={m.category?.slug}>
+                      <div className="offer-alt">
+                        <div>
+                          <div className="small" style={{ fontWeight: 700 }}>
+                            {o.seller}
+                            {o.sellerType === "MANUFACTURER" && <span className="muted"> · official store</span>}
                           </div>
-                          <a className="btn small" href={`/go/${d.linkId}`} rel="sponsored nofollow noopener" target="_blank">
-                            View<span className="visually-hidden"> offer at {d.merchant ?? "the retailer"} (opens in a new tab)</span>
-                          </a>
+                          {o.price !== null ? (
+                            <div className="small">
+                              <strong>{money(o.price, o.currency)}</strong> at {o.seller} · checked <time dateTime={o.observedAt}>{shortDate(o.observedAt)}</time>
+                            </div>
+                          ) : (
+                            <div className="small muted">Price currently unavailable</div>
+                          )}
+                          {o.price !== null && o.availability && <div className="small muted">{availabilityLabel(o.availability)}</div>}
                         </div>
-                      </DealImpression>
-                    ))}
-                  </div>
-                )}
-              </>
+                        <a className="btn small" href={`/go/${o.id}`} rel={o.affiliated ? "sponsored nofollow noopener" : "nofollow noopener"} target="_blank">
+                          View<span className="visually-hidden"> {m.productName} at {o.seller} (opens in a new tab)</span>
+                        </a>
+                      </div>
+                    </DealImpression>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <div className="no-offer" role="status">
-                <strong>No verified offer currently available.</strong>
-                <p>We only show a deal after confirming its link reaches the retailer.</p>
+                <strong>Price currently unavailable.</strong>
+                <p>{m.kind === "REVIEW" ? "We show a price only while we have checked it recently at the maker or a retailer." : "This page covers several products; prices appear on each product’s own review."}</p>
               </div>
             )}
-            {/* Direct links (no /go redirect) built only from stored URLs: never a price, never a "deal". */}
-            {(m.retailerLinks ?? []).length > 0 && (
+            {offers.length > 0 && <p className="small muted" style={{ margin: "12px 0 0" }}>Prices and availability can change at the seller; always confirm the final price there.</p>}
+            {/* Direct links built only from stored URLs: never a price on their own. */}
+            {retailerLinks.length > 0 && (
               <div className="where-to-buy">
-                <h3>Where to buy</h3>
+                <h3>{offers.length ? "More places to look" : "Where to buy"}</h3>
                 <ul>
-                  {(m.retailerLinks ?? []).map((l) => (
+                  {retailerLinks.map((l) => (
                     <li key={l.url}>
-                      <a href={l.url} rel="sponsored nofollow noopener" target="_blank">
+                      <a href={l.url} rel="nofollow noopener" target="_blank">
                         {l.label}
                         <span className="visually-hidden"> (opens in a new tab)</span>
                       </a>
@@ -531,48 +537,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                     </li>
                   ))}
                 </ul>
-                <p className="small muted">Links go to the retailer or the maker&rsquo;s site. We may earn a commission if you buy.</p>
+                <p className="small muted">Links go to the retailer or the maker&rsquo;s site.</p>
               </div>
             )}
-            {(m.coupons ?? []).filter((c) => couponIsCurrent(c)).map((c) => (
-              <div key={c.id} className="coupon" style={{ marginTop: 14, borderTop: "1px solid var(--line, #ddd)", paddingTop: 12 }}>
-                <div className="verified-head">Verified coupon</div>
-                <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: "0.04em" }}>
-                  <code>{c.code}</code>
-                </div>
-                {c.description && <div className="small">{c.description}</div>}
-                {money(c.priceWithCode, c.currency) && (
-                  <div className="small">
-                    {money(c.priceWithCode, c.currency)} with code{money(c.originalPrice, c.currency) && c.originalPrice !== c.priceWithCode ? <> (was <s>{money(c.originalPrice, c.currency)}</s>)</> : null}
-                    {c.merchant ? ` at ${c.merchant}` : ""}
-                  </div>
-                )}
-                <p className="small muted" style={{ margin: "4px 0 8px" }}>
-                  Verified by Sovrn <time dateTime={c.verifiedAt}>{shortDate(c.verifiedAt)}</time>. Codes can stop working at any time.
-                </p>
-                <a className="btn small" href={`/go/coupon/${c.id}`} rel="sponsored nofollow noopener" target="_blank">
-                  Shop with code<span className="visually-hidden"> {c.code} (opens in a new tab)</span>
-                </a>
-              </div>
-            ))}
+            {m.kind === "REVIEW" && (commerceBrandId || m.brand) && <VerifiedCoupons brandId={commerceBrandId} merchant={commerceBrandId ? null : m.brand} />}
             <p className="disclosure">
-              Made4Buyers may earn a commission from qualifying purchases made through links on this page. <Link href="/disclosure">Affiliate disclosure</Link>
+              {offers.some((o) => o.affiliated) ? "Made4Buyers may earn a commission from purchases made through some links on this page." : "Links to sellers are plain links; we earn nothing from them."} <Link href="/disclosure">Affiliate disclosure</Link>
             </p>
           </section>
           <SponsoredSlot position="REVIEW_SIDEBAR" categorySlug={m.category?.slug} />
         </aside>
       </div>
-      {best && (
-        <aside className="sticky-offer" aria-label="Verified offer shortcut">
-          <div>
-            <div style={{ fontWeight: 800 }}>{money(best.price, best.currency) ?? "Verified offer"}</div>
-            <div className="small">{best.merchant ?? "Retailer not reported"}</div>
-          </div>
-          <a className="btn light" href={`/go/${best.linkId}`} rel="sponsored nofollow noopener" target="_blank">
-            View deal<span className="visually-hidden"> (opens in a new tab)</span>
-          </a>
-        </aside>
-      )}
     </main>
   );
 }

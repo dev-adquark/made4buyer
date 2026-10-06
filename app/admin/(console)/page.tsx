@@ -7,7 +7,6 @@ import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import { successMetrics, reviewsWithVerifiedDeal } from "@/lib/analytics/metrics";
 import { categoryName } from "@/lib/taxonomy/definitions";
-import SovrnStatusNotice from "@/components/sovrn-status-notice";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Overview" };
@@ -20,7 +19,7 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
     db.normalizedReview.groupBy({ by: ["status"], _count: { _all: true } }),
     db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
     reviewsWithVerifiedDeal({ status: "PUBLISHED" }),
-    db.affiliateLink.groupBy({ by: ["verificationStatus"], where: { isActive: true }, _count: { _all: true } }),
+    db.commerceOffer.groupBy({ by: ["status"], where: { product: { productEntityId: { not: null } } }, _count: { _all: true } }),
     db.imageAsset.count({ where: { isPrimary: true } }),
     db.imageAsset.count({ where: { isPrimary: true, isFallback: true } }),
     db.normalizedReview.groupBy({ by: ["categorySlug"], _count: { _all: true }, orderBy: { _count: { categorySlug: "desc" } } }),
@@ -37,7 +36,7 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
     db.automationSlot.groupBy({ by: ["status"], where: { updatedAt: { gte: week } }, _count: { _all: true } }),
     db.apifyRun.groupBy({ by: ["status"], where: { startedAt: { gte: day } }, _count: { _all: true } }),
     Promise.all([db.revalidationRun.count({ where: { startedAt: { gte: day }, status: { in: ["FAILED", "COMPLETED_WITH_ERRORS"] } } }), db.ingestionRun.count({ where: { startedAt: { gte: day }, status: "FAILED" } })]).then(([a, b]) => a + b),
-    db.normalizedReview.count({ where: { status: "PUBLISHED", coupons: { some: { isActive: true, verified: true } } } }),
+    db.commerceCoupon.count({ where: { status: "VERIFIED", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }),
     db.reviewSource.findMany({ where: { enabled: true }, select: { pausedUntil: true, consecutiveStale: true, consecutiveFailures: true } }),
   ]);
   const ktb = (st: string) => ktbWeek.find((r) => r.status === st)?._count._all ?? 0;
@@ -49,18 +48,15 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
   const reviews = (s: string) => reviewsByStatus.find((c) => c.status === s)?._count._all ?? 0;
   const totalContent = contentByStatus.reduce((n, c) => n + c._count._all, 0);
   const linksTotal = linkGroups.reduce((n, g) => n + g._count._all, 0);
-  const linksOk = linkGroups.find((g) => g.verificationStatus === "VERIFIED_OK")?._count._all ?? 0;
+  const linksOk = linkGroups.find((g) => g.status === "FRESH")?._count._all ?? 0;
   const integrations = integrationStatus();
 
   return (
     <>
       <h1>Overview</h1>
-      <SovrnStatusNotice />
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <div className="btnrow">
         <ActionForm action="/api/admin/jobs" fields={{ job: "ingest" }} label="Run ingestion now" returnTo="/admin" className="btn primary" disabledReason={integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured (BLOCKED_BY_ENVIRONMENT)" : undefined} />
-        <ActionForm action="/api/admin/jobs" fields={{ job: "verify-links" }} label="Verify due links" returnTo="/admin" />
-        <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin" disabledReason={integrations.sovrn === "READY" ? undefined : "Sovrn not configured"} />
         <Link className="btn" href="/admin/automation">
           Automation control centre
         </Link>
@@ -73,7 +69,7 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
         <Stat label="Keyword-to-Blog slots (7 d)" value={`${ktb("PUBLISHED")} published`} note={`${ktb("BLOCKED")} blocked, ${ktb("FAILED") + ktb("RETRYING")} failed/retrying`} />
         <Stat label="Apify runs (24 h)" value={apifyTotal} note={`${apifyFailed} failed`} />
         <Stat label="Failed job runs (24 h)" value={failedRuns} />
-        <Stat label="Coupon coverage" value={pct(published ? withCoupon / published : null)} note={`${withCoupon}/${published} published with a verified Sovrn code`} />
+        <Stat label="Verified brand codes" value={withCoupon} note="first-party promo codes from official brand sites, unexpired" />
         <Stat label="Sources" value={`${sources.length - pausedSources - degradedSources} healthy`} note={`${degradedSources} degraded, ${pausedSources} paused`} />
       </div>
       <div className="stats">
@@ -82,8 +78,8 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
         <Stat label="Held by a rule" value={reviews("NEEDS_REVIEW")} note="stale, undated or incomplete; rechecked automatically" />
         <Stat label="Failed items" value={content("FAILED")} />
         <Stat label="Duplicates" value={content("DUPLICATE")} />
-        <Stat label="Deal coverage" value={pct(published ? withDeal / published : null)} note={`${withDeal}/${published} published with verified deal`} />
-        <Stat label="Link health" value={pct(linksTotal ? linksOk / linksTotal : null)} note={`${linksOk}/${linksTotal} active links verified`} />
+        <Stat label="Price coverage" value={pct(published ? withDeal / published : null)} note={`${withDeal}/${published} published with a fresh commerce price`} />
+        <Stat label="Offer freshness" value={pct(linksTotal ? linksOk / linksTotal : null)} note={`${linksOk}/${linksTotal} matched commerce offers FRESH`} />
         <Stat label="Image coverage" value={pct(images ? (images - fallbackImages) / images : null)} note={`${fallbackImages} fallback placeholders`} />
       </div>
 
@@ -91,17 +87,17 @@ export default async function Overview({ searchParams }: { searchParams: SearchP
         <section className="chart-card" aria-labelledby="ch-coverage">
           <h2 id="ch-coverage">Coverage</h2>
           <p className="small muted">Share of published reviews / primary images.</p>
-          <Meter label="Verified deal coverage" value={published ? withDeal / published : null} note={`${withDeal} of ${published} published reviews have a verified offer (target ≥ 90%)`} />
+          <Meter label="Price coverage" value={published ? withDeal / published : null} note={`${withDeal} of ${published} published reviews have a fresh commerce price`} />
           <div style={{ height: 12 }} />
           <Meter label="Image coverage (non-fallback)" value={images ? (images - fallbackImages) / images : null} note={`${images - fallbackImages} of ${images} primary images are real product images`} />
         </section>
         <section className="chart-card" aria-labelledby="ch-links">
-          <h2 id="ch-links">Link health</h2>
-          <p className="small muted">Active affiliate links by verification status.</p>
+          <h2 id="ch-links">Commerce offers</h2>
+          <p className="small muted">Seller offers attached to a product, by status.</p>
           <BarList
-            label="Active links by status"
+            label="Commerce offers by status"
             data={linkGroups
-              .map((g) => ({ label: g.verificationStatus, value: g._count._all, tone: (g.verificationStatus === "VERIFIED_OK" ? "ok" : g.verificationStatus === "PENDING" ? "neutral" : ["TIMEOUT", "PROVIDER_ERROR"].includes(g.verificationStatus) ? "warn" : "error") as "ok" | "warn" | "error" | "neutral" }))
+              .map((g) => ({ label: g.status, value: g._count._all, tone: (g.status === "FRESH" ? "ok" : g.status === "STALE" ? "warn" : "neutral") as "ok" | "warn" | "error" | "neutral" }))
               .sort((a, b) => b.value - a.value)}
           />
         </section>

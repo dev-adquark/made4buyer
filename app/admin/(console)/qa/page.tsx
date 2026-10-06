@@ -32,7 +32,6 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
       include: {
         entities: { select: { lowConfidenceFields: true } },
         images: { where: { isPrimary: true }, select: { isFallback: true, licenseState: true }, take: 1 },
-        affiliateLinks: { where: { isActive: true }, select: { verificationStatus: true, isBest: true } },
       },
     }),
     db.normalizedReview.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -95,7 +94,7 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
               <th scope="col">Category</th>
               <th scope="col">Confidence</th>
               <th scope="col">QA</th>
-              <th scope="col">Deal / link</th>
+              <th scope="col">Price</th>
               <th scope="col">Image</th>
               <th scope="col">Status</th>
               <th scope="col">Actions</th>
@@ -104,7 +103,6 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
           <tbody>
             {rows.map((r) => {
               const failures = (r.qaFailures as Array<{ code: string; message: string }> | null) ?? [];
-              const best = r.affiliateLinks.find((l) => l.isBest);
               return (
                 <tr key={r.id}>
                   <td data-label="Review">
@@ -142,10 +140,8 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
                     ) : null}
                   </td>
                   <td data-label="QA">{failures.length ? <span className="small">{failures.map((f) => f.code).join(", ")}</span> : <Badge value="PASS" tone="ok" />}</td>
-                  <td data-label="Deal / link">
+                  <td data-label="Price">
                     <Badge value={r.dealStatus} />
-                    <br />
-                    <Badge value={best?.verificationStatus ?? "NO LINK"} />
                   </td>
                   <td data-label="Image">{r.images[0] ? <Badge value={r.images[0].isFallback ? "FALLBACK" : r.images[0].licenseState} /> : <Badge value="NONE" />}</td>
                   <td data-label="Status">

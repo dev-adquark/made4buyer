@@ -13,7 +13,7 @@ import SponsoredSlot from "@/components/sponsored-slot";
 import TrackOnce from "@/components/track-once";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { cardSelect, categoryCounts, facetCounts, latestByKind, trendingReviews, verifiedDealRows, LATEST_FIRST } from "@/lib/public/queries";
+import { cardSelect, categoryCounts, facetCounts, latestByKind, trendingReviews, freshDealRows, LATEST_FIRST } from "@/lib/public/queries";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
@@ -48,7 +48,7 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
   const filtered = FILTERS.some((f) => sp[f.key]) || Boolean(sp.q) || Boolean(sp.type) || (sp.page && sp.page !== "1");
   return {
     title: `${def.name} reviews`,
-    description: `${def.description} Buyer-focused reviews with verified offers.`,
+    description: `${def.description} Buyer-focused reviews with recently checked prices.`,
     alternates: { canonical: `/category/${slug}` },
     openGraph: { siteName: "Made4Buyers", type: "website", title: `${def.name} reviews`, description: def.description, url: `/category/${slug}` },
     // Empty or filtered listing pages are not indexed (avoids thin/duplicate pages).
@@ -86,7 +86,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
     facetCounts({ categorySlug: slug }),
     categoryCounts(),
     anyFilter ? Promise.resolve([]) : latestByKind(["AI_GUIDE", "BUYING_GUIDE"], 3, slug),
-    anyFilter ? Promise.resolve([]) : verifiedDealRows({ categorySlug: slug, take: 4 }),
+    anyFilter ? Promise.resolve([]) : freshDealRows({ categorySlug: slug, take: 4 }),
     anyFilter ? Promise.resolve([]) : trendingReviews(7, 30),
     // Products and services with published content in this category (product hubs).
     db.productEntity.findMany({
@@ -183,7 +183,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
             )}
             {deals.length > 0 && (
               <li>
-                <a href="#deals">Deals</a>
+                <a href="#deals">Prices</a>
               </li>
             )}
           </ul>
@@ -379,7 +379,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       {deals.length > 0 && (
         <section className="section" id="deals" aria-labelledby="cd-title">
           <div className="wrap">
-            <SectionHeader id="cd-title" label={`${deals.length} shown`} title={`Verified ${def.name.toLowerCase()} deals`} action={<Link className="arrow-link" href={`/deals?category=${slug}`}>All {def.name.toLowerCase()} deals</Link>} />
+            <SectionHeader id="cd-title" label={`${deals.length} shown`} title={`Current ${def.name.toLowerCase()} prices`} action={<Link className="arrow-link" href={`/deals?category=${slug}`}>All {def.name.toLowerCase()} prices</Link>} />
             <DealLedger rows={deals} />
           </div>
         </section>

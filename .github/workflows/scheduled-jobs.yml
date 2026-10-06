@@ -5,14 +5,14 @@ name: Scheduled jobs
 
 on:
   schedule:
-    - cron: "10 */6 * * *" # every 6 hours: offers + links
+    - cron: "10 */6 * * *" # every 6 hours: product data enrichment
     - cron: "40 * * * *" # hourly: ingestion + retries + publish cycle
   workflow_dispatch:
     inputs:
       job:
-        description: "Job to run (scrape-sources, collect-scrapes, ingest, verify-links, revalidate-offers, retry-failed, publish-cycle, cleanup-cache, detect-stale, enrich-images, reclassify-content, daily-article, inspect-index)"
+        description: "Job to run (scrape-sources, collect-scrapes, ingest, retry-failed, publish-cycle, cleanup-cache, detect-stale, enrich-images, reclassify-content, daily-article, inspect-index)"
         required: true
-        default: verify-links
+        default: retry-failed
 
 jobs:
   run:
@@ -29,7 +29,7 @@ jobs:
             echo "SITE_URL / CRON_SECRET secrets not set — skipping."; exit 0
           fi
           if [ -n "$MANUAL_JOB" ]; then JOBS="$MANUAL_JOB"
-          elif [ "$SCHEDULE" = "10 */6 * * *" ]; then JOBS="revalidate-offers verify-links"
+          elif [ "$SCHEDULE" = "10 */6 * * *" ]; then JOBS="enrich-products commerce-collect"
           else JOBS="scrape-sources collect-scrapes ingest retry-failed publish-cycle daily-article"; fi
           status=0
           for job in $JOBS; do

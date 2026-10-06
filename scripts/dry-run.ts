@@ -6,8 +6,8 @@
  *   npm run pipeline:dry-run                       # fixtures/sample-content.json
  *   npm run pipeline:dry-run -- path/to/items.json # your own Content API sample
  *
- * Offer matching uses fixtures/sample-sovrn-offers.json (SAMPLE, not real offers). Image
- * probing and link verification need the network and are reported as SKIPPED_DRY_RUN.
+ * Offers come from the commerce engine's stored observations (database), so OFFER_MATCHING is
+ * reported as SKIPPED_DRY_RUN; image probing needs the network and is skipped too.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -16,17 +16,13 @@ import { extractEntities, lowConfidenceFields } from "@/lib/pipeline/entities";
 import { normalizeContent } from "@/lib/pipeline/normalize";
 import { composeRenderModel } from "@/lib/pipeline/render-model";
 import { validateContentItem } from "@/lib/pipeline/validate";
-import { generateAffiliateUrl } from "@/lib/sovrn/affiliate";
-import { buildQueryString, normalizeOffers, rankOffers, selectionReason } from "@/lib/sovrn/offers";
 import { classify } from "@/lib/taxonomy/classify";
 import { CATEGORIES, INTENTS, PLATFORMS, PRICE_TIERS } from "@/lib/taxonomy/definitions";
 import { slugify } from "@/lib/util/text";
 
-const SAMPLE_OFFER_BASE = "https://sample-offers.example";
 const file = process.argv[2] ?? "fixtures/sample-content.json";
 const raw = JSON.parse(readFileSync(file, "utf8")) as unknown;
 const items = Array.isArray(raw) ? raw : ((raw as { items?: unknown[] }).items ?? []);
-const sovrn = JSON.parse(readFileSync("fixtures/sample-sovrn-offers.json", "utf8")) as { responses: Record<string, unknown[]> };
 const tagName = (type: string, slug: string) =>
   (type === "CATEGORY" ? CATEGORIES : type === "SUBCATEGORY" ? CATEGORIES.flatMap((c) => c.subcategories) : type === "INTENT" ? INTENTS : type === "PLATFORM" ? PLATFORMS : PRICE_TIERS).find((t) => t.slug === slug)?.name ?? slug;
 
@@ -73,25 +69,7 @@ for (const [index, item] of items.entries()) {
     ? { outcome: "SKIPPED_DRY_RUN", wouldTry: ["CONTENT_API", "ENRICHMENT_SERVICE", "PLACEHOLDER"], contentApiImage: v.value.imageUrl, licenseEvidence: v.value.imageLicense ?? "none (would be LICENSE_UNVERIFIED)" }
     : { outcome: "FALLBACK", record: "image_assets", sourceType: "PLACEHOLDER", sourceUrl: `/placeholders/${c.category?.slug ?? "general"}.svg`, licenseState: "OWNED_PLACEHOLDER" };
 
-  const query = { productName: e.productName, brand: e.brand, deviceType: e.deviceType, categorySlug: c.category?.slug, modelNumber: e.modelNumber };
-  const queryKey = buildQueryString(query);
-  const sample = Object.entries(sovrn.responses).find(([k]) => k.toLowerCase() === queryKey.toLowerCase())?.[1];
-  const offers = normalizeOffers(JSON.parse(JSON.stringify({ offers: sample ?? [] }).split("{BASE}").join(SAMPLE_OFFER_BASE)));
-  const ranked = rankOffers(query, offers, { minScore: config.sovrn.minScore(), trustedMerchants: config.sovrn.trustedMerchants() });
-  const viable = ranked.filter((r) => r.viable);
-  stages.OFFER_MATCHING = {
-    outcome: viable.length ? "MATCHED" : "NO_MATCH (SOVRN_NO_MATCH)",
-    note: "SAMPLE offers from fixtures/sample-sovrn-offers.json — not real Sovrn data",
-    record: "sovrn_offer_matches",
-    queryKey,
-    matchedSovrnOfferSet: ranked.map((r) => ({ offerId: r.offer.offerId, title: r.offer.title, merchant: r.offer.merchantName, price: r.offer.price, viable: r.viable, score: r.breakdown.total, breakdown: r.breakdown })),
-    bestOffer: viable[0] ? selectionReason(viable[0], viable[1]) : null,
-  };
-
-  const selected = viable.slice(0, 1 + config.sovrn.alternates());
-  const links = selected.map((s) => ({ offerId: s.offer.offerId, ...generateAffiliateUrl(s.offer, { wrapperUrl: config.sovrn.linkWrapperUrl(), siteKey: config.sovrn.siteKey() }) }));
-  stages.AFFILIATE_LINK = { outcome: links.length ? "SUCCESS" : "SKIPPED (no selected offer)", record: "affiliate_links", affiliateLinkSet: links };
-  stages.LINK_VERIFICATION = { outcome: "SKIPPED_DRY_RUN", note: "Requires the network; production follows the redirect chain through the SSRF-safe client and only VERIFIED_OK links are rendered.", wouldVerify: links.length };
+  stages.OFFER_MATCHING = { outcome: "SKIPPED_DRY_RUN", note: "Prices and seller links come from the commerce engine's stored observations (commerce_offers); no provider is queried and links stay plain unless an affiliate provider is configured." };
 
   const slug = n.slugBase;
   const model = composeRenderModel({
@@ -105,18 +83,18 @@ for (const [index, item] of items.entries()) {
       ...(c.priceTier ? [{ tagType: "PRICE_TIER", isPrimary: true, confidence: c.priceTier.confidence, categoryTag: { slug: c.priceTier.slug, name: tagName("PRICE_TIER", c.priceTier.slug) } }] : []),
     ],
     image: null,
-    deals: [],
+    offers: [],
   });
-  stages.PAGE_RENDER = { outcome: "SUCCESS", record: "page_render_models", pageRenderModel: { ...model, bodyParagraphs: [`${model.bodyParagraphs.length} paragraph(s)`] }, note: "deals is empty: no link is VERIFIED_OK in a dry-run" };
+  stages.PAGE_RENDER = { outcome: "SUCCESS", record: "page_render_models", pageRenderModel: { ...model, bodyParagraphs: [`${model.bodyParagraphs.length} paragraph(s)`] }, note: "offers is empty: commerce offers are read from the database, which a dry-run does not use" };
 
   // Same hard rules as evaluateQa: low category/entity confidence is information only.
   const qa = [!c.category && "NO_PRIMARY_CATEGORY"].filter(Boolean);
   stages.PUBLISH = { outcome: qa.length ? "BLOCKED_BY_QA (review status NEEDS_REVIEW)" : "READY (review status QUEUED)", record: "publish_jobs", qaFailures: qa };
   results.push({ input: { ...(item as object), body: "…" }, stages });
-  summary.push({ item: v.value.sourceId, status: qa.length ? "NEEDS_REVIEW" : "QUEUED", category: `${c.category?.slug ?? "-"} (${c.category?.confidence ?? 0})`, deal: viable[0]?.offer.offerId ?? "NO_MATCH" });
+  summary.push({ item: v.value.sourceId, status: qa.length ? "NEEDS_REVIEW" : "QUEUED", category: `${c.category?.slug ?? "-"} (${c.category?.confidence ?? 0})`, offers: "SKIPPED_DRY_RUN" });
 }
 
-const out = { generatedFrom: file, note: "Dry-run over SAMPLE data. No database, no network, no real offers.", stagesInOrder: ["CONTENT_FETCH", "VALIDATION", "NORMALIZATION", "DEDUPE", "ENTITY_EXTRACTION", "TAXONOMY", "IMAGE_ENRICHMENT", "OFFER_MATCHING", "AFFILIATE_LINK", "LINK_VERIFICATION", "PAGE_RENDER", "PUBLISH"], summary, results };
+const out = { generatedFrom: file, note: "Dry-run over SAMPLE data. No database, no network, no real offers.", stagesInOrder: ["CONTENT_FETCH", "VALIDATION", "NORMALIZATION", "DEDUPE", "ENTITY_EXTRACTION", "TAXONOMY", "IMAGE_ENRICHMENT", "OFFER_MATCHING", "PAGE_RENDER", "PUBLISH"], summary, results };
 mkdirSync(path.resolve("docs/dry-run"), { recursive: true });
 writeFileSync("docs/dry-run/sample-output.json", JSON.stringify(out, null, 2) + "\n");
 console.table(summary);

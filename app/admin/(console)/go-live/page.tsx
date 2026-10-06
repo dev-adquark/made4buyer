@@ -12,7 +12,7 @@ const STEPS = [
   "Run these checks. Every configured integration must be OK (EMPTY means the provider answered with nothing for that product).",
   "Publishing is automatic: fresh, QA-passing content goes live with no approval step. Pause it any time in Admin → Automation.",
   "Open a few recently published pages after the first runs.",
-  "Check Link health and Deals: every shown offer must be VERIFIED_OK.",
+  "Check Retailer links and Deals: prices are shown only while fresh, and links stay plain unless an affiliate provider is configured.",
   "Watch Admin → Automation for freshness, source health and the run timeline.",
 ];
 

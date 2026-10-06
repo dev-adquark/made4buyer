@@ -4,10 +4,10 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { track } from "./analytics";
 
 /**
- * Wraps a verified deal. Emits one deal_impression when at least half of it is visible —
+ * Wraps a priced seller offer. Emits one deal_impression when at least half of it is visible —
  * these are the "eligible deal impressions" used as the CTR denominator.
  */
-export default function DealImpression({ linkId, reviewId, categorySlug, children }: { linkId: string; reviewId: string; categorySlug?: string | null; children: ReactNode }) {
+export default function DealImpression({ offerId, reviewId, categorySlug, children }: { offerId: string; reviewId: string; categorySlug?: string | null; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -16,7 +16,7 @@ export default function DealImpression({ linkId, reviewId, categorySlug, childre
     const fire = () => {
       if (sent) return;
       sent = true;
-      track("deal_impression", { reviewId, categorySlug, metadata: { linkId } });
+      track("deal_impression", { reviewId, categorySlug, metadata: { offerId } });
     };
     if (typeof IntersectionObserver === "undefined") {
       fire();
@@ -33,6 +33,6 @@ export default function DealImpression({ linkId, reviewId, categorySlug, childre
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [linkId, reviewId, categorySlug]);
+  }, [offerId, reviewId, categorySlug]);
   return <div ref={ref}>{children}</div>;
 }

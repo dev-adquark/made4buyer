@@ -1,118 +1,57 @@
-import type { LinkVerificationStatus } from "@prisma/client";
 import Link from "next/link";
 import Flash from "@/components/flash";
-import { ActionForm, Badge, Stat, when } from "@/components/admin-ui";
+import { Badge, Stat, when } from "@/components/admin-ui";
+import { getAffiliateProvider } from "@/lib/affiliate/provider";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
+import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { freshSince } from "@/lib/public/offers";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Link health" };
+export const metadata = { title: "Retailer links" };
 
-const STATUSES: LinkVerificationStatus[] = ["VERIFIED_OK", "PENDING", "REDIRECT_MISMATCH", "FORBIDDEN", "BLOCKED", "UNAVAILABLE", "TIMEOUT", "INVALID", "PROVIDER_ERROR"];
+const STATUSES = ["FRESH", "STALE"] as const;
 
-function defaultRange() {
-  const now = new Date();
-  return { today: now.toISOString().slice(0, 10), weekAgo: new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10) };
-}
-
+/** Seller links stored by the commerce engine: plain retailer URLs unless an affiliate provider set one. */
 export default async function LinksPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
   const sp = await searchParams;
-  const status = STATUSES.includes(param(sp, "status") as LinkVerificationStatus) ? (param(sp, "status") as LinkVerificationStatus) : undefined;
-  const [counts, links, runs] = await Promise.all([
-    db.affiliateLink.groupBy({ by: ["verificationStatus"], where: { isActive: true }, _count: { _all: true } }),
-    db.affiliateLink.findMany({
-      where: { isActive: true, ...(status ? { verificationStatus: status } : {}) },
-      orderBy: [{ lastVerifiedAt: { sort: "desc", nulls: "first" } }],
+  const status = (STATUSES as readonly string[]).includes(param(sp, "status") ?? "") ? param(sp, "status") : undefined;
+  const since = freshSince();
+  const provider = getAffiliateProvider();
+  const [byStatus, byAffiliate, shownNow, offers] = await Promise.all([
+    db.commerceOffer.groupBy({ by: ["status"], _count: { _all: true } }),
+    db.commerceOffer.groupBy({ by: ["affiliateStatus"], _count: { _all: true } }),
+    db.commerceOffer.count({ where: { status: "FRESH", observedAt: { gte: since }, product: { productEntityId: { not: null } } } }),
+    db.commerceOffer.findMany({
+      where: status ? { status } : {},
+      orderBy: [{ observedAt: "desc" }],
       take: 100,
-      include: { review: { select: { id: true, productName: true, status: true } }, offerMatch: { select: { merchantName: true } } },
+      select: { id: true, seller: true, sellerType: true, destinationUrl: true, affiliateUrl: true, affiliateStatus: true, price: true, currency: true, status: true, observedAt: true, product: { select: { name: true, productEntityId: true } } },
     }),
-    db.revalidationRun.findMany({ where: { type: { in: ["LINK_VERIFICATION", "OFFER_REFRESH"] } }, orderBy: { startedAt: "desc" }, take: 10 }),
   ]);
-  const count = (s: string) => counts.find((c) => c.verificationStatus === s)?._count._all ?? 0;
-  const { today, weekAgo } = defaultRange();
+  const count = (s: string) => byStatus.find((c) => c.status === s)?._count._all ?? 0;
 
   return (
     <>
-      <h1>Link health</h1>
+      <h1>Retailer links</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
+      <p className="muted">
+        Seller links come from the commerce engine. Affiliate provider: <strong>{provider.name}</strong>
+        {provider.active ? " (links may carry provider-generated affiliate URLs)." : " — every link is the retailer’s own URL, with no tracking added."} A price is shown publicly only while observed within {config.commerce.priceMaxAgeHours()} hours.
+      </p>
       <div className="stats">
+        <Stat label="Shown now" value={shownNow} note="fresh, attached to a product" />
         {STATUSES.map((s) => (
           <Stat key={s} label={s} value={count(s)} />
         ))}
-      </div>
-      <section aria-labelledby="reval-h" className="card card-body">
-        <h2 id="reval-h" style={{ marginTop: 0 }}>
-          Revalidate by date range
-        </h2>
-        <p className="small muted">Selects reviews published in the range (or created in the range, if never published) and re-checks every active link, or re-queries Sovrn for their offers.</p>
-        <form action="/api/admin/revalidate" method="post" className="toolbar">
-          <input type="hidden" name="returnTo" value="/admin/links" />
-          <div className="field">
-            <label htmlFor="rv-start">From</label>
-            <input id="rv-start" name="start" type="date" defaultValue={weekAgo} max={today} />
-          </div>
-          <div className="field">
-            <label htmlFor="rv-end">To</label>
-            <input id="rv-end" name="end" type="date" defaultValue={today} max={today} />
-          </div>
-          <div className="field">
-            <label htmlFor="rv-type">What</label>
-            <select id="rv-type" name="type" defaultValue="links">
-              <option value="links">Affiliate link verification</option>
-              <option value="offers">Sovrn offer refresh (+ links)</option>
-            </select>
-          </div>
-          <button className="btn primary" type="submit">
-            Run revalidation
-          </button>
-        </form>
-        <ActionForm action="/api/admin/jobs" fields={{ job: "verify-links" }} label="Verify all due links" returnTo="/admin/links" />
-      </section>
-
-      <h2>Recent revalidation runs</h2>
-      <div className="table-wrap">
-        <table className="table responsive">
-          <thead>
-            <tr>
-              <th scope="col">Started</th>
-              <th scope="col">Type</th>
-              <th scope="col">Trigger</th>
-              <th scope="col">Range</th>
-              <th scope="col" className="num">Checked</th>
-              <th scope="col" className="num">OK</th>
-              <th scope="col" className="num">Failed</th>
-              <th scope="col">Reasons</th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id}>
-                <td data-label="Started">{when(r.startedAt)}</td>
-                <td data-label="Type">{r.type}</td>
-                <td data-label="Trigger">{r.trigger}</td>
-                <td data-label="Range" className="small">{r.rangeStart || r.rangeEnd ? `${when(r.rangeStart)} → ${when(r.rangeEnd)}` : "due items"}</td>
-                <td data-label="Checked" className="num">{r.checkedCount}</td>
-                <td data-label="OK" className="num">{r.successCount}</td>
-                <td data-label="Failed" className="num">{r.failureCount}</td>
-                <td data-label="Reasons" className="small">{r.reasonBreakdown ? Object.entries(r.reasonBreakdown as Record<string, number>).map(([k, v]) => `${k}: ${v}`).join(", ") : "—"}</td>
-                <td data-label="Status">
-                  <Badge value={r.status} />
-                </td>
-              </tr>
-            ))}
-            {!runs.length && (
-              <tr>
-                <td colSpan={9}>No revalidation runs yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {byAffiliate.map((a) => (
+          <Stat key={a.affiliateStatus} label={`Affiliate ${a.affiliateStatus}`} value={a._count._all} />
+        ))}
       </div>
 
-      <h2>Active links</h2>
-      <nav aria-label="Verification status filter">
+      <h2>Recent offers</h2>
+      <nav aria-label="Offer status filter">
         <ul className="chips">
           <li>
             <Link className="chip neutral" href="/admin/links" aria-current={!status ? "true" : undefined}>
@@ -132,35 +71,34 @@ export default async function LinksPage({ searchParams }: { searchParams: Search
         <table className="table responsive">
           <thead>
             <tr>
-              <th scope="col">Review</th>
-              <th scope="col">Merchant</th>
+              <th scope="col">Product</th>
+              <th scope="col">Seller</th>
               <th scope="col">Status</th>
-              <th scope="col">Reason</th>
-              <th scope="col">Last checked</th>
-              <th scope="col">Next check</th>
+              <th scope="col">Link</th>
+              <th scope="col">Observed</th>
             </tr>
           </thead>
           <tbody>
-            {links.map((l) => (
-              <tr key={l.id}>
-                <td data-label="Review">
-                  <Link href={`/admin/reviews/${l.review.id}`}>{l.review.productName}</Link> {l.isBest && <Badge value="BEST" tone="ok" />}
+            {offers.map((o) => (
+              <tr key={o.id}>
+                <td data-label="Product">
+                  {o.product.name} {!o.product.productEntityId && <Badge value="UNMATCHED" tone="warn" />}
                 </td>
-                <td data-label="Merchant">{l.offerMatch?.merchantName ?? "—"}</td>
+                <td data-label="Seller">
+                  {o.seller} <span className="small muted">({o.sellerType.toLowerCase()})</span>
+                </td>
                 <td data-label="Status">
-                  <Badge value={l.verificationStatus} />
+                  <Badge value={o.status} />
                 </td>
-                <td data-label="Reason" className="small">
-                  {l.httpStatus ? `HTTP ${l.httpStatus} · ` : ""}
-                  {l.verificationReason ?? "—"}
+                <td data-label="Link" className="small" style={{ wordBreak: "break-all" }}>
+                  {o.affiliateUrl ? <Badge value="AFFILIATED" tone="ok" /> : <Badge value="PLAIN" tone="neutral" />} {o.destinationUrl}
                 </td>
-                <td data-label="Last checked">{when(l.lastVerifiedAt)}</td>
-                <td data-label="Next check">{when(l.nextVerificationAt)}</td>
+                <td data-label="Observed">{when(o.observedAt)}</td>
               </tr>
             ))}
-            {!links.length && (
+            {!offers.length && (
               <tr>
-                <td colSpan={6}>No active links in this view.</td>
+                <td colSpan={5}>No commerce offers stored yet.</td>
               </tr>
             )}
           </tbody>

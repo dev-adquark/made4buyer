@@ -33,7 +33,8 @@ describe("publishing", () => {
     expect(after.status).toBe("PUBLISHED");
     expect(after.publishedAt).not.toBeNull();
     expect(after.renderModel?.model).toMatchObject({ slug: r.slug, canonicalPath: `/review/${r.slug}` });
-    expect((after.renderModel?.model as { deals: unknown[] }).deals.length).toBeGreaterThan(0);
+    // No commerce data in this suite: the model carries no offers (never an invented price).
+    expect((after.renderModel?.model as { offers: unknown[] }).offers).toEqual([]);
     expect(after.publishJobs).toEqual([expect.objectContaining({ action: "PUBLISH", status: "SUCCEEDED", actor: "admin@test" })]);
     expect(await db.auditLog.count({ where: { action: "review.publish", entityId: r.id } })).toBe(1);
     expect(await db.analyticsEvent.count({ where: { event: "publish", normalizedReviewId: r.id } })).toBe(1);

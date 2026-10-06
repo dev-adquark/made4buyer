@@ -1,0 +1,93 @@
+{
+  "_comment": "Third-party coupon sites, recorded so they are known and kept OFF. Coupons on Made4Buyers come only from brands' own official promotions pages (CommerceBrand.promoUrls). A row here is crawled only if an admin first records termsStatus APPROVED and then enables it. No start URLs are seeded; an admin adds them together with the written permission.",
+  "sources": [
+    {
+      "name": "RetailMeNot",
+      "slug": "retailmenot",
+      "kind": "COUPON_SITE",
+      "domain": "retailmenot.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Slickdeals",
+      "slug": "slickdeals",
+      "kind": "COUPON_SITE",
+      "domain": "slickdeals.net",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Coupons.com",
+      "slug": "coupons-com",
+      "kind": "COUPON_SITE",
+      "domain": "coupons.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Groupon Coupons",
+      "slug": "groupon",
+      "kind": "COUPON_SITE",
+      "domain": "groupon.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Honey",
+      "slug": "honey",
+      "kind": "COUPON_SITE",
+      "domain": "joinhoney.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Dealspotr",
+      "slug": "dealspotr",
+      "kind": "COUPON_SITE",
+      "domain": "dealspotr.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "CouponFollow",
+      "slug": "couponfollow",
+      "kind": "COUPON_SITE",
+      "domain": "couponfollow.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    },
+    {
+      "name": "Offers.com",
+      "slug": "offers-com",
+      "kind": "COUPON_SITE",
+      "domain": "offers.com",
+      "startUrls": [],
+      "urlPatterns": [],
+      "enabled": false,
+      "termsStatus": "UNREVIEWED",
+      "notes": "Terms of service generally prohibit automated collection; enable only after confirming permission"
+    }
+  ]
+}

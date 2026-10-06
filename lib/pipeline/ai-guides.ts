@@ -11,7 +11,7 @@ import { cleanText, sha256, stableStringify } from "@/lib/util/text";
  * The API writes a new article with an AI model; it is NOT a source of reviews. Generated
  * posts therefore enter the pipeline as kind AI_GUIDE: they are labelled as AI-assisted,
  * never given Review schema or ratings, never carry prices (deals still come only from
- * verified Sovrn offers), and are published automatically, exactly as returned.
+ * commerce-engine offers), and are published automatically, exactly as returned.
  */
 
 export const AI_GUIDE_SOURCE = "keyword-to-blog";

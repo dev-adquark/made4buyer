@@ -1,0 +1,1639 @@
+[
+  {
+    "name": "Apple",
+    "slug": "apple",
+    "officialDomain": "www.apple.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "phones",
+      "tablets",
+      "desktops",
+      "wearables",
+      "audio",
+      "accessories",
+      "streaming-devices"
+    ],
+    "discoveryUrls": [
+      "https://www.apple.com/shop/sitemap.xml",
+      "https://www.apple.com/autopush/sitemap/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Samsung",
+    "slug": "samsung",
+    "officialDomain": "www.samsung.com",
+    "market": "US",
+    "categories": [
+      "phones",
+      "tablets",
+      "tv-home-entertainment",
+      "monitors",
+      "home-appliances",
+      "kitchen-appliances",
+      "wearables",
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.samsung.com/us/sitemap.xml",
+      "https://www.samsung.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.samsung.com/us/offer/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 94 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Google Store",
+    "slug": "google-store",
+    "officialDomain": "store.google.com",
+    "market": "US",
+    "categories": [
+      "phones",
+      "wearables",
+      "smart-home",
+      "streaming-devices",
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://store.google.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Microsoft",
+    "slug": "microsoft",
+    "officialDomain": "www.microsoft.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "productivity-software",
+      "accessories",
+      "ai-tools",
+      "developer-software"
+    ],
+    "discoveryUrls": [
+      "https://www.microsoft.com/en-us/surface/surface.index.xml",
+      "https://www.microsoft.com/en-us/windows/windows-index.xml",
+      "https://www.microsoft.com/store/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 22 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Dell",
+    "slug": "dell",
+    "officialDomain": "www.dell.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "desktops",
+      "monitors",
+      "accessories"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 9 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin."
+  },
+  {
+    "name": "HP",
+    "slug": "hp",
+    "officialDomain": "www.hp.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "desktops",
+      "printers",
+      "monitors",
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.hp.com/sitemap-index-store-us-en.xml",
+      "https://www.hp.com/sitemap_index.xml",
+      "https://www.hp.com/sitemap",
+      "https://www.hp.com/sitemap-index-store-global-hreflang-non-pdp.xml",
+      "https://www.hp.com/sitemap-index-store-global-hreflang-pdp.xml",
+      "https://www.hp.com/sitemap-index-store-global-hreflang-tech-takes.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 86 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "ASUS",
+    "slug": "asus",
+    "officialDomain": "www.asus.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "desktops",
+      "pc-components",
+      "networking",
+      "monitors"
+    ],
+    "discoveryUrls": [
+      "https://www.asus.com/sitemap.xml",
+      "https://www.asus.com/business/sitemap.xml",
+      "https://www.asus.com/proart/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.asus.com/us/deals/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Razer",
+    "slug": "razer",
+    "officialDomain": "www.razer.com",
+    "market": "US",
+    "categories": [
+      "laptops",
+      "accessories",
+      "gaming",
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.razer.com/sitemap.xml",
+      "https://sitemap-xml.razer.com/pro-sitemaps-4237407.php?sn=sitemap1.xml",
+      "https://sitemap-xml.razer.com/pro-sitemaps-4237407.php?sn=sitemap2.xml",
+      "https://sitemap-xml.razer.com/pro-sitemaps-4237407.php?sn=sitemap3.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 6 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "LG",
+    "slug": "lg",
+    "officialDomain": "www.lg.com",
+    "market": "US",
+    "categories": [
+      "tv-home-entertainment",
+      "monitors",
+      "home-appliances",
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.lg.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "PlayStation Direct",
+    "slug": "playstation",
+    "officialDomain": "direct.playstation.com",
+    "market": "US",
+    "categories": [
+      "gaming"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "Nintendo",
+    "slug": "nintendo",
+    "officialDomain": "www.nintendo.com",
+    "market": "US",
+    "categories": [
+      "gaming"
+    ],
+    "discoveryUrls": [
+      "https://www.nintendo.com/us/store/sitemap.xml",
+      "https://www.nintendo.com/us/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.nintendo.com/us/store/sales-and-deals/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 49 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Xbox",
+    "slug": "xbox",
+    "officialDomain": "www.xbox.com",
+    "market": "US",
+    "categories": [
+      "gaming"
+    ],
+    "discoveryUrls": [
+      "https://www.xbox.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.xbox.com/en-US/promotions/sales/sales-and-specials"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Meta",
+    "slug": "meta",
+    "officialDomain": "www.meta.com",
+    "market": "US",
+    "categories": [
+      "gaming",
+      "wearables"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 30 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin."
+  },
+  {
+    "name": "Motorola",
+    "slug": "motorola",
+    "officialDomain": "www.motorola.com",
+    "market": "US",
+    "categories": [
+      "phones"
+    ],
+    "discoveryUrls": [
+      "https://www.motorola.com/us/en/sitemap.xml",
+      "https://www.motorola.com/us/es/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 51 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "OnePlus",
+    "slug": "oneplus",
+    "officialDomain": "www.oneplus.com",
+    "market": "US",
+    "categories": [
+      "phones",
+      "tablets",
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.oneplus.com/us/sitemap.xml",
+      "https://www.oneplus.com/us_es/sitemap.xml",
+      "https://www.oneplus.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 72 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Bose",
+    "slug": "bose",
+    "officialDomain": "www.bose.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.bose.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.bose.com/c/sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Sonos",
+    "slug": "sonos",
+    "officialDomain": "www.sonos.com",
+    "market": "US",
+    "categories": [
+      "audio",
+      "tv-home-entertainment"
+    ],
+    "discoveryUrls": [
+      "https://www.sonos.com/sitemap.xml",
+      "https://www.sonos.com/sonos-pro/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.sonos.com/en-us/shop/deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "JBL",
+    "slug": "jbl",
+    "officialDomain": "www.jbl.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.jbl.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Beats",
+    "slug": "beats",
+    "officialDomain": "www.beatsbydre.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.beatsbydre.com/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Sennheiser",
+    "slug": "sennheiser",
+    "officialDomain": "www.sennheiser-hearing.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.sennheiser-hearing.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Shure",
+    "slug": "shure",
+    "officialDomain": "www.shure.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [
+      "https://www.shure.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Audio-Technica",
+    "slug": "audio-technica",
+    "officialDomain": "www.audio-technica.com",
+    "market": "US",
+    "categories": [
+      "audio"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "Anker",
+    "slug": "anker",
+    "officialDomain": "www.anker.com",
+    "market": "US",
+    "categories": [
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.anker.com/server-sitemap-index-products.xml",
+      "https://www.anker.com/sitemap.xml",
+      "https://www.anker.com/server-sitemap-index-pages.xml",
+      "https://www.anker.com/server-sitemap-index-collections.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 10 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Belkin",
+    "slug": "belkin",
+    "officialDomain": "www.belkin.com",
+    "market": "US",
+    "categories": [
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.belkin.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Logitech",
+    "slug": "logitech",
+    "officialDomain": "www.logitech.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "gaming"
+    ],
+    "discoveryUrls": [
+      "https://www.logitech.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Corsair",
+    "slug": "corsair",
+    "officialDomain": "www.corsair.com",
+    "market": "US",
+    "categories": [
+      "pc-components",
+      "accessories",
+      "gaming"
+    ],
+    "discoveryUrls": [
+      "https://www.corsair.com/us-sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "SteelSeries",
+    "slug": "steelseries",
+    "officialDomain": "steelseries.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "gaming",
+      "audio"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "HyperX",
+    "slug": "hyperx",
+    "officialDomain": "hyperx.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "audio",
+      "gaming"
+    ],
+    "discoveryUrls": [
+      "https://hyperx.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Keychron",
+    "slug": "keychron",
+    "officialDomain": "www.keychron.com",
+    "market": "US",
+    "categories": [
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.keychron.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Elgato",
+    "slug": "elgato",
+    "officialDomain": "www.elgato.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "cameras"
+    ],
+    "discoveryUrls": [
+      "https://www.elgato.com/us-sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 18 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Western Digital",
+    "slug": "western-digital",
+    "officialDomain": "www.westerndigital.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "pc-components"
+    ],
+    "discoveryUrls": [
+      "https://www.westerndigital.com/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Seagate",
+    "slug": "seagate",
+    "officialDomain": "www.seagate.com",
+    "market": "US",
+    "categories": [
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.seagate.com/siteindex.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "SanDisk",
+    "slug": "sandisk",
+    "officialDomain": "www.sandisk.com",
+    "market": "US",
+    "categories": [
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.sandisk.com/sitemap-index.xml",
+      "https://www.sandisk.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Kingston",
+    "slug": "kingston",
+    "officialDomain": "www.kingston.com",
+    "market": "US",
+    "categories": [
+      "pc-components",
+      "accessories"
+    ],
+    "discoveryUrls": [
+      "https://www.kingston.com/siteindex.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "NVIDIA",
+    "slug": "nvidia",
+    "officialDomain": "www.nvidia.com",
+    "market": "US",
+    "categories": [
+      "pc-components",
+      "ai-tools"
+    ],
+    "discoveryUrls": [
+      "https://www.nvidia.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Intel",
+    "slug": "intel",
+    "officialDomain": "www.intel.com",
+    "market": "US",
+    "categories": [
+      "pc-components"
+    ],
+    "discoveryUrls": [
+      "https://www.intel.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "BenQ",
+    "slug": "benq",
+    "officialDomain": "www.benq.com",
+    "market": "US",
+    "categories": [
+      "monitors"
+    ],
+    "discoveryUrls": [
+      "https://www.benq.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Synology",
+    "slug": "synology",
+    "officialDomain": "www.synology.com",
+    "market": "US",
+    "categories": [
+      "networking"
+    ],
+    "discoveryUrls": [
+      "https://www.synology.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "NETGEAR",
+    "slug": "netgear",
+    "officialDomain": "www.netgear.com",
+    "market": "US",
+    "categories": [
+      "networking"
+    ],
+    "discoveryUrls": [
+      "https://www.netgear.com/sitemap-netgear-us.xml",
+      "https://www.netgear.com/sitemap_index.xml",
+      "https://www.netgear.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 27 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "TP-Link",
+    "slug": "tp-link",
+    "officialDomain": "www.tp-link.com",
+    "market": "US",
+    "categories": [
+      "networking",
+      "smart-home"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 1 sitemap(s), none for the US storefront or product pages; add discovery URLs in Admin."
+  },
+  {
+    "name": "eero",
+    "slug": "eero",
+    "officialDomain": "eero.com",
+    "market": "US",
+    "categories": [
+      "networking"
+    ],
+    "discoveryUrls": [
+      "https://eero.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Ubiquiti",
+    "slug": "ubiquiti",
+    "officialDomain": "www.ui.com",
+    "market": "US",
+    "categories": [
+      "networking"
+    ],
+    "discoveryUrls": [
+      "https://ui.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Linksys",
+    "slug": "linksys",
+    "officialDomain": "www.linksys.com",
+    "market": "US",
+    "categories": [
+      "networking"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "Nikon",
+    "slug": "nikon",
+    "officialDomain": "www.nikonusa.com",
+    "market": "US",
+    "categories": [
+      "cameras"
+    ],
+    "discoveryUrls": [
+      "https://www.nikonusa.com/google/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Fujifilm",
+    "slug": "fujifilm",
+    "officialDomain": "www.fujifilm.com",
+    "market": "US",
+    "categories": [
+      "cameras"
+    ],
+    "discoveryUrls": [
+      "https://www.fujifilm.com/us/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 141 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "DJI",
+    "slug": "dji",
+    "officialDomain": "store.dji.com",
+    "market": "US",
+    "categories": [
+      "drones-gadgets",
+      "cameras"
+    ],
+    "discoveryUrls": [
+      "https://store.dji.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Insta360",
+    "slug": "insta360",
+    "officialDomain": "www.insta360.com",
+    "market": "US",
+    "categories": [
+      "cameras"
+    ],
+    "discoveryUrls": [
+      "https://www.insta360.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Epson",
+    "slug": "epson",
+    "officialDomain": "epson.com",
+    "market": "US",
+    "categories": [
+      "printers"
+    ],
+    "discoveryUrls": [
+      "https://epson.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Brother",
+    "slug": "brother",
+    "officialDomain": "www.brother-usa.com",
+    "market": "US",
+    "categories": [
+      "printers"
+    ],
+    "discoveryUrls": [
+      "https://www.brother-usa.com/sitemap_product_0.xml",
+      "https://www.brother-usa.com/sitemap_index.xml",
+      "https://www.brother-usa.com/sitemap_categories_0.xml",
+      "https://www.brother-usa.com/sitemap_statics_0.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Garmin",
+    "slug": "garmin",
+    "officialDomain": "www.garmin.com",
+    "market": "US",
+    "categories": [
+      "wearables",
+      "automotive-tech",
+      "fitness-equipment"
+    ],
+    "discoveryUrls": [
+      "https://www.garmin.com/product-sitemap-index.xml",
+      "https://www.garmin.com/www-sitemaps-index.xml",
+      "https://www.garmin.com/category-sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 4 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Oura",
+    "slug": "oura",
+    "officialDomain": "ouraring.com",
+    "market": "US",
+    "categories": [
+      "wearables"
+    ],
+    "discoveryUrls": [
+      "https://ouraring.com/sitemap.xml",
+      "https://ouraring.com/growth/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Ring",
+    "slug": "ring",
+    "officialDomain": "ring.com",
+    "market": "US",
+    "categories": [
+      "smart-home"
+    ],
+    "discoveryUrls": [
+      "https://ring.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Philips Hue",
+    "slug": "philips-hue",
+    "officialDomain": "www.philips-hue.com",
+    "market": "US",
+    "categories": [
+      "smart-home"
+    ],
+    "discoveryUrls": [
+      "https://www.philips-hue.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "ecobee",
+    "slug": "ecobee",
+    "officialDomain": "www.ecobee.com",
+    "market": "US",
+    "categories": [
+      "smart-home"
+    ],
+    "discoveryUrls": [
+      "https://www.ecobee.com/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "eufy",
+    "slug": "eufy",
+    "officialDomain": "www.eufy.com",
+    "market": "US",
+    "categories": [
+      "smart-home",
+      "home-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.eufy.com/server-sitemap-index-products.xml",
+      "https://www.eufy.com/sitemap.xml",
+      "https://www.eufy.com/server-sitemap-index.xml",
+      "https://www.eufy.com/server-sitemap-index-pages.xml",
+      "https://www.eufy.com/server-sitemap-index-collections.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Wyze",
+    "slug": "wyze",
+    "officialDomain": "www.wyze.com",
+    "market": "US",
+    "categories": [
+      "smart-home"
+    ],
+    "discoveryUrls": [
+      "https://www.wyze.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Roku",
+    "slug": "roku",
+    "officialDomain": "www.roku.com",
+    "market": "US",
+    "categories": [
+      "streaming-devices",
+      "tv-home-entertainment"
+    ],
+    "discoveryUrls": [
+      "https://www.roku.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "TCL",
+    "slug": "tcl",
+    "officialDomain": "www.tcl.com",
+    "market": "US",
+    "categories": [
+      "tv-home-entertainment"
+    ],
+    "discoveryUrls": [
+      "https://www.tcl.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Hisense",
+    "slug": "hisense",
+    "officialDomain": "www.hisense-usa.com",
+    "market": "US",
+    "categories": [
+      "tv-home-entertainment"
+    ],
+    "discoveryUrls": [
+      "https://www.hisense-usa.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "VIZIO",
+    "slug": "vizio",
+    "officialDomain": "www.vizio.com",
+    "market": "US",
+    "categories": [
+      "tv-home-entertainment"
+    ],
+    "discoveryUrls": [
+      "https://www.vizio.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Dyson",
+    "slug": "dyson",
+    "officialDomain": "www.dyson.com",
+    "market": "US",
+    "categories": [
+      "home-appliances",
+      "personal-care"
+    ],
+    "discoveryUrls": [
+      "https://www.dyson.com/sitemapindex.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "iRobot",
+    "slug": "irobot",
+    "officialDomain": "www.irobot.com",
+    "market": "US",
+    "categories": [
+      "home-appliances",
+      "smart-home"
+    ],
+    "discoveryUrls": [
+      "https://www.irobot.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "SharkNinja",
+    "slug": "sharkninja",
+    "officialDomain": "www.sharkninja.com",
+    "market": "US",
+    "categories": [
+      "home-appliances",
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.sharkninja.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Breville",
+    "slug": "breville",
+    "officialDomain": "www.breville.com",
+    "market": "US",
+    "categories": [
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.breville.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Vitamix",
+    "slug": "vitamix",
+    "officialDomain": "www.vitamix.com",
+    "market": "US",
+    "categories": [
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.vitamix.com/us/en_us/products/sitemap.xml",
+      "https://www.vitamix.com/us/en_us.sitemap.xml",
+      "https://www.vitamix.com/media/en_us.magento_sitemap.xml",
+      "https://www.vitamix.com/media/en_vr.magento_sitemap.xml",
+      "https://www.vitamix.com/media/en_mx.magento_sitemap.xml",
+      "https://www.vitamix.com/media/en_ca.magento_sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "GE Appliances",
+    "slug": "ge-appliances",
+    "officialDomain": "www.geappliances.com",
+    "market": "US",
+    "categories": [
+      "home-appliances",
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.geappliances.com/xmlsitemap.php"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Peloton",
+    "slug": "peloton",
+    "officialDomain": "www.onepeloton.com",
+    "market": "US",
+    "categories": [
+      "fitness-equipment"
+    ],
+    "discoveryUrls": [
+      "https://www.onepeloton.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Therabody",
+    "slug": "therabody",
+    "officialDomain": "www.therabody.com",
+    "market": "US",
+    "categories": [
+      "fitness-equipment",
+      "personal-care"
+    ],
+    "discoveryUrls": [
+      "https://www.therabody.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Philips",
+    "slug": "philips",
+    "officialDomain": "www.usa.philips.com",
+    "market": "US",
+    "categories": [
+      "personal-care"
+    ],
+    "discoveryUrls": [
+      "https://www.usa.philips.com/prx/sitemap-B2C-en_US-products-index.xml",
+      "https://www.usa.philips.com/prx/sitemap-B2C-en_US-sfdc-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "EcoFlow",
+    "slug": "ecoflow",
+    "officialDomain": "us.ecoflow.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "outdoor-garden"
+    ],
+    "discoveryUrls": [
+      "https://us.ecoflow.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Casper",
+    "slug": "casper",
+    "officialDomain": "casper.com",
+    "market": "US",
+    "categories": [
+      "mattresses"
+    ],
+    "discoveryUrls": [
+      "https://casper.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://casper.com/collections/clearance"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Herman Miller",
+    "slug": "herman-miller",
+    "officialDomain": "www.hermanmiller.com",
+    "market": "US",
+    "categories": [
+      "furniture"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "DEWALT",
+    "slug": "dewalt",
+    "officialDomain": "www.dewalt.com",
+    "market": "US",
+    "categories": [
+      "tools-diy"
+    ],
+    "discoveryUrls": [
+      "https://www.dewalt.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Samsonite",
+    "slug": "samsonite",
+    "officialDomain": "shop.samsonite.com",
+    "market": "US",
+    "categories": [
+      "luggage-travel"
+    ],
+    "discoveryUrls": [
+      "https://shop.samsonite.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://shop.samsonite.com/sale/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "OpenAI",
+    "slug": "openai",
+    "officialDomain": "openai.com",
+    "market": "US",
+    "categories": [
+      "ai-tools"
+    ],
+    "discoveryUrls": [
+      "https://openai.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Anthropic",
+    "slug": "anthropic",
+    "officialDomain": "www.anthropic.com",
+    "market": "US",
+    "categories": [
+      "ai-tools",
+      "developer-software"
+    ],
+    "discoveryUrls": [
+      "https://www.anthropic.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "GitHub",
+    "slug": "github",
+    "officialDomain": "github.com",
+    "market": "US",
+    "categories": [
+      "developer-software",
+      "ai-tools"
+    ],
+    "discoveryUrls": [],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+  },
+  {
+    "name": "JetBrains",
+    "slug": "jetbrains",
+    "officialDomain": "www.jetbrains.com",
+    "market": "US",
+    "categories": [
+      "developer-software"
+    ],
+    "discoveryUrls": [
+      "https://www.jetbrains.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Adobe",
+    "slug": "adobe",
+    "officialDomain": "www.adobe.com",
+    "market": "US",
+    "categories": [
+      "creative-software",
+      "ai-tools"
+    ],
+    "discoveryUrls": [
+      "https://www.adobe.com/cc-product.index.xml",
+      "https://www.adobe.com/creativecloud/sitemap-index.xml",
+      "https://www.adobe.com/acrobat/sitemap-index.xml",
+      "https://www.adobe.com/home-sitemap.xml",
+      "https://www.adobe.com/plans-catalog-sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Canva",
+    "slug": "canva",
+    "officialDomain": "www.canva.com",
+    "market": "US",
+    "categories": [
+      "creative-software"
+    ],
+    "discoveryUrls": [
+      "https://sitemap.canva.com/sitemap_index.xml",
+      "https://www.canva.com/landing_page_sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Notion",
+    "slug": "notion",
+    "officialDomain": "www.notion.com",
+    "market": "US",
+    "categories": [
+      "productivity-software",
+      "ai-tools"
+    ],
+    "discoveryUrls": [
+      "https://www.notion.com/sitemap.xml",
+      "https://sitemaps.notion.com/sitemap-categories.xml",
+      "https://sitemaps.notion.com/sitemap-collections.xml",
+      "https://www.notion.com/sitemap-root.xml",
+      "https://www.notion.com/md/sitemap.xml",
+      "https://www.notion.com/use-case/sitemap.xml",
+      "https://www.notion.com/feature/sitemap.xml",
+      "https://www.notion.com/front-static/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 8 of 12 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Shopify",
+    "slug": "shopify",
+    "officialDomain": "www.shopify.com",
+    "market": "US",
+    "categories": [
+      "website-ecommerce"
+    ],
+    "discoveryUrls": [
+      "https://www.shopify.com/sitemaps_list.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Squarespace",
+    "slug": "squarespace",
+    "officialDomain": "www.squarespace.com",
+    "market": "US",
+    "categories": [
+      "website-ecommerce"
+    ],
+    "discoveryUrls": [
+      "https://www.squarespace.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "NordVPN",
+    "slug": "nordvpn",
+    "officialDomain": "nordvpn.com",
+    "market": "US",
+    "categories": [
+      "security-software"
+    ],
+    "discoveryUrls": [
+      "https://nordvpn.com/homepage-sitemap.xml",
+      "https://nordvpn.com/general-sitemap.xml",
+      "https://nordvpn.com/features-sitemap.xml",
+      "https://nordvpn.com/unblock-sitemap.xml",
+      "https://nordvpn.com/gaming-sitemap.xml",
+      "https://nordvpn.com/research-lab-sitemap.xml",
+      "https://nordvpn.com/cybersecurity-sitemap.xml",
+      "https://nordvpn.com/threat-center-sitemap.xml",
+      "https://nordvpn.com/is-it-down-sitemap.xml",
+      "https://nordvpn.com/glossary-num-sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 10 of 297 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "1Password",
+    "slug": "1password",
+    "officialDomain": "1password.com",
+    "market": "US",
+    "categories": [
+      "security-software"
+    ],
+    "discoveryUrls": [
+      "https://1password.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Zoom",
+    "slug": "zoom",
+    "officialDomain": "www.zoom.com",
+    "market": "US",
+    "categories": [
+      "business-software"
+    ],
+    "discoveryUrls": [
+      "https://www.zoom.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Atlassian",
+    "slug": "atlassian",
+    "officialDomain": "www.atlassian.com",
+    "market": "US",
+    "categories": [
+      "developer-software",
+      "business-software"
+    ],
+    "discoveryUrls": [
+      "https://www.atlassian.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Dropbox",
+    "slug": "dropbox",
+    "officialDomain": "www.dropbox.com",
+    "market": "US",
+    "categories": [
+      "productivity-software"
+    ],
+    "discoveryUrls": [
+      "https://www.dropbox.com/sitemapindex.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Vercel",
+    "slug": "vercel",
+    "officialDomain": "vercel.com",
+    "market": "US",
+    "categories": [
+      "developer-software"
+    ],
+    "discoveryUrls": [
+      "https://vercel.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Wix",
+    "slug": "wix",
+    "officialDomain": "www.wix.com",
+    "market": "US",
+    "categories": [
+      "website-ecommerce"
+    ],
+    "discoveryUrls": [
+      "https://www.wix.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Slack",
+    "slug": "slack",
+    "officialDomain": "slack.com",
+    "market": "US",
+    "categories": [
+      "business-software"
+    ],
+    "discoveryUrls": [
+      "https://slack.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Purple",
+    "slug": "purple",
+    "officialDomain": "purple.com",
+    "market": "US",
+    "categories": [
+      "mattresses"
+    ],
+    "discoveryUrls": [
+      "https://purple.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://purple.com/sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Traeger",
+    "slug": "traeger",
+    "officialDomain": "www.traeger.com",
+    "market": "US",
+    "categories": [
+      "outdoor-garden",
+      "kitchen-appliances"
+    ],
+    "discoveryUrls": [
+      "https://www.traeger.com/sitemap"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Ryobi",
+    "slug": "ryobi",
+    "officialDomain": "www.ryobitools.com",
+    "market": "US",
+    "categories": [
+      "tools-diy"
+    ],
+    "discoveryUrls": [
+      "https://www.ryobitools.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Furbo",
+    "slug": "furbo",
+    "officialDomain": "furbo.com",
+    "market": "US",
+    "categories": [
+      "pet-supplies"
+    ],
+    "discoveryUrls": [
+      "https://furbo.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Owlet",
+    "slug": "owlet",
+    "officialDomain": "owletcare.com",
+    "market": "US",
+    "categories": [
+      "baby-kids"
+    ],
+    "discoveryUrls": [
+      "https://owletcare.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Away",
+    "slug": "away",
+    "officialDomain": "www.awaytravel.com",
+    "market": "US",
+    "categories": [
+      "luggage-travel"
+    ],
+    "discoveryUrls": [
+      "https://www.awaytravel.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Jackery",
+    "slug": "jackery",
+    "officialDomain": "www.jackery.com",
+    "market": "US",
+    "categories": [
+      "accessories",
+      "outdoor-garden"
+    ],
+    "discoveryUrls": [
+      "https://www.jackery.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [
+      "https://www.jackery.com/pages/deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+  },
+  {
+    "name": "Kobo",
+    "slug": "kobo",
+    "officialDomain": "www.kobo.com",
+    "market": "US",
+    "categories": [
+      "tablets"
+    ],
+    "discoveryUrls": [
+      "https://www.kobo.com/sitemap"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  },
+  {
+    "name": "Weber",
+    "slug": "weber",
+    "officialDomain": "www.weber.com",
+    "market": "US",
+    "categories": [
+      "outdoor-garden"
+    ],
+    "discoveryUrls": [
+      "https://www.weber.com/on/demandware.static/-/Sites-PRODUCTFEEDS/default/productfeeds/Sitemap/sitemap_index-global.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+  }
+]

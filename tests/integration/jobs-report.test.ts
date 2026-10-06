@@ -32,33 +32,32 @@ describe("job locking", () => {
   });
 
   it("cron job runner refuses concurrent runs of the same job", async () => {
-    const owner = await acquireLock("job:verify-links", 60_000);
-    await expect(runJob("verify-links", "test")).rejects.toBeInstanceOf(LockHeldError);
-    await releaseLock("job:verify-links", owner!);
-    await expect(runJob("verify-links", "test")).resolves.toBeTruthy();
+    const owner = await acquireLock("job:cleanup-cache", 60_000);
+    await expect(runJob("cleanup-cache", "test")).rejects.toBeInstanceOf(LockHeldError);
+    await releaseLock("job:cleanup-cache", owner!);
+    await expect(runJob("cleanup-cache", "test")).resolves.toBeTruthy();
   });
 });
 
 describe("retry and cleanup jobs", () => {
   it("retries due retryable failures and exhausts after maxRetries", async () => {
     await runIngestion({ trigger: "test" });
-    const link = await db.affiliateLink.findFirstOrThrow({ where: { verificationStatus: "VERIFIED_OK" } });
-    await db.affiliateLink.update({ where: { id: link.id }, data: { verificationStatus: "TIMEOUT" } });
-    const failure = await db.pipelineFailure.create({ data: { fingerprint: "f1", stage: "LINK_VERIFICATION", kind: "RETRYABLE_FAILURE", errorCode: "LINK_VERIFICATION_TIMEOUT", message: "t", entityType: "affiliate_link", entityId: link.id, normalizedReviewId: link.normalizedReviewId, nextRetryAt: new Date(Date.now() - 1000) } });
+    // A failure left over from the retired affiliate-link pipeline is resolved, not retried.
+    const review = await db.normalizedReview.findFirstOrThrow();
+    const failure = await db.pipelineFailure.create({ data: { fingerprint: "f1", stage: "LINK_VERIFICATION", kind: "RETRYABLE_FAILURE", errorCode: "LINK_VERIFICATION_TIMEOUT", message: "t", entityType: "affiliate_link", entityId: "legacy-link", normalizedReviewId: review.id, nextRetryAt: new Date(Date.now() - 1000) } });
     const exhausted = await db.pipelineFailure.create({ data: { fingerprint: "f2", stage: "OFFER_MATCHING", kind: "RETRYABLE_FAILURE", errorCode: "SOVRN_TIMEOUT", message: "t", entityType: "normalized_review", entityId: "x", retryCount: 5, maxRetries: 5, nextRetryAt: new Date(Date.now() - 1000) } });
     const res = await runFailedRetry({ trigger: "test" });
     expect(res.checked).toBe(2);
-    expect((await db.affiliateLink.findUniqueOrThrow({ where: { id: link.id } })).verificationStatus).toBe("VERIFIED_OK");
     expect((await db.pipelineFailure.findUniqueOrThrow({ where: { id: failure.id } })).resolvedAt).not.toBeNull();
     expect(await db.pipelineFailure.findUniqueOrThrow({ where: { id: exhausted.id } })).toMatchObject({ kind: "PERMANENT_FAILURE", nextRetryAt: null });
   });
 
-  it("cleans up expired cache rows, sessions and stale locks", async () => {
-    await db.sovrnOfferCache.create({ data: { queryKey: "old", requestHash: "h-old", expiresAt: new Date(Date.now() - 30 * 86_400_000), providerStatus: "OK" } });
+  it("cleans up expired sessions and stale locks", async () => {
     await db.adminSession.create({ data: { id: "s1", email: "a", expiresAt: new Date(Date.now() - 1000) } });
     await db.jobLock.create({ data: { name: "dead", owner: "x", expiresAt: new Date(Date.now() - 1000) } });
     const res = await runCacheCleanup({ trigger: "test" });
-    expect(res.reasons).toMatchObject({ sovrn_cache: 1, admin_sessions: 1, stale_locks: 1 });
+    expect(res.reasons).toMatchObject({ admin_sessions: 1, stale_locks: 1 });
+    expect(res.reasons).not.toHaveProperty("sovrn_cache");
   });
 });
 
@@ -71,11 +70,12 @@ describe("Day-30 report", () => {
     r();
     expect(report.ingestion).toMatchObject({ totalFetched: 15, duplicates: 1, published: 13, normalized: 13 }); // none waits for an editor
     expect(report.dealCoverage.publishedReviews).toBe(13);
-    expect(report.dealCoverage.reviewsWithVerifiedDeal).toBeGreaterThan(0);
-    expect(report.linkHealth.checked).toBeGreaterThan(0);
+    // No commerce data in this suite: honest zeros, nothing invented.
+    expect(report.dealCoverage.reviewsWithVerifiedDeal).toBe(0);
+    expect(report.linkHealth).toMatchObject({ affiliateProvider: "none", offersObserved: 0 });
     expect(report.seoIndexing).toMatchObject({ status: "NOT_AVAILABLE_IN_ENVIRONMENT", indexed: "NOT_AVAILABLE_IN_ENVIRONMENT" });
     expect(report.ctr.note).toMatch(/INSUFFICIENT_DATA/);
-    expect(report.topFailureReasons.map((f) => f.errorCode)).toContain("SOVRN_NO_MATCH");
+    expect(report.topFailureReasons.map((f) => f.errorCode)).not.toContain("SOVRN_NO_MATCH");
     expect(report.categorization.acceptanceRate).toBe("INSUFFICIENT_DATA");
 
     await db.analyticsEvent.createMany({ data: Array.from({ length: 5 }, () => ({ event: "deal_impression", categorySlug: "phones" })) });

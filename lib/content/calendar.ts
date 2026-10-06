@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { publishedFreshOffers } from "@/lib/public/offers";
 import {
   CATEGORIES,
   DEPARTMENTS,
@@ -88,15 +89,7 @@ export async function categoryCoverage(): Promise<CategoryCoverage[]> {
         where: { content: { some: { review: { status: "PUBLISHED" } } } },
         _count: { _all: true },
       }),
-      db.affiliateLink.findMany({
-        where: {
-          isActive: true,
-          verificationStatus: "VERIFIED_OK",
-          offerMatch: { matchStatus: "MATCHED" },
-          review: { status: "PUBLISHED" },
-        },
-        select: { review: { select: { categorySlug: true } } },
-      }),
+      publishedFreshOffers(),
       db.imageAsset.findMany({
         where: {
           isPrimary: true,
@@ -141,7 +134,7 @@ export async function categoryCoverage(): Promise<CategoryCoverage[]> {
         "No enabled source covers this category: reviews need a publisher whose terms allow it",
       );
     if (published > 0 && verifiedDeals === 0)
-      blockers.push("No verified offers (Sovrn price comparison not approved)");
+      blockers.push("No fresh prices (the commerce engine has no current offer for these products)");
     return {
       slug: c.slug,
       name: c.name,

@@ -15,9 +15,10 @@ export const SWITCHES = {
   keyword_to_blog: { label: "Keyword-to-Blog generation", help: "Off stops all generation requests (quota protection).", default: true },
   external_ingestion: { label: "External source ingestion", help: "Apify crawls, collection and the Content API feed.", default: true },
   image_enrichment: { label: "Image enrichment", help: "Daily Pexels image backfill.", default: true },
-  affiliate_enrichment: { label: "Affiliate enrichment", help: "Sovrn offer refresh and link verification.", default: true },
-  product_enrichment: { label: "Product data enrichment", help: "Field-level product facts from the review source, known product pages and Sovrn offers, with provenance.", default: true },
-  coupons: { label: "Coupon enrichment", help: "Sovrn promo-code lookups for products with a real retailer URL.", default: true },
+  affiliate_enrichment: { label: "Affiliate enrichment", help: "Affiliate wrapping of retailer links; has an effect only when an affiliate provider is configured (AFFILIATE_PROVIDER).", default: true },
+  product_enrichment: { label: "Product data enrichment", help: "Field-level product facts from the review source, known product pages and official/retailer pages, with provenance.", default: true },
+  coupons: { label: "Coupon enrichment", help: "Legacy switch kept for stored settings; first-party brand codes are collected by the commerce engine.", default: true },
+  commerce_engine: { label: "Commerce engine", help: "Apify crawls of official brand sites: product discovery, extraction, exact matching, offers and first-party coupons (budget-capped).", default: true },
   retries: { label: "Automatic retries", help: "Retry of failed pipeline stages.", default: true },
 } as const;
 

@@ -1,9 +1,10 @@
 # Made4Buyers — RealTech Review Engine
 
 A buyer-focused technology review site. Reviews arrive from a Content API and are
-normalized, de-duplicated and classified. They are then matched to Sovrn offers whose
-affiliate links are verified, checked in an admin QA step, and published as SEO pages with
-first-party analytics. EXPERTE.com was used only as a reference for information architecture
+normalized, de-duplicated and classified, checked by automatic QA rules, and published as SEO
+pages with first-party analytics. Prices and seller links come from the commerce engine
+(official brand and retailer pages, `lib/commerce/*`) and are shown only while fresh; retailer
+links stay plain unless an affiliate provider is configured (`lib/affiliate/provider.ts`). EXPERTE.com was used only as a reference for information architecture
 and UX; the implementation, branding and content are original.
 
 **Nothing is fabricated.** When an integration has no credentials it reports
@@ -19,7 +20,7 @@ little data report `INSUFFICIENT_DATA`.
 
 ```
 Content API → ContentItem → NormalizedReview → ExtractedEntities → CategoryTagSet → ImageAsset
-→ MatchedSovrnOfferSet → AffiliateLinkSet (verified) → PageRenderModel → PublishJob
+→ fresh commerce offers (read) → PageRenderModel → PublishJob
 → /review/{slug}, /category/{slug}, /brand/{slug}, sitemap → analytics → revalidation → Day-30 report
 ```
 
@@ -33,7 +34,7 @@ npm run pipeline:dry-run          # every stage on sample JSON — no DB, no net
 
 # Full local stack with SAMPLE data:
 npm run db:local                  # terminal 1: PostgreSQL on :54329, migrated + seeded
-npm run dev:stubs                 # terminal 2: SAMPLE Content API / Sovrn / merchant stub on :4010
+npm run dev:stubs                 # terminal 2: SAMPLE Content API / Apify / merchant stub on :4010
 cp .env.example .env.local        # then set DATABASE_URL, ADMIN_* and the stub lines printed by dev:stubs
 npm run dev                       # terminal 3: http://localhost:3000, admin at /admin
 ```
@@ -91,11 +92,11 @@ pages. Sample fixtures are fictional and are labelled `SAMPLE` wherever they app
 
 ## AI-assisted buying guides
 
-**Admin → AI guides** sends a product and keywords to Keyword-to-Blog (`KEYWORD_TO_BLOG_API_URL` / `KEYWORD_TO_BLOG_API_KEY`). The generated draft runs through the normal pipeline (dedupe, entities, taxonomy, Pexels image, Sovrn matching, QA) as kind `AI_GUIDE`:
+**Admin → AI guides** sends a product and keywords to Keyword-to-Blog (`KEYWORD_TO_BLOG_API_URL` / `KEYWORD_TO_BLOG_API_KEY`). The generated draft runs through the normal pipeline (dedupe, entities, taxonomy, Pexels image, commerce-offer check, QA) as kind `AI_GUIDE`:
 
 - It cannot be published, including by auto-publish, until an editor clicks **approve** on the review page. That approval is audited and can be revoked.
 - On the site it's labelled "AI-assisted buying guide", with a disclosure that it isn't a hands-on review. It gets Article schema authored by Made4Buyers, never Review schema or a rating.
-- Prices and deals still come only from verified Sovrn offers.
+- Prices still come only from fresh commerce-engine offers.
 - Generation is admin-triggered only, rate-limited to 20 per admin per hour.
 
 ## CSV overrides
@@ -103,13 +104,12 @@ pages. Sample fixtures are fictional and are labelled `SAMPLE` wherever they app
 Header columns:
 
 - `normalized_review_key` (review id, slug or dedupe key)
-- one or more of `override_primary_category`, `entity_brand_override`, `entity_product_name_override`, `sovrn_deal_id_override`
+- one or more of `override_primary_category`, `entity_brand_override`, `entity_product_name_override`
 - optionally `override_subcategory`, `entity_model_number_override`, `entity_device_type_override`
 
-Rows are validated individually: unknown reviews, invalid categories, duplicate rows and
-malformed deal IDs are all caught, and valid rows still apply when others fail. Every applied
-override is audited and re-runs categorization, Sovrn matching, affiliate links and
-verification for that review. A deal ID that Sovrn does not return is reverted and reported.
+Rows are validated individually: unknown reviews, invalid categories and duplicate rows are
+all caught, and valid rows still apply when others fail. Every applied override is audited and
+re-runs categorization and the commerce-offer check for that review.
 
 ## Configuration
 

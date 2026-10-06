@@ -2,11 +2,9 @@ import Flash from "@/components/flash";
 import { ActionForm, Badge, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
-import { couponsConfigured } from "@/lib/sovrn/coupons";
 import { db } from "@/lib/db";
 import { jobOutcome, JOBS } from "@/lib/jobs/registry";
 import { apifyConfigured } from "@/lib/pipeline/apify";
-import { config } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs & runs" };
@@ -15,19 +13,19 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   ingest: "Fetch the legacy Content API (skipped when not configured) and run all review stages.",
   "scrape-sources": "Start Apify Web Scraper runs for enabled review sources whose crawl interval has elapsed (robots.txt checked first).",
   "collect-scrapes": "Poll running Apify runs; fetch finished datasets, reject invalid pages with a reason, and ingest the rest; fresh items are published automatically.",
-  "verify-links": "Re-verify affiliate links that are due (or pending).",
-  "revalidate-offers": "Re-query Sovrn for reviews with stale or failed deal data.",
   "retry-failed": "Retry due retryable failures with bounded attempts.",
-  "cleanup-cache": "Delete expired Sovrn cache rows, sessions, rate-limit buckets and stale locks.",
+  "cleanup-cache": "Delete expired admin sessions, rate-limit buckets and stale locks.",
   "publish-cycle": "Publish QA-passing reviews automatically (pause it in Admin → Automation).",
   "fix-title-years": "Remove years from external titles that are newer than the source's own published/updated date (original kept in sourceData.originalTitle). Never changes slugs, bodies or Keyword-to-Blog posts; rebuilds live pages.",
-  "enrich-products": "Enrich product facts field by field (review source, known manufacturer/retailer pages, Sovrn offers) with provenance; exact-product match required; never guesses.",
-  "refresh-coupons": "Look up Sovrn promo codes for published products with a real retailer URL; retire codes Sovrn no longer returns.",
+  "enrich-products": "Enrich product facts field by field (review source, known manufacturer/retailer pages) with provenance; exact-product match required; never guesses.",
   "daily-article": "Publish the scheduled article for the due slot (MORNING 08:00, EVENING 19:00 Asia/Kolkata): next topic from the queue, duplicate checks, Keyword-to-Blog, content and SEO QA, unique image, then publish. Does nothing when no slot is due or it is already published. See Admin → Daily articles.",
   "reclassify-content": "Re-run entity extraction, content-kind detection (review / comparison / buying guide), product linking and categorization for existing content after rule or taxonomy changes. Never changes publish state; rebuilds live pages.",
   "enrich-images": "Give published and QA reviews a real Pexels image: a photo of the product if one exists, otherwise a labelled illustrative photo of its topic. Replaces broken images, never downgrades a good one, stops on a Pexels rate limit.",
   "detect-stale": "Flag published reviews whose source article is older than STALE_REVIEW_MONTHS (default 18) and AI guides older than STALE_GUIDE_MONTHS (default 12) as CONTENT_STALE in Failures. Nothing is unpublished automatically.",
   "inspect-index": "Inspect published URLs with the Search Console URL Inspection API.",
+  "commerce-discover": "For due brands (COMMERCE_BRANDS_PER_RUN, default 10): discover product URLs on the official site and start one Apify Web Scraper run per brand (robots.txt respected; skipped when the monthly Apify budget is spent).",
+  "commerce-collect": "Collect finished commerce runs: store raw records, normalize, match exactly to Made4Buyers products, write facts and offers with provenance; mark offers older than 48 h as stale.",
+  "commerce-coupons": "Crawl brands' official promotions pages for first-party promo codes (Apify, budget-capped).",
 };
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
@@ -41,9 +39,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const integrations = integrationStatus();
   const blocked: Partial<Record<keyof typeof JOBS, string | undefined>> = {
     ingest: integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured" : undefined,
-    "revalidate-offers": integrations.sovrn !== "READY" ? "Sovrn not configured" : undefined,
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
-    "refresh-coupons": couponsConfigured() ? undefined : "SOVRN_COUPONS_ENABLED is off (needs Sovrn Promo Codes registration)",
     "scrape-sources": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
     "collect-scrapes": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
   };

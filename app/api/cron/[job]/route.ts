@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // Backwards-compatible aliases for the previous cron paths.
-const ALIASES: Record<string, JobName[]> = { revalidate: ["revalidate-offers", "verify-links"] };
+const ALIASES: Record<string, JobName[]> = {};
 
 /** Vercel Cron entry point. Requires `Authorization: Bearer <CRON_SECRET>` (sent by Vercel automatically). */
 export async function GET(req: Request, { params }: { params: Promise<{ job: string }> }) {

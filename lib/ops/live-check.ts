@@ -3,8 +3,7 @@
  * Admin → Go-live checks (so it can run where the production secrets live).
  *
  * It makes one authenticated request to each configured provider and reports what came back.
- * It never writes to the database, never caches provider responses, never follows affiliate
- * links and never returns secret values: only variable names, statuses and counts.
+ * It never writes to the database, never caches provider responses and never returns secret values: only variable names, statuses and counts.
  * Unconfigured integrations are BLOCKED_BY_ENVIRONMENT, not failures.
  */
 import { config } from "@/lib/config";
@@ -17,9 +16,7 @@ import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
 import { runIntegrityChecks } from "./integrity";
 import { automationHealth } from "@/lib/automation/daily-article";
 import { validateContentItem } from "@/lib/pipeline/validate";
-import { fetchSovrnCampaigns, sovrnApprovalStatus } from "@/lib/sovrn/account";
-import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
-import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
+import { getAffiliateProvider } from "@/lib/affiliate/provider";
 
 export type LiveCheckStatus = "OK" | "BLOCKED_BY_ENVIRONMENT" | "AUTH_FAILED" | "RATE_LIMITED" | "PROVIDER_ERROR" | "INVALID_RESPONSE" | "EMPTY" | "FAIL";
 export type LiveCheckResult = { integration: string; status: LiveCheckStatus; detail: Record<string, unknown> };
@@ -32,11 +29,9 @@ const add = (integration: string, status: LiveCheckStatus, detail: Record<string
 const httpStatus = (s: number): LiveCheckStatus => (s === 401 || s === 403 ? "AUTH_FAILED" : s === 429 ? "RATE_LIMITED" : "PROVIDER_ERROR");
 
 function environment() {
-  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "SOVRN_API_URL", "SOVRN_API_KEY", "SOVRN_SITE_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON", "APIFY_API_TOKEN", "KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY", "KEYWORD_TO_BLOG_API_KEY_SECONDARY", "SOVRN_SITE_STATUS"];
+  const names = ["DATABASE_URL", "DIRECT_URL", "NEXT_PUBLIC_SITE_URL", "CRON_SECRET", "ADMIN_SESSION_SECRET", "CONTENT_API_URL", "CONTENT_API_KEY", "PEXELS_API_KEY", "GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON", "APIFY_API_TOKEN", "KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY", "KEYWORD_TO_BLOG_API_KEY_SECONDARY", "AFFILIATE_PROVIDER"];
   const set = Object.fromEntries(names.map((n) => [n, Boolean(process.env[n])]));
   const problems: string[] = [];
-  const secret = process.env.SOVRN_API_KEY;
-  if (secret && secret === process.env.SOVRN_SITE_KEY) problems.push("SOVRN_SITE_KEY holds the SECRET key. It must be the public site key; the site key is disabled until fixed, and the secret should be regenerated in Sovrn");
   for (const n of Object.keys(process.env)) if (n.startsWith("NEXT_PUBLIC_") && /KEY|SECRET|TOKEN|PASSWORD/i.test(n)) problems.push(`${n} would be exposed to the browser`);
   if (process.env.UNSAFE_ALLOW_LOOPBACK_FOR_TESTS === "true") problems.push("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS is on (tests only)");
   add("environment", problems.length ? "FAIL" : "OK", { set, problems });
@@ -105,37 +100,6 @@ async function contentApi(): Promise<{ productName?: string; brand?: string } | 
   return first;
 }
 
-/** One Sovrn search, parsed and ranked in memory (nothing cached, no link followed). */
-async function sovrn(product?: { productName?: string; brand?: string }) {
-  const base = config.sovrn.apiUrl();
-  const key = config.sovrn.apiKey();
-  if (!base || !key) return add("sovrn", "BLOCKED_BY_ENVIRONMENT", { missing: [!base && "SOVRN_API_URL", !key && "SOVRN_API_KEY"].filter(Boolean) });
-  const productName = arg("product") ?? product?.productName;
-  if (!productName) return add("sovrn", "FAIL", { reason: "no product to search: pass --product, or configure the Content API" });
-  const query = { productName, brand: arg("product") ? arg("brand") : product?.brand };
-  const res = await safeFetch(buildSovrnRequestUrl(base, buildQueryString(query), config.sovrn.queryParam()), { headers: { Accept: "application/json", Authorization: `${config.sovrn.authScheme()} ${key}` }, timeoutMs: config.sovrn.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 5_000_000 });
-  if (!res.ok) return add("sovrn", res.error ? "PROVIDER_ERROR" : httpStatus(res.status), { query: buildQueryString(query), httpStatus: res.status, error: res.error?.kind, hint: res.status === 401 ? "Sovrn rejected the request: usually the site is not yet approved for the Price Comparison API (check the Sovrn dashboard); if it is approved, check SOVRN_API_KEY is the secret key" : res.status === 403 ? "Sovrn does not recognise this site key: check SOVRN_SITE_KEY / the site path" : undefined });
-  let payload: unknown;
-  try {
-    payload = JSON.parse(res.body ?? "");
-  } catch {
-    return add("sovrn", "INVALID_RESPONSE", { reason: "response is not JSON" });
-  }
-  if (!extractOfferArray(payload)) return add("sovrn", "INVALID_RESPONSE", { reason: "no offer array", topLevelKeys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 20) : typeof payload });
-  const offers = normalizeOffers(payload);
-  const ranked = rankOffers(query, offers, { minScore: config.sovrn.minScore(), trustedMerchants: config.sovrn.trustedMerchants() });
-  const best = ranked[0];
-  add("sovrn", offers.length ? "OK" : "EMPTY", {
-    query: buildQueryString(query),
-    offers: offers.length,
-    viable: ranked.filter((r) => r.viable).length,
-    withMerchant: offers.filter((o) => o.merchantName).length,
-    withPrice: offers.filter((o) => o.price !== undefined).length,
-    withProviderDeeplink: offers.filter((o) => o.providerAffiliateUrl && isProviderAffiliateUrl(o.providerAffiliateUrl)).length,
-    best: best ? { title: best.offer.title, merchant: best.offer.merchantName ?? null, score: best.breakdown.total, viable: best.viable, notes: best.breakdown.notes } : null,
-  });
-}
-
 async function pexels(product?: { productName?: string; brand?: string }) {
   if (!config.images.pexelsKey()) return add("pexels", "BLOCKED_BY_ENVIRONMENT", { missing: "PEXELS_API_KEY" });
   // 1. Raw authenticated search: status, rate-limit headers, record fields.
@@ -199,24 +163,10 @@ async function keywordToBlog() {
   add("keywordToBlog", "PROVIDER_ERROR", { httpStatus: res.status, code, error: res.error?.kind });
 }
 
-/** Sovrn's approval of this site: live from the Campaigns API (campaign matching SOVRN_SITE_KEY), else SOVRN_SITE_STATUS. */
-async function sovrnSite() {
-  const account = await fetchSovrnCampaigns({ bypassCache: true });
-  const approval = await sovrnApprovalStatus();
-  const { status, source } = approval;
-  add("sovrnSiteApproval", status === "APPROVED" ? "OK" : status === "DENIED" ? "FAIL" : "EMPTY", {
-    status,
-    source,
-    campaignId: approval.campaign?.campaignId ?? null,
-    campaignName: approval.campaign?.name ?? null,
-    accountCampaigns: account.status === "OK" ? account.campaigns.length : null,
-    campaignsApi: account.status === "OK" ? "OK" : `${account.status}: ${account.message}`,
-    SOVRN_SITE_STATUS: config.sovrn.siteStatus(),
-    commerceScript: config.sovrn.commerceScript() ? (config.sovrn.siteKey() ? "installed on public pages" : "enabled but SOVRN_SITE_KEY missing") : "not installed (SOVRN_COMMERCE_SCRIPT=false)",
-    note:
-      approval.message ??
-      (status === "APPROVED" ? "approved by Sovrn" : "Complete Sovrn's site review in the Sovrn dashboard; until approved, merchants are not affiliatable and the price API refuses requests."),
-  });
+/** Affiliate provider: configuration only ("none" keeps every retailer link plain). */
+function affiliate() {
+  const provider = getAffiliateProvider();
+  add("affiliateProvider", "OK", { provider: provider.name, active: provider.active, note: provider.active ? "retailer links may carry provider-generated affiliate URLs" : "no affiliate provider: retailer links stay plain" });
 }
 
 /** Runs every probe once. Read-only: no DB writes, no provider caching, no secret values. */
@@ -248,12 +198,11 @@ export async function runLiveCheck(options: LiveCheckOptions = {}) {
   environment();
   await database();
   const product = await contentApi();
-  await sovrn(product);
   await pexels(product);
   await gsc();
   await apify();
   await keywordToBlog();
-  await sovrnSite();
+  affiliate();
   await integrity();
   await automation();
   const failed = results.filter((r) => !["OK", "BLOCKED_BY_ENVIRONMENT", "EMPTY"].includes(r.status));

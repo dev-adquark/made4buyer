@@ -1,7 +1,8 @@
 # Go-live runbook (real data)
 
-The production pipeline only counts as live after a **real** review has gone from the Content
-API to a published page with a verified Sovrn offer. Follow these steps in order. Nothing here
+The production pipeline only counts as live after a **real** review has gone from its
+source to a published page. Prices and seller links come from the commerce engine (official
+brand and retailer pages); a price is shown only while fresh. Follow these steps in order. Nothing here
 wipes or replaces production data.
 
 ## 1. Credentials (Vercel → Settings → Environment Variables, Production, "Sensitive")
@@ -9,11 +10,7 @@ wipes or replaces production data.
 | Variable | Notes |
 |---|---|
 | `APIFY_API_TOKEN` | Reviews now come from sources in Admin → Sources, crawled by Apify (see [REVIEW_SOURCES.md](REVIEW_SOURCES.md)). The legacy `CONTENT_API_*` feed is optional. |
-| `SOVRN_SITE_STATUS` | Copy the site's approval status from the Sovrn dashboard (`PENDING`, `APPROVED`, `DENIED`). Never inferred. |
-| `SOVRN_SITE_KEY` | The **public** site key from the Sovrn dashboard (safe in the browser). Used by the Commerce script, link wrapping, and to fill `{siteKey}` in `SOVRN_API_URL`. Never the website URL. |
-| `SOVRN_API_KEY` | The **secret** API key (Vercel Sensitive, server only). Must differ from the site key: if equal, the site key is withheld everywhere. |
-| `SOVRN_API_URL` | `https://comparisons.sovrn.com/api/affiliate/v3.5/sites/{siteKey}/compare/prices/usd_en/by/accuracy`; `{siteKey}` is filled from `SOVRN_SITE_KEY`, so changing keys needs one variable. |
-| `SOVRN_COMMERCE_SCRIPT` | `true` loads Sovrn Commerce (vglnk.js + commerce-js) on public pages with the public key. |
+| `PRODUCT_PRICE_MAX_AGE_HOURS`, `AFFILIATE_PROVIDER` | Optional. Prices older than 48 h (default) are never shown. `AFFILIATE_PROVIDER=none` (the only implemented value) keeps every retailer link plain. |
 | `GSC_SITE_URL`, `GSC_SERVICE_ACCOUNT_JSON` | Add the service account's `client_email` as a user on the Search Console property first. |
 | `PEXELS_API_KEY`, `CRON_SECRET`, `DATABASE_URL`, `DIRECT_URL` | Already set. |
 
@@ -28,7 +25,7 @@ makes one request per provider. It writes nothing except an audit-log entry with
 |---|---|
 | `OK` | Authenticated, response parsed. Details show field coverage, dates, pagination, offer counts. |
 | `EMPTY` | Provider answered with no items/offers for that request (not an error). |
-| `AUTH_FAILED` | Credential rejected. For Sovrn, 401 "Invalid Api Key" with the right key pair usually means the site is not yet approved for the Price Comparison API; 403 means the site key in the URL is not recognised. |
+| `AUTH_FAILED` | Credential rejected. |
 | `INVALID_RESPONSE` | Response shape doesn't match what the adapter parses. **Do not ingest**: send the details to engineering so the adapter is fixed against the real contract. |
 | `BLOCKED_BY_ENVIRONMENT` | Not configured. |
 
@@ -39,11 +36,11 @@ makes one request per provider. It writes nothing except an audit-log entry with
 1. Keep `AUTO_PUBLISH_ENABLED=false`. Set the source's "Review pages per run" to 10.
 2. Admin → Sources: add a source whose terms allow crawling, enable it, **Run now**, then
    Jobs → **collect-scrapes** once the run finishes. Check Ingestion (invalid items and reasons),
-   Entities and Categorization (low-confidence items), Deals (`MATCHED` / `NO_MATCH` /
-   `FAILED`), Link health (`VERIFIED_OK` share) and Failures.
+   Entities and Categorization (low-confidence items), Deals (`MATCHED` / `STALE` /
+   `UNAVAILABLE`, from the commerce engine), Retailer links and Failures.
 3. Let the publish cycle run (it publishes fresh, rule-passing content by itself). Open a few public pages: source
-   attribution, dates, image credit, "Verified offer" only where the link is `VERIFIED_OK`.
-4. Click one "View deal" link and confirm it lands on the merchant.
+   attribution, dates, image credit, a price only where a fresh commerce offer exists, otherwise "Price currently unavailable".
+4. Click one seller "View" link and confirm it lands on the seller's own page (plain link, no tracking).
 5. Confirm the pages appear in `/sitemap.xml`. Jobs → run `inspect-index` for GSC status.
 
 ## 4. Continuous operation

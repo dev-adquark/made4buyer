@@ -20,8 +20,6 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
       entities: true,
       contentEntities: { orderBy: { position: "asc" }, include: { entity: true } },
       assignments: { orderBy: [{ active: "desc" }, { tagType: "asc" }, { createdAt: "desc" }], include: { categoryTag: true }, take: 40 },
-      offerMatches: { orderBy: [{ matchStatus: "asc" }, { rank: "asc" }], take: 20 },
-      affiliateLinks: { orderBy: [{ isActive: "desc" }, { isBest: "desc" }] },
       images: { orderBy: { createdAt: "desc" }, take: 3 },
       contentItems: { orderBy: { fetchedAt: "desc" }, take: 5 },
       publishJobs: { orderBy: { createdAt: "desc" }, take: 10 },
@@ -29,9 +27,13 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
     },
   });
   if (!r) notFound();
-  const [failures, auditRows] = await Promise.all([
+  const primaryEntityId = r.contentEntities.find((c) => c.role === "PRIMARY")?.productEntityId ?? null;
+  const [failures, auditRows, commerceOffers] = await Promise.all([
     db.pipelineFailure.findMany({ where: { normalizedReviewId: id, resolvedAt: null }, orderBy: { lastOccurredAt: "desc" }, take: 20 }),
     db.auditLog.findMany({ where: { entityType: "normalized_review", entityId: id }, orderBy: { createdAt: "desc" }, take: 20 }),
+    primaryEntityId
+      ? db.commerceOffer.findMany({ where: { product: { productEntityId: primaryEntityId } }, orderBy: { observedAt: "desc" }, take: 20, select: { id: true, seller: true, sellerType: true, price: true, currency: true, availability: true, status: true, observedAt: true, destinationUrl: true, affiliateUrl: true, affiliateStatus: true } })
+      : Promise.resolve([]),
   ]);
   const self = `/admin/reviews/${id}`;
   const qa = (r.qaFailures as Array<{ code: string; message: string }> | null) ?? [];
@@ -61,7 +63,6 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
         {(r.status === "REJECTED" || r.status === "UNPUBLISHED") && <ActionForm action="/api/admin/reviews" fields={{ id, action: "restore" }} label="Restore" returnTo={self} />}
         {r.status !== "REJECTED" && <ActionForm action="/api/admin/reviews" fields={{ id, action: "reject" }} label="Reject" returnTo={self} confirm="Reject this review?" className="btn small danger" />}
         <ActionForm action="/api/admin/reviews" fields={{ id, action: "reprocess" }} label="Re-run pipeline" returnTo={self} />
-        <ActionForm action="/api/admin/reviews" fields={{ id, action: "verify-links" }} label="Revalidate links now" returnTo={self} disabledReason={r.affiliateLinks.some((l) => l.isActive) ? undefined : "No active affiliate links"} />
       </div>
 
       {r.kind === "AI_GUIDE" && (
@@ -197,7 +198,7 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
               </div>
             ))}
           </div>
-          <div className="field-hint">Filled fields become overrides (confidence 100%). Clear a field to remove its override. Saving re-runs categorization and Sovrn matching.</div>
+          <div className="field-hint">Filled fields become overrides (confidence 100%). Clear a field to remove its override. Saving re-runs categorization and the commerce-offer check.</div>
           <div className="btnrow">
             <button className="btn primary" type="submit">
               Save entity overrides
@@ -430,107 +431,43 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
       </section>
 
       <section aria-labelledby="deal-h">
-        <h2 id="deal-h">Sovrn offers</h2>
+        <h2 id="deal-h">Commerce offers</h2>
         <p>
           <Badge value={r.dealStatus} /> <span className="small muted">{r.dealStatusReason ?? ""} · checked {when(r.dealCheckedAt)}</span>
         </p>
-        <form action="/api/admin/reviews" method="post" className="toolbar">
-          <input type="hidden" name="id" value={id} />
-          <input type="hidden" name="action" value="override-deal" />
-          <input type="hidden" name="returnTo" value={self} />
-          <div className="field">
-            <label htmlFor="o-deal">Sovrn deal ID override</label>
-            <input id="o-deal" name="dealId" defaultValue={r.sovrnDealIdOverride ?? ""} placeholder="Leave empty to clear" maxLength={300} />
-          </div>
-          <button className="btn" type="submit">
-            Save deal override &amp; re-match
-          </button>
-        </form>
+        <p className="small muted">Offers observed by the commerce engine for this review’s primary product. A price is shown publicly only while observed within the price window; links stay plain unless an affiliate provider set one.</p>
         <div className="table-wrap">
           <table className="table responsive">
             <thead>
               <tr>
-                <th scope="col">#</th>
-                <th scope="col">Offer</th>
-                <th scope="col">Merchant</th>
+                <th scope="col">Seller</th>
                 <th scope="col" className="num">Price</th>
                 <th scope="col">Availability</th>
-                <th scope="col" className="num">Score</th>
                 <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.offerMatches.map((m) => (
-                <tr key={m.id}>
-                  <td data-label="#">{m.rank}</td>
-                  <td data-label="Offer">
-                    {m.isBestOffer && <Badge value="BEST" tone="ok" />} {m.title}
-                    <div className="small muted">id {m.offerId}</div>
-                    {m.selectionReason && <div className="small muted">{m.selectionReason}</div>}
-                    <details>
-                      <summary className="small">Score breakdown</summary>
-                      <pre className="code">{JSON.stringify(m.scoreBreakdown, null, 2)}</pre>
-                    </details>
-                  </td>
-                  <td data-label="Merchant">{m.merchantName ?? "—"}</td>
-                  <td data-label="Price" className="num">{m.price !== null ? `${m.price} ${m.currency ?? ""}` : "not provided"}</td>
-                  <td data-label="Availability">{m.availability ?? "—"}</td>
-                  <td data-label="Score" className="num">{m.score.toFixed(3)}</td>
-                  <td data-label="Status">
-                    <Badge value={m.matchStatus} />
-                  </td>
-                </tr>
-              ))}
-              {!r.offerMatches.length && (
-                <tr>
-                  <td colSpan={7}>No offers stored.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="links-h">
-        <h2 id="links-h">Affiliate links</h2>
-        <div className="table-wrap">
-          <table className="table responsive">
-            <thead>
-              <tr>
                 <th scope="col">Link</th>
-                <th scope="col">Method</th>
-                <th scope="col">Verification</th>
-                <th scope="col">Checked</th>
-                <th scope="col">Next check</th>
+                <th scope="col">Observed</th>
               </tr>
             </thead>
             <tbody>
-              {r.affiliateLinks.map((l) => (
-                <tr key={l.id} className={l.isActive ? undefined : "row-inactive"}>
-                  <td data-label="Link" style={{ wordBreak: "break-all" }}>
-                    {l.isBest && <Badge value="BEST" tone="ok" />} {!l.isActive && <Badge value="INACTIVE" />} <span className="small">{l.affiliateUrl}</span>
-                    {Array.isArray(l.redirectChain) && (
-                      <details>
-                        <summary className="small">Redirect chain ({(l.redirectChain as unknown[]).length})</summary>
-                        <pre className="code">{JSON.stringify(l.redirectChain, null, 2)}</pre>
-                      </details>
-                    )}
+              {commerceOffers.map((o) => (
+                <tr key={o.id}>
+                  <td data-label="Seller">
+                    {o.seller} <span className="small muted">({o.sellerType.toLowerCase()})</span>
                   </td>
-                  <td data-label="Method">{l.generationMethod}</td>
-                  <td data-label="Verification">
-                    <Badge value={l.verificationStatus} />
-                    <div className="small muted">
-                      {l.httpStatus ? `HTTP ${l.httpStatus} · ` : ""}
-                      {l.verificationReason}
-                    </div>
+                  <td data-label="Price" className="num">{o.price !== null ? `${o.price} ${o.currency ?? ""}` : "not stated"}</td>
+                  <td data-label="Availability">{o.availability ?? "—"}</td>
+                  <td data-label="Status">
+                    <Badge value={o.status} />
                   </td>
-                  <td data-label="Checked">{when(l.lastVerifiedAt)}</td>
-                  <td data-label="Next check">{when(l.nextVerificationAt)}</td>
+                  <td data-label="Link" className="small" style={{ wordBreak: "break-all" }}>
+                    <Badge value={o.affiliateUrl ? "AFFILIATED" : "PLAIN"} tone={o.affiliateUrl ? "ok" : "neutral"} /> {o.destinationUrl}
+                  </td>
+                  <td data-label="Observed">{when(o.observedAt)}</td>
                 </tr>
               ))}
-              {!r.affiliateLinks.length && (
+              {!commerceOffers.length && (
                 <tr>
-                  <td colSpan={5}>No affiliate links generated.</td>
+                  <td colSpan={6}>{primaryEntityId ? "No commerce offers observed for this product yet." : "No primary product linked, so no commerce offers apply."}</td>
                 </tr>
               )}
             </tbody>

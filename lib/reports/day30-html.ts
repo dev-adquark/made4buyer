@@ -43,8 +43,8 @@ table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 10px
 <p class="muted">All values are computed from persisted records. Integrations without credentials are reported as BLOCKED_BY_ENVIRONMENT / NOT_AVAILABLE_IN_ENVIRONMENT, not as zero.</p>
 ${grid("Integration status", ["Integration", "State"], integrations, "")}
 ${table("Ingestion", r.ingestion)}
-${table("Deal coverage", r.dealCoverage)}
-${table("Link health", r.linkHealth)}
+${table("Price coverage", r.dealCoverage)}
+${table("Retailer links (commerce engine)", r.linkHealth)}
 ${table("Categorization", r.categorization)}
 ${table("Images", r.images)}
 ${table("SEO / indexing", r.seoIndexing)}

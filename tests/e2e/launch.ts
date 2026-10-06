@@ -27,7 +27,7 @@ async function main() {
   } catch {
     /* no build output yet */
   }
-  const stub = await startStubServer({ port: 4011, sovrnKey: "e2e-sovrn" });
+  const stub = await startStubServer({ port: 4011 });
   const env = {
     ...process.env,
     NODE_ENV: "production" as const,
@@ -37,12 +37,10 @@ async function main() {
     NEXT_PUBLIC_SITE_URL: `http://localhost:${port}`,
     CONTENT_API_URL: `${stub.base}/content`,
     CONTENT_API_SOURCE_NAME: "sample-fixture",
-    SOVRN_API_URL: `${stub.base}/sovrn`,
     // Historical sample fixtures stay in-window (the 7-day rule has its own tests).
     FRESHNESS_MAX_DAYS: "36500",
     // This suite walks the admin tools by hand; automatic publishing is covered by integration tests.
     AUTO_PUBLISH_ENABLED: "false",
-    SOVRN_API_KEY: "e2e-sovrn",
     KEYWORD_TO_BLOG_API_URL: `${stub.base}/ktb/v1/generate`,
     KEYWORD_TO_BLOG_API_KEY: "test-ktb-key",
     APIFY_API_TOKEN: "test-apify-token",

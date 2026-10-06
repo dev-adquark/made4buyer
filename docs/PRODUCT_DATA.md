@@ -10,7 +10,7 @@ guide) is not shown.
 | Source | What it gives | How we reach it |
 |---|---|---|
 | Manufacturer page | identity, specs, price, availability | the product URL the review source linked, when it is on the brand's own domain |
-| Structured feed | price, merchant | Sovrn price-comparison matches whose link was verified |
+| Structured feed | price, merchant | Approved product feeds (none configured). Live prices are shown from the commerce engine's fresh offers, not stored as facts |
 | Retailer page | price, availability, identifiers | the retailer page behind a verified offer, or the product URL the source linked |
 | Review source | pros, cons, rating, identifiers, stated price | the review's own structured data (Apify extraction) |
 | Other page | anything above | only as supporting evidence |

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Wordmark } from "./brand-mark";
 import type { NavCategory } from "./site-nav";
 import { visibleNavCategories } from "@/lib/public/nav-categories";
+import { affiliateProviderActive } from "@/lib/affiliate/provider";
 
 /** `taxonomy` is the full category list; only categories with published content are linked. */
 export default async function SiteFooter({ categories: taxonomy }: { categories: NavCategory[] }) {
@@ -21,9 +22,12 @@ export default async function SiteFooter({ categories: taxonomy }: { categories:
           <Link className="brand" href="/">
             <Wordmark />
           </Link>
-          <p style={{ marginTop: 14, maxWidth: "40ch" }}>Reviews sorted by what you need, comparisons built only from facts we hold, and offers we check before we show them.</p>
+          <p style={{ marginTop: 14, maxWidth: "40ch" }}>Reviews sorted by what you need, comparisons built only from facts we hold, and prices shown only while recently checked.</p>
           <p className="footer-disclosure">
-            <strong>Affiliate disclosure.</strong> Some links to retailers earn us a commission if you buy, through Sovrn Commerce. It never decides what we review or which offer we show, and a verified offer is shown only after its link is checked.{" "}
+            <strong>Affiliate disclosure.</strong>{" "}
+            {affiliateProviderActive()
+              ? "Some links to retailers earn us a commission if you buy. That never decides what we review or which seller we list."
+              : "Links to retailers are plain links: we currently earn nothing from them. Prices are shown only while recently checked."}{" "}
             <Link href="/disclosure">Read the disclosure</Link>
           </p>
         </div>

@@ -26,24 +26,12 @@
       "schedule": "15 6 * * *"
     },
     {
-      "path": "/api/cron/verify-links",
-      "schedule": "0 7 * * *"
-    },
-    {
-      "path": "/api/cron/revalidate-offers",
-      "schedule": "30 7 * * *"
-    },
-    {
       "path": "/api/cron/retry-failed",
       "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/publish-cycle",
       "schedule": "30 8 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-coupons",
-      "schedule": "15 8 * * *"
     },
     {
       "path": "/api/cron/detect-stale",
@@ -68,6 +56,18 @@
     {
       "path": "/api/cron/fix-title-years",
       "schedule": "15 7 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-collect",
+      "schedule": "40 10 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-coupons",
+      "schedule": "20 11 * * *"
     }
   ]
 }

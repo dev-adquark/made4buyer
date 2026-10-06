@@ -32,7 +32,6 @@ beforeAll(async () => {
     PEXELS_API_BASE_URL: `${stub.base}/pexels/v1`,
     UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: "true",
     IMAGE_ENRICHMENT_URL: undefined,
-    SOVRN_API_URL: undefined,
     CONTENT_API_URL: undefined,
   });
 });
@@ -223,29 +222,9 @@ describe("daily article automation", () => {
     expect(await db.normalizedReview.count({ where: { status: "PUBLISHED" } })).toBe(1);
   });
 
-  it("publishes even while Sovrn rejects every request (Sovrn never blocks content)", async () => {
-    const r = withEnv({ SOVRN_API_URL: `${stub.base}/sovrn`, SOVRN_API_KEY: "rejected-secret" });
-    try {
-      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
-    } finally {
-      r();
-    }
-    expect(await db.affiliateLink.count()).toBe(0);
-  });
-
-  it("publishes when Sovrn answers 403 or marks every offer affiliatable:false", async () => {
-    const r = withEnv({ SOVRN_API_URL: `${stub.base}/sovrn`, SOVRN_API_KEY: "test-sovrn-key" });
-    try {
-      stub.sovrn.status = 403;
-      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
-      stub.sovrn.status = 0;
-      stub.sovrn.notAffiliatable = true;
-      expect(await runDailyArticle("test", { now: EVENING })).toMatchObject({ status: "PUBLISHED" });
-    } finally {
-      stub.sovrn.status = 0;
-      stub.sovrn.notAffiliatable = false;
-      r();
-    }
+  it("publishes without any commerce data (prices never block content)", async () => {
+    expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({ status: "PUBLISHED" });
+    expect(await db.commerceOffer.count()).toBe(0);
   });
 
   it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {

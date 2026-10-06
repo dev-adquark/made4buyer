@@ -3,8 +3,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * End-to-end: admin login → ingestion → QA queue → edit → CSV import → deal matching →
- * revalidation → publish → public review/category/search pages → affiliate click →
+ * End-to-end: admin login → ingestion → QA queue → edit → CSV import → deal status (commerce
+ * engine, no data here) → retailer links → publish → public review/category/search pages → /go guard →
  * analytics → reject → restore → unpublish, plus dead-link / dead-button sweeps.
  * Runs serially against one fresh database seeded only by the UI flow itself.
  */
@@ -85,19 +85,19 @@ test("5. CSV import with preview and processing", async () => {
   await expect(page.getByText("All QA gates pass.")).toBeVisible();
 });
 
-test("6. deal matching is visible to admins", async () => {
+test("6. deal status comes from the commerce engine (no data in this suite)", async () => {
   await page.goto("/admin/deals");
   const mba = page.getByRole("row").filter({ hasText: "MacBook Air 13 (M4)" });
-  await expect(mba).toContainText("MATCHED");
-  await expect(mba).toContainText("VERIFIED_OK");
-  await expect(page.getByRole("row").filter({ hasText: "ChatGPT Plus" })).toContainText("NO_MATCH");
+  await expect(mba).toContainText("UNAVAILABLE");
+  await expect(mba).toContainText("commerce engine");
+  await expect(page.locator("body")).not.toContainText(/sovrn|viglink/i);
 });
 
-test("7. revalidation by date range", async () => {
+test("7. retailer links admin: plain links, no affiliate provider", async () => {
   await page.goto("/admin/links");
-  await page.getByRole("button", { name: "Run revalidation" }).click();
-  await flash(/Revalidation \(links\) checked \d+: \d+ ok, \d+ failed/);
-  await expect(page.getByRole("row").filter({ hasText: "LINK_VERIFICATION" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Retailer links" })).toBeVisible();
+  await expect(page.locator("main, body").first()).toContainText("Affiliate provider: none");
+  await expect(page.getByText("No commerce offers stored yet.")).toBeVisible();
 });
 
 test("8. publish the QA-passed queue", async () => {
@@ -114,21 +114,27 @@ test("9. public review page", async () => {
   await page.waitForURL(/\/review\//);
   state.macbookSlug = page.url().split("/review/")[1];
   await expect(page.getByRole("heading", { level: 1 })).toContainText("MacBook Air");
-  await expect(page.locator("#deal .verified-head")).toHaveText("Verified offer");
-  await expect(page.getByRole("link", { name: /View deal/ })).toBeVisible();
-  await expect(page.locator("#deal").getByText(/may earn a commission/)).toBeVisible();
+  // No commerce data: the honest state, never a stale or invented price.
+  await expect(page.locator("#deal")).toContainText("Price currently unavailable");
+  await expect(page.locator("#deal")).toContainText("we earn nothing");
+  await expect(page.getByRole("link", { name: /View deal/ })).toHaveCount(0);
+  await expect(page.locator(".sticky-offer")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Laptops");
   const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
   const types = ld.map((t) => JSON.parse(t)["@type"]);
-  expect(types).toEqual(expect.arrayContaining(["BreadcrumbList", "Article", "Product"]));
+  expect(types).toEqual(expect.arrayContaining(["BreadcrumbList", "Article"]));
+  // No Offer markup without a fresh price.
+  expect(ld.join("")).not.toContain('"Offer"');
+  const html = await page.content();
+  expect(html).not.toMatch(/sovrn|viglink|vglnk/i);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", new RegExp(`/review/${state.macbookSlug}$`));
   // No internal verification data on the public page.
   await expect(page.locator("body")).not.toContainText(/VERIFIED_OK|redirect chain|score breakdown/i);
 
-  // A review without a verified offer shows the honest unavailable state.
+  // Every review without commerce data shows the same honest state.
   await page.goto("/category/ai-tools");
   await page.locator('a[href^="/review/"]', { hasText: /ChatGPT Plus/ }).first().click();
-  await expect(page.getByText("No verified offer currently available.")).toBeVisible();
+  await expect(page.locator("#deal")).toContainText("Price currently unavailable");
   await expect(page.locator("#deal .price")).toHaveCount(0);
 });
 
@@ -161,13 +167,8 @@ test("11. search", async () => {
   state.pixelSlug = page.url().split("/review/")[1];
 });
 
-test("12. affiliate click goes through the verified redirect", async () => {
-  await page.goto(`/review/${state.macbookSlug}`);
-  const [popup] = await Promise.all([page.waitForEvent("popup"), page.getByRole("link", { name: /View deal/ }).click()]);
-  await popup.waitForLoadState();
-  expect(popup.url()).toMatch(/127\.0\.0\.1:4011\/merchant\//);
-  await popup.close();
-  // Unknown or unverified link ids never redirect off-site.
+test("12. /go redirects only to stored commerce offers", async () => {
+  // Unknown offer ids never redirect off-site.
   const res = await page.request.get("/go/notarealidentifier1", { maxRedirects: 0 });
   expect(res.status()).toBe(302);
   expect(res.headers().location).toMatch(/^http:\/\/localhost:\d+\/$/);
@@ -176,12 +177,9 @@ test("12. affiliate click goes through the verified redirect", async () => {
 test("13. analytics records events and CTR", async () => {
   await page.goto("/admin/analytics");
   const stat = (label: string) => page.locator(".stat").filter({ has: page.locator(".stat-label", { hasText: new RegExp(`^${label}$`) }) }).locator(".stat-value");
-  await expect(stat("affiliate_click")).not.toHaveText("0");
   await expect(stat("page_view")).not.toHaveText("0");
-  await expect(stat("deal_impression")).not.toHaveText("0");
   await expect(stat("search")).not.toHaveText("0");
   await expect(stat("publish")).not.toHaveText("0");
-  await expect(page.getByRole("row").filter({ hasText: "Laptops" })).toContainText("SUFFICIENT");
 });
 
 test("14. reject removes the page from the public site", async () => {
@@ -212,11 +210,13 @@ test("16. unpublish", async () => {
 });
 
 test("security: cron, health, robots and admin API protection", async ({ request }) => {
-  expect((await request.get("/api/cron/verify-links")).status()).toBe(401);
-  expect((await request.get("/api/cron/verify-links", { headers: { authorization: "Bearer e2e-cron-secret" } })).status()).toBe(200);
+  expect((await request.get("/api/cron/cleanup-cache")).status()).toBe(401);
+  expect((await request.get("/api/cron/cleanup-cache", { headers: { authorization: "Bearer e2e-cron-secret" } })).status()).toBe(200);
+  // Retired Sovrn jobs are gone.
+  expect((await request.get("/api/cron/verify-links", { headers: { authorization: "Bearer e2e-cron-secret" } })).status()).toBe(404);
   const health = await (await request.get("/api/health")).json();
   expect(health).toMatchObject({ status: "ok", database: "ok" });
-  expect(JSON.stringify(health)).not.toMatch(/postgres:|e2e-sovrn|password/);
+  expect(JSON.stringify(health)).not.toMatch(/postgres:|password/);
   expect(await (await request.get("/robots.txt")).text()).toMatch(/Sitemap: http:\/\/localhost:\d+\/sitemap\.xml/);
   expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { origin: "https://evil.example" } })).status()).toBe(403);
   expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { accept: "application/json", origin: `http://localhost:${process.env.E2E_PORT ?? 3100}` }, maxRedirects: 0 })).status()).toBe(401);
@@ -395,9 +395,9 @@ test("hero: editorial statement, real collage, motion respects reduced motion", 
   await expect(full.getByRole("heading", { level: 1 })).toHaveText(/Buy less\.\s+Buy right\./i);
   const collage = full.getByRole("complementary", { name: "On the cutting table" });
   await expect(collage).toBeVisible();
-  // Clippings are real records: the latest review links to its page, the deal clip to a verified offer.
+  // Clippings are real records: the latest review links to its page; with no fresh prices the deal clip says so.
   await expect(collage.locator('a.clip.photo[href^="/review/"]')).toHaveCount(1);
-  await expect(collage.locator("a.clip.deal")).toContainText("Verified offer");
+  await expect(collage.locator(".clip.deal")).toContainText("No current prices yet");
   await expect(full.getByRole("region", { name: "Running now" })).toBeVisible();
   await full.close();
   const reduced = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
@@ -431,12 +431,13 @@ test("go-live checks run read-only probes and report honestly", async () => {
   await expect(page.getByRole("heading", { name: /Last run/ })).toBeVisible();
   const row = (name: string) => page.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
   await expect(row("contentApi")).toContainText("OK");
-  await expect(row("sovrn")).toContainText("OK");
+  await expect(row("affiliateProvider")).toContainText("OK");
+  await expect(row("sovrn")).toHaveCount(0);
   await expect(row("database")).toContainText("OK");
   // The test-only loopback flag is flagged, and unconfigured GSC is blocked, not "failed".
   await expect(row("environment")).toContainText("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS");
   await expect(row("gsc")).toContainText("BLOCKED_BY_ENVIRONMENT");
-  await expect(page.locator("body")).not.toContainText(/e2e-sovrn|test-ktb-key|e2e-cron-secret/);
+  await expect(page.locator("body")).not.toContainText(/test-ktb-key|e2e-cron-secret/);
 });
 
 test("review sources: add, enable, robots-checked crawl, collect job (sample stub)", async ({ request }) => {

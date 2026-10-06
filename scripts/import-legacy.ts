@@ -10,8 +10,8 @@
  *   full pipeline; its slug and original publishedAt are preserved.
  * - Legacy PUBLISHED reviews are re-published through the QA gates. Reviews that fail QA
  *   are listed and stay in the QA queue (they are not force-published).
- * - Legacy Deal rows are NOT imported as verified: offers are re-matched via Sovrn and
- *   links re-verified, because the legacy boolean carried no verification evidence.
+ * - Legacy Deal rows are NOT imported: prices and offers come only from the commerce engine,
+ *   because the legacy boolean carried no verification evidence.
  * - Analytics events are copied (review_view → page_view, compare → comparison).
  * - Sponsored placements are copied disabled.
  */

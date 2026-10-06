@@ -4,8 +4,8 @@
 Content API ──► ContentItem ──► NormalizedReview ──► ExtractedEntities ──► CategoryTagSet
                 (raw snapshot)   (canonical review)    (per-field confidence)  (review_category_assignments)
                                                                                      │
-PublishJob ◄── PageRenderModel ◄── AffiliateLinkSet ◄── MatchedSovrnOfferSet ◄── ImageAsset
-(publish_jobs) (page_render_models) (affiliate_links)    (sovrn_offer_matches)   (image_assets)
+PublishJob ◄── PageRenderModel ◄── commerce offers (read) ◄── ImageAsset
+(publish_jobs) (page_render_models) (commerce_offers, fresh)   (image_assets)
 ```
 
 Every stage name below is the value of the `PipelineStage` enum. The same name appears in the
@@ -32,9 +32,10 @@ It prints a summary table and writes every stage's input and output to
 | Entity extraction | `lib/pipeline/entities.ts`, `lib/pipeline/brands.ts` |
 | Taxonomy definitions / classifier / persistence | `lib/taxonomy/*` |
 | Image enrichment | `lib/pipeline/images.ts` |
-| Sovrn adapter, cache, scoring | `lib/sovrn/client.ts`, `lib/sovrn/offers.ts` |
-| Affiliate link generation | `lib/sovrn/affiliate.ts` |
-| Link verification | `lib/pipeline/verify-link.ts` on top of `lib/net/safe-fetch.ts` (SSRF-safe) |
+| Public commerce offers (fresh prices, seller links) | `lib/public/offers.ts` (reads `commerce_offers` written by the commerce engine, `lib/commerce/*`) |
+| Affiliate provider interface (default `none`: plain links) | `lib/affiliate/provider.ts` |
+| Product URL hygiene (tracking params, affiliate redirectors) | `lib/net/product-url.ts` |
+| Outbound link verification utility | `lib/pipeline/verify-link.ts` on top of `lib/net/safe-fetch.ts` (SSRF-safe) |
 | Stage runners (persist + failures) | `lib/pipeline/stages.ts` |
 | Per-review orchestration | `lib/pipeline/process.ts` |
 | Ingestion run orchestration | `lib/pipeline/ingest.ts` |
@@ -97,28 +98,14 @@ It prints a summary table and writes every stage's input and output to
 - **Failure states:** `IMAGE_ENRICHMENT_FAILED`, `LICENSE_UNVERIFIED`. These never block publishing.
 
 ### 8. `OFFER_MATCHING`
-- **Input:** product name, brand, device type, category and model number.
-- **Records:** `sovrn_offers_cache` holds every response, including errors, with `providerStatus` and `expiresAt`; only successful responses are reused. `sovrn_offer_matches` holds viable offers plus up to three below-threshold offers for transparency, each with `score`, `scoreBreakdown`, `rank`, `isBestOffer` and `selectionReason`.
-- **Scoring:** product similarity 0.35, brand 0.15, model 0.15, category fit 0.10 (accessory or replacement listings score 0), availability 0.10, price present 0.10, merchant quality 0.05. An offer is viable when its score is ≥ `SOVRN_MIN_MATCH_SCORE` and product ≥ 0.5, brand > 0 and category > 0. Ties break on availability, then lower price, then `offerId`.
-- **Deal ID override:** a set `sovrnDealIdOverride` forces that offer, which must be present in the provider's results. Otherwise the stage records `SOVRN_DEAL_ID_NOT_FOUND`.
-- **Review `dealStatus`:** `MATCHED`, `NO_MATCH`, `STALE` (provider failed but earlier matches exist), `FAILED`, or `UNAVAILABLE` (Sovrn not configured).
-- **Failure states:** `SOVRN_NOT_CONFIGURED`, `SOVRN_NO_MATCH`, `SOVRN_TIMEOUT`, `SOVRN_PROVIDER_ERROR`, `SOVRN_RESPONSE_INVALID`, `SOVRN_DEAL_ID_NOT_FOUND`.
-
-### 9. `AFFILIATE_LINK`
-- **Output:** the AffiliateLinkSet — the best offer plus up to `SOVRN_ALTERNATE_OFFERS` alternates.
-- **Record:** `affiliate_links`, unique on `(normalizedReviewId, sovrnOfferId)`, with `generationMethod`, `isBest`, `isActive` and `destinationUrl`.
-- **Rules:** the link is the provider's deeplink (`PROVIDER_DEEPLINK`), or the merchant URL wrapped with `SOVRN_LINK_WRAPPER_URL?key=SOVRN_SITE_KEY&u=…` (`LINK_WRAPPER`). If neither is possible the stage fails with `AFFILIATE_URL_INVALID`; no link is ever invented. A changed URL resets verification to `PENDING`.
-
-### 10. `LINK_VERIFICATION`
-- **Rules:** the redirect chain is followed manually through `safeFetch`: http(s) only, standard ports, every hop re-validated, private, loopback, link-local and internal hosts refused at socket-connect time (so DNS rebinding cannot bypass the check), loops detected, bounded hop count and timeout. HEAD is tried first, then a ranged GET.
-- **Classification:** `VERIFIED_OK`, `REDIRECT_MISMATCH` (the final registrable domain differs from the merchant's, or a loop occurred), `FORBIDDEN`, `BLOCKED`, `UNAVAILABLE`, `TIMEOUT`, `INVALID`, `PROVIDER_ERROR`.
-- **Record:** the result is written to `affiliate_links` (`verificationStatus`, `verificationReason`, `httpStatus`, `redirectChain`, `finalUrl`, `lastVerifiedAt`, `nextVerificationAt`). Each run adds a `revalidation_runs` row with checked, success and failure counts and a reason breakdown.
-- **Retry:** `TIMEOUT` and `PROVIDER_ERROR` back off (1 h × 2ⁿ, at most 24 h). Healthy links are re-checked every `LINK_VERIFY_INTERVAL_HOURS`.
-- **Public rule:** only `VERIFIED_OK` links on `MATCHED` offers are rendered or redirected by `/go/{id}`.
+- **Input:** the review's PRIMARY product (`content_entities`, role `PRIMARY`).
+- **Rule:** no provider is called. The stage reads the commerce engine's `commerce_offers` for that product (`commerce_products.productEntityId`, set only after an exact identity match) and records the review's `dealStatus`: `MATCHED` (at least one FRESH priced offer observed within `PRODUCT_PRICE_MAX_AGE_HOURS`, default 48), `STALE` (offers exist but none is fresh), `UNAVAILABLE` (no offer yet, or no primary product; reason "commerce data comes from the commerce engine"), `NO_MATCH` (comparisons and guides cover several products).
+- **Links:** an offer links to the seller's own URL (`destinationUrl`). An `affiliateUrl` is used only when a real affiliate provider generated it (`lib/affiliate/provider.ts`; `AFFILIATE_PROVIDER`, only `none` is implemented). No tracking parameter is ever added by us.
+- **Legacy:** the former Sovrn stages `AFFILIATE_LINK` and `LINK_VERIFICATION` were removed. Their tables (`sovrn_offers_cache`, `sovrn_offer_matches`, `affiliate_links`, `sovrn_coupons`) and historical rows are kept untouched but are no longer read or written; open failures from those stages are resolved by `retry-failed`.
 
 ### 11. `PAGE_RENDER`
-- **Output:** the PageRenderModel, a complete description of the public page with no internal data (no scores, chains or reasons). Its JSON-LD is chosen from the real data: Review when a rating exists, otherwise Article, plus Product/Offer only when a verified offer has a price.
-- **Record:** `page_render_models` (`model`, `modelHash`, `builtAt`). It is rebuilt on publish, admin edits, overrides and link-status changes of published reviews.
+- **Output:** the PageRenderModel, a complete description of the public page with no internal data (no scores, chains or reasons). Its JSON-LD is chosen from the real data: Review when a rating exists, otherwise Article, plus Product/Offer only when a fresh commerce offer has a price (no `priceValidUntil` is invented).
+- **Record:** `page_render_models` (`model`, `modelHash`, `builtAt`). It is rebuilt on publish, admin edits and overrides of published reviews; the review page also reloads fresh offers at request time, so an aged-out price is never shown.
 
 ### 12. `PUBLISH`
 - **QA gates:** the review is not rejected; title, summary and body are long enough; a primary category exists; low-confidence categories have been accepted or overridden; low-confidence entities have been confirmed or overridden.
@@ -140,11 +127,9 @@ exhausted. Error codes are defined in `lib/errors.ts`.
 | Job (`/api/cron/<name>`) | Lock | Purpose |
 |---|---|---|
 | `ingest` | `ingestion` | Fetch, snapshot, normalize and process pending items; publish cycle |
-| `verify-links` | `job:verify-links` | Re-verify due / pending affiliate links |
-| `revalidate-offers` | `job:revalidate-offers` | Re-query Sovrn for stale or failed deal data |
 | `retry-failed` | `job:retry-failed` | Retry due retryable failures |
 | `publish-cycle` | `job:publish-cycle` | Auto-publish QA-passing queued reviews (when enabled) |
-| `cleanup-cache` | `job:cleanup-cache` | Expired Sovrn cache, sessions, rate-limit buckets, stale locks |
+| `cleanup-cache` | `job:cleanup-cache` | Expired sessions, rate-limit buckets, stale locks |
 | `inspect-index` | `job:inspect-index` | Search Console URL Inspection of published pages |
 
 Locks are acquired atomically with `INSERT … ON CONFLICT … WHERE expiresAt < now()`. A

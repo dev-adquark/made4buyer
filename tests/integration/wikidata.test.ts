@@ -25,7 +25,7 @@ const item = (id: string, label: string, brandId = "Q2", extra: Record<string, u
 beforeAll(async () => {
   await seedTaxonomy();
   stub = await startStubServer({});
-  restore = withEnv({ WIKIDATA_ENABLED: "true", WIKIDATA_API_URL: `${stub.base}/wikidata/api.php`, COMMONS_API_URL: `${stub.base}/commons/api.php`, CONTENT_API_URL: undefined, SOVRN_API_URL: undefined, AUTO_PUBLISH_ENABLED: undefined });
+  restore = withEnv({ WIKIDATA_ENABLED: "true", WIKIDATA_API_URL: `${stub.base}/wikidata/api.php`, COMMONS_API_URL: `${stub.base}/commons/api.php`, CONTENT_API_URL: undefined, AUTO_PUBLISH_ENABLED: undefined });
 });
 afterAll(async () => {
   restore();

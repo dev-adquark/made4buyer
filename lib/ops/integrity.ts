@@ -20,7 +20,6 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
     dupCanonical,
     published,
     entityless,
-    orphanLinks,
     imagelessPublished,
   ] = await Promise.all([
     db.normalizedReview.groupBy({
@@ -49,14 +48,6 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
     db.productEntity.findMany({
       where: { content: { none: {} } },
       select: { slug: true },
-      take: 20,
-    }),
-    db.affiliateLink.findMany({
-      where: {
-        isActive: true,
-        review: { status: { notIn: ["PUBLISHED", "QUEUED", "NEEDS_REVIEW"] } },
-      },
-      select: { id: true },
       take: 20,
     }),
     db.normalizedReview.findMany({
@@ -110,10 +101,6 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
     publishedWithoutImageRecord: {
       count: imagelessPublished.length,
       sample: imagelessPublished.slice(0, 5).map((r) => r.slug),
-    },
-    activeLinksOnRetiredContent: {
-      count: orphanLinks.length,
-      sample: orphanLinks.slice(0, 5).map((l) => l.id),
     },
     // Informational: products left without any article (e.g. after an editor unlinked them).
     unlinkedProducts: {

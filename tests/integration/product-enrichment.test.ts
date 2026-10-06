@@ -19,7 +19,7 @@ const productPage = (name: string, mpn: string, price: number) => `<!doctype htm
 beforeAll(async () => {
   await seedTaxonomy();
   stub = await startStubServer({});
-  restore = withEnv({ CONTENT_API_URL: undefined, SOVRN_API_URL: undefined, SOVRN_API_KEY: undefined, AUTO_PUBLISH_ENABLED: undefined });
+  restore = withEnv({ CONTENT_API_URL: undefined, AUTO_PUBLISH_ENABLED: undefined });
 });
 afterAll(async () => {
   restore();

@@ -2,7 +2,7 @@ import Link from "next/link";
 import SafeImg from "./safe-img";
 import TrustLabel from "./trust-label";
 import { placeholderPath } from "@/lib/pipeline/images";
-import { cardImage, hasVerifiedOffer, type ReviewCard as Card } from "@/lib/public/queries";
+import { cardImage, type ReviewCard as Card } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline } from "@/lib/util/format";
@@ -73,7 +73,6 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
         <div className="body">
           <div className="meta-row">
             <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
-            {hasVerifiedOffer(review) && <TrustLabel kind="verified" />}
           </div>
           <Heading>{review.canonicalTitle}</Heading>
           <p className="summary">{review.summary}</p>
@@ -96,7 +95,6 @@ export function FeatureStory({ review }: { review: Card }) {
         <div className="meta-row" style={{ marginTop: 16 }}>
           <span className="cat-tag">{categoryName(review.categorySlug) ?? "General"}</span>
           <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
-          {hasVerifiedOffer(review) && <TrustLabel kind="verified" />}
         </div>
         <h3>{review.canonicalTitle}</h3>
         <p className="summary">{review.summary}</p>

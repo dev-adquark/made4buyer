@@ -35,7 +35,7 @@ For every later schema change, run `npm run db:migrate` before (or as part of) t
 ## 2. Vercel project
 
 1. Import the repository. The framework is detected as Next.js, and the build command is `npm run build` (release notes → `prisma generate` → `next build`).
-2. Set the environment variables from [`.env.example`](../.env.example). The minimum for a working production site is `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` (≥ 32 characters) and `CRON_SECRET`, plus `CONTENT_API_URL`/`CONTENT_API_KEY` for ingestion and `SOVRN_API_URL`/`SOVRN_API_KEY` for deals.
+2. Set the environment variables from [`.env.example`](../.env.example). The minimum for a working production site is `DATABASE_URL`, `NEXT_PUBLIC_SITE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_SECRET` (≥ 32 characters) and `CRON_SECRET`, plus `APIFY_API_TOKEN` for reviews and the commerce engine. Prices and seller links come from the commerce engine; `AFFILIATE_PROVIDER` defaults to `none` (plain retailer links).
 3. Never set `UNSAFE_ALLOW_LOOPBACK_FOR_TESTS` in any deployed environment. It is ignored when `VERCEL_ENV=production`.
 
 ## 3. Cron

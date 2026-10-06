@@ -5,38 +5,32 @@ import { PRODUCT_TYPE_QUERIES } from "../../lib/images/product-type";
 import path from "node:path";
 
 /**
- * LOCAL/TEST stub for the Content API, Sovrn and merchant endpoints, serving the SAMPLE
+ * LOCAL/TEST stub for the Content API, Apify, Keyword-to-Blog and merchant endpoints, serving the SAMPLE
  * fixtures in /fixtures. It exists so the full pipeline can run on a laptop and in CI
  * without credentials. It is never used by the production code path.
  *
  *   GET /content                    → fixtures/sample-content.json (Bearer auth optional)
- *   GET /sovrn?search-keywords=…    → sample offers (requires "Authorization: secret <key>")
- *   GET|HEAD /aff/:id               → 302 → /merchant/:id   (affiliate redirect)
+ *   GET|HEAD /aff/:id               → 302 → /merchant/:id   (generic redirect)
  *   GET|HEAD /merchant/:id          → 200 (sv-ank-1 → 404 to exercise UNAVAILABLE)
  *   GET|HEAD /image/:name           → 1×1 PNG
  */
 
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64");
 
-export type StubOptions = { port?: number; sovrnKey?: string; contentKey?: string; contentOverride?: () => unknown; apifyToken?: string };
+export type StubOptions = { port?: number; contentKey?: string; contentOverride?: () => unknown; apifyToken?: string };
 
 export async function startStubServer(opts: StubOptions = {}) {
   const root = path.resolve(process.cwd(), "fixtures");
   const content = JSON.parse(readFileSync(path.join(root, "sample-content.json"), "utf8")) as { items: unknown[] };
-  const sovrn = JSON.parse(readFileSync(path.join(root, "sample-sovrn-offers.json"), "utf8")) as { responses: Record<string, unknown[]> };
   const apifyItems = JSON.parse(readFileSync(path.join(root, "sample-apify-items.json"), "utf8")) as { items: unknown[] };
   const apifyRuns = new Map<string, { input: unknown; polls: number }>();
   const requests: Array<{ method: string; path: string }> = [];
   let base = "";
   const pexels = { broken: false, rateLimited: false };
-  // Sovrn stub controls: `status` forces that HTTP status (e.g. 403); `notAffiliatable` marks every offer affiliatable:false.
-  const sovrnCtl = { status: 0, notAffiliatable: false };
-  // Sovrn Product Promo Codes stub (documented response shape). `coupons` is returned for any product_url.
   // Product pages for enrichment tests: GET /pages/<name> serves pages[name] as HTML.
   const pages: Record<string, string> = {};
   // Wikidata/Commons stub: `search` ids, `entities` by id, `commons` imageinfo by file name.
   const wikidata = { search: [] as string[], entities: {} as Record<string, unknown>, commons: {} as Record<string, unknown> };
-  const couponCtl = { status: 0, coupons: [] as Array<Record<string, unknown>>, verificationActive: false, requests: [] as string[] };
   // Keyword-to-Blog stub controls: `unavailable` = number of next requests to fail with the
   // provider's "temporarily unavailable" error; `handsOn` = article claims hands-on testing.
   const ktb = { unavailable: 0, handsOn: false, delayMs: 0, requests: 0, quotaReached: false, rejectPrimary: false, keysUsed: [] as string[], tinyPost: false, fixedTitle: "" };
@@ -68,21 +62,6 @@ export async function startStubServer(opts: StubOptions = {}) {
     if (url.pathname.startsWith("/pages/")) {
       const html = pages[decodeURIComponent(url.pathname.slice(7))];
       return html ? send(200, html, { "content-type": "text/html; charset=utf-8" }) : send(404, "not found");
-    }
-    if (url.pathname === "/coupons/product") {
-      if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
-      if (couponCtl.status) return send(couponCtl.status, { error: "forbidden" });
-      couponCtl.requests.push(url.searchParams.get("product_url") ?? "");
-      return send(200, { merchant: { domain: "shop.example.test", group_id: 1, group_name: "Example Shop", logo_url: null }, scan: { verification_active: couponCtl.verificationActive, when_to_check_back: 600 }, coupons: couponCtl.coupons });
-    }
-    if (url.pathname === "/sovrn") {
-      if (req.headers.authorization !== `secret ${opts.sovrnKey ?? "test-sovrn-key"}`) return send(401, { error: "unauthorized" });
-      if (sovrnCtl.status) return send(sovrnCtl.status, { error: "forbidden" });
-      const q = (url.searchParams.get("search-keywords") ?? "").toLowerCase();
-      if (q.includes("ratelimit")) return send(429, { error: "Too many requests" });
-      const key = Object.keys(sovrn.responses).find((k) => k.toLowerCase() === q) ?? Object.keys(sovrn.responses).find((k) => q.includes(k.toLowerCase()) || k.toLowerCase().includes(q));
-      const offers = (key ? sovrn.responses[key] : []) as Record<string, unknown>[];
-      return send(200, fill({ offers: sovrnCtl.notAffiliatable ? offers.map((o) => ({ ...o, affiliatable: false })) : offers }));
     }
     // Apify API (v2) — just enough of it for the scrape/collect jobs: runs, run status, dataset items.
     if (url.pathname.startsWith("/apify/v2/")) {
@@ -230,5 +209,5 @@ export async function startStubServer(opts: StubOptions = {}) {
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
   const address = server.address() as { port: number };
   base = `http://127.0.0.1:${address.port}`;
-  return { base, requests, pexels, ktb, sovrn: sovrnCtl, coupons: couponCtl, pages, wikidata, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, requests, pexels, ktb, pages, wikidata, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

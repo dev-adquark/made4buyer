@@ -24,8 +24,7 @@ beforeAll(async () => {
     IMAGE_ENRICHMENT_URL: undefined,
     IMAGE_REQUIRE_LICENSE: "true",
     CONTENT_API_IMAGES_LICENSED: undefined,
-    SOVRN_API_URL: undefined,
-  });
+    });
 });
 afterAll(async () => {
   restore();

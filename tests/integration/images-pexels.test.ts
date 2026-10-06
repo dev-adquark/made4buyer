@@ -22,8 +22,7 @@ beforeAll(async () => {
     UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: "true",
     IMAGE_ENRICHMENT_URL: undefined,
     IMAGE_REQUIRE_LICENSE: "true",
-    SOVRN_API_URL: undefined,
-  });
+    });
 });
 afterAll(async () => {
   restore();

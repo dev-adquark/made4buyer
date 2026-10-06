@@ -51,7 +51,7 @@ describe("retailerLinksFor", () => {
     expect(links[0]).toMatchObject({ kind: "retailer", label: "View at newegg.com", source: "retailer product page (Newegg)" });
   });
 
-  it("never links the review publisher, Made4Buyers, Sovrn/VigLink redirects or image/CDN hosts", () => {
+  it("never links the review publisher, Made4Buyers, affiliate-network redirects or image/CDN hosts", () => {
     const cases = [
       "https://cloudwards.net/go/nordvpn",
       "https://www.made4buyers.com/review/x",

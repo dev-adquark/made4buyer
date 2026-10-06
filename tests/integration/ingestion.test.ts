@@ -13,7 +13,7 @@ let override: (() => unknown) | undefined;
 beforeAll(async () => {
   await seedTaxonomy();
   stub = await startStubServer({ contentKey: "content-key", contentOverride: () => override?.() ?? undefined });
-  restore = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_KEY: "content-key", CONTENT_API_SOURCE_NAME: "sample-fixture", SOVRN_API_URL: undefined, SOVRN_API_KEY: undefined, AUTO_PUBLISH_ENABLED: "false" });
+  restore = withEnv({ CONTENT_API_URL: `${stub.base}/content`, CONTENT_API_KEY: "content-key", CONTENT_API_SOURCE_NAME: "sample-fixture", AUTO_PUBLISH_ENABLED: "false" });
 });
 afterAll(async () => {
   restore();
@@ -60,7 +60,7 @@ describe("Content API ingestion", () => {
     for (const r of reviews) {
       expect(r.entities).not.toBeNull();
       expect(r.images.filter((i) => i.isPrimary)).toHaveLength(1);
-      expect(r.dealStatus).toBe("UNAVAILABLE"); // Sovrn not configured in this test → honest state
+      expect(r.dealStatus).toBe("UNAVAILABLE"); // no commerce-engine offer for these products → honest state
       expect(r.assignments.length).toBe(1);
     }
     const categories = new Set(reviews.map((r) => r.categorySlug));
@@ -76,7 +76,8 @@ describe("Content API ingestion", () => {
     // An unlicensed feed image can't be shown (IMAGE_REQUIRE_LICENSE), so it is not stored as the
     // page image; with no image provider configured here, the category placeholder is used.
     expect(pixel.images[0]).toMatchObject({ sourceType: "PLACEHOLDER", isFallback: true });
-    expect(await db.pipelineFailure.count({ where: { errorCode: "SOVRN_NOT_CONFIGURED" } })).toBe(13);
+    // Missing commerce data is a state, not a failure.
+    expect(await db.pipelineFailure.count({ where: { stage: "OFFER_MATCHING", resolvedAt: null } })).toBe(0);
   });
 
   it("is idempotent: a re-run with unchanged content creates nothing new", async () => {

@@ -89,10 +89,3 @@ export async function setCategoryOverride(reviewId: string, categorySlug: string
   const after = await db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId }, select: { categorySlug: true, subcategorySlug: true } });
   await audit(ctx, { action: `category.override.${source.toLowerCase()}`, entityType: "normalized_review", entityId: reviewId, before, after });
 }
-
-export async function setDealOverride(reviewId: string, dealId: string | null, ctx: AuditContext, source: OverrideSource) {
-  const before = await db.normalizedReview.findUniqueOrThrow({ where: { id: reviewId }, select: { sovrnDealIdOverride: true } });
-  await db.normalizedReview.update({ where: { id: reviewId }, data: { sovrnDealIdOverride: dealId } });
-  await audit(ctx, { action: `deal.override.${source.toLowerCase()}`, entityType: "normalized_review", entityId: reviewId, before, after: { sovrnDealIdOverride: dealId } });
-  return before.sovrnDealIdOverride;
-}

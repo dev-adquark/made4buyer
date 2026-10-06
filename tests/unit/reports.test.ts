@@ -40,37 +40,12 @@ describe("Day-30 HTML", () => {
 
 describe("log redaction", () => {
   it("redacts secrets by key and by value", () => {
-    const restore = withEnv({ SOVRN_API_KEY: "super-secret-sovrn-key" });
-    const out = redact({ apiKey: "x", nested: { message: "failed with super-secret-sovrn-key", url: "postgres://u:pw@host/db" } }) as Record<string, unknown>;
+    const restore = withEnv({ APIFY_API_TOKEN: "super-secret-apify-token" });
+    const out = redact({ apiKey: "x", nested: { message: "failed with super-secret-apify-token", url: "postgres://u:pw@host/db" } }) as Record<string, unknown>;
     restore();
     expect(out.apiKey).toBe("[REDACTED]");
-    expect(JSON.stringify(out)).not.toContain("super-secret-sovrn-key");
+    expect(JSON.stringify(out)).not.toContain("super-secret-apify-token");
     expect(JSON.stringify(out)).not.toContain("u:pw");
   });
 });
 
-describe("Sovrn key safety", () => {
-  it("never exposes a site key that equals the secret API key", async () => {
-    const { config } = await import("@/lib/config");
-    const r = withEnv({ SOVRN_SITE_KEY: "secret-value-123456", SOVRN_API_KEY: "secret-value-123456" });
-    expect(config.sovrn.siteKey()).toBeUndefined();
-    expect(config.sovrn.siteKeyIsSecret()).toBe(true);
-    r();
-    const ok = withEnv({ SOVRN_SITE_KEY: "public-site-key", SOVRN_API_KEY: "different-secret" });
-    expect(config.sovrn.siteKey()).toBe("public-site-key");
-    ok();
-  });
-});
-
-describe("Sovrn API URL template", () => {
-  it("fills {siteKey} from SOVRN_SITE_KEY", async () => {
-    const { withEnv } = await import("../support/env");
-    const { config } = await import("@/lib/config");
-    const r = withEnv({ SOVRN_API_URL: "https://comparisons.sovrn.com/api/affiliate/v3.5/sites/{siteKey}/compare/prices/usd_en/by/accuracy", SOVRN_SITE_KEY: "publicsitekey123", SOVRN_API_KEY: "secret-x" });
-    try {
-      expect(config.sovrn.apiUrl()).toBe("https://comparisons.sovrn.com/api/affiliate/v3.5/sites/publicsitekey123/compare/prices/usd_en/by/accuracy");
-    } finally {
-      r();
-    }
-  });
-});

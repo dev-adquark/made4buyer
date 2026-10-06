@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dueSlot } from "@/lib/automation/daily-article";
 import { mapApifyItem, PAGE_FUNCTION, sourceDataOf } from "@/lib/pipeline/apify";
-import { rankOffers, type NormalizedOffer } from "@/lib/sovrn/offers";
 import { validateContentItem } from "@/lib/pipeline/validate";
 
 const source = { slug: "example", name: "Example Reviews", allowedDomains: ["example.test"], categoryHint: null };
@@ -49,15 +48,6 @@ describe("Apify: every useful field the page stated, nothing invented", () => {
     expect(PAGE_FUNCTION).toContain("positiveNotes");
     expect(PAGE_FUNCTION).toContain("DOMParser");
     expect(PAGE_FUNCTION).not.toContain("innerHTML");
-  });
-});
-
-describe("Sovrn affiliatable:false", () => {
-  it("is never a viable deal", () => {
-    const offer: NormalizedOffer = { offerId: "o1", title: "Widgets Widget One", merchantName: "Best Buy", offerUrl: "https://shop.example.com/w1", price: 99, brand: "Widgets", availability: "in_stock" };
-    const q = { productName: "Widget One", brand: "Widgets", categorySlug: "laptops" };
-    const viable = (o: NormalizedOffer) => rankOffers(q, [o], { minScore: 0, trustedMerchants: ["best buy"] })[0].viable;
-    expect(viable({ ...offer, affiliatable: false })).toBe(false);
   });
 });
 

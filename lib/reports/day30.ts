@@ -5,6 +5,8 @@ import { gscConfigured } from "@/lib/gsc";
 import { ctrByCategory, defaultWindow, ratio, reviewsWithVerifiedDeal, successMetrics, type Window } from "@/lib/analytics/metrics";
 import { renderDay30Html } from "./day30-html";
 import releaseNotes from "./release-notes.json";
+import { getAffiliateProvider } from "@/lib/affiliate/provider";
+import { freshOfferWhere } from "@/lib/public/offers";
 
 /**
  * Day-30 success report. Every figure is a query over persisted records for the window.
@@ -39,9 +41,11 @@ export async function buildDay30Report(window: Window = defaultWindow(30)) {
     db.normalizedReview.count({ where: { status: "PUBLISHED", dealStatus: "UNAVAILABLE" } }),
   ]);
 
-  const linkGroups = await db.affiliateLink.groupBy({ by: ["verificationStatus"], where: { isActive: true, lastVerifiedAt: w }, _count: { _all: true } });
-  const link = (s: string) => linkGroups.find((g) => g.verificationStatus === s)?._count._all ?? 0;
-  const linksChecked = linkGroups.reduce((n, g) => n + g._count._all, 0);
+  // Commerce-engine seller links observed in the window (attached to a product).
+  const offerGroups = await db.commerceOffer.groupBy({ by: ["status", "affiliateStatus"], where: { observedAt: w, product: { productEntityId: { not: null } } }, _count: { _all: true } });
+  const offersObserved = offerGroups.reduce((n, g) => n + g._count._all, 0);
+  const offersBy = (f: (g: (typeof offerGroups)[number]) => boolean) => offerGroups.filter(f).reduce((n, g) => n + g._count._all, 0);
+  const freshNow = await db.commerceOffer.count({ where: { ...freshOfferWhere(), product: { productEntityId: { not: null } } } });
 
   const [assignTotal, assignHigh, assignLow, assignAccepted, assignRejected] = await Promise.all([
     db.reviewCategoryAssignment.count({ where: { tagType: "CATEGORY", createdAt: w } }),
@@ -96,7 +100,7 @@ export async function buildDay30Report(window: Window = defaultWindow(30)) {
       publicationPercentage: pct(publishedInWindow, reviewsCreated),
     },
     dealCoverage: {
-      sovrnIntegration: integrations.sovrn,
+      source: "commerce engine (fresh prices only)",
       publishedReviews: published,
       matchedReviews: matched,
       reviewsWithVerifiedDeal: withVerified,
@@ -105,15 +109,13 @@ export async function buildDay30Report(window: Window = defaultWindow(30)) {
       coveragePercentage: pct(withVerified, published),
     },
     linkHealth: {
-      checked: linksChecked,
-      verified: link("VERIFIED_OK"),
-      invalid: link("INVALID"),
-      blocked: link("BLOCKED") + link("FORBIDDEN"),
-      mismatch: link("REDIRECT_MISMATCH"),
-      unavailable: link("UNAVAILABLE"),
-      timeout: link("TIMEOUT"),
-      providerError: link("PROVIDER_ERROR"),
-      verificationPercentage: pct(link("VERIFIED_OK"), linksChecked),
+      affiliateProvider: getAffiliateProvider().name,
+      offersObserved,
+      fresh: offersBy((g) => g.status === "FRESH"),
+      stale: offersBy((g) => g.status === "STALE"),
+      affiliated: offersBy((g) => g.affiliateStatus === "AFFILIATED"),
+      plain: offersBy((g) => g.affiliateStatus !== "AFFILIATED"),
+      freshWithinPriceWindowNow: freshNow,
     },
     categorization: {
       totalAssignments: assignTotal,

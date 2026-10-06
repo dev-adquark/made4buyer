@@ -8,10 +8,10 @@
 /** Where a fact came from, strongest authority first (see SOURCE_AUTHORITY). */
 export type FactSource =
   | "MANUFACTURER" // the brand's own product page / specifications
-  | "STRUCTURED_FEED" // approved product API or feed (e.g. Sovrn price comparison, retailer API)
+  | "STRUCTURED_FEED" // approved product API or feed (e.g. a retailer API)
   | "RETAILER" // a retailer's product page (structured data)
   | "REVIEW_SOURCE" // the publication that reviewed the product (its structured data)
-  | "SOVRN" // Sovrn commerce data (coupons, affiliate links)
+  | "SOVRN" // legacy: historical facts only; nothing writes this source any more
   | "WIKIDATA" // public, free structured data (stable facts only: never prices or offers)
   | "SECONDARY"; // any other legitimate page
 

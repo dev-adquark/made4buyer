@@ -1,6 +1,7 @@
 import type { ImageSourceType, LicenseState, Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { freshOffersForReview, offerDomain, type PublicOffer } from "@/lib/public/offers";
 import { loadRetailerLinks, type RetailerLink } from "@/lib/public/retailer-links";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
@@ -10,47 +11,13 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
 
 /**
  * Stage PAGE_RENDER. The PageRenderModel is the complete, public-safe description of a
- * review page. It contains no internal verification/debug data. Deal data inside the model
- * is a publish-time snapshot; the page overlays live verified offers at request time.
+ * review page. It contains no internal verification/debug data. Offer data inside the model
+ * is a build-time snapshot of fresh commerce-engine offers; the page reloads live offers at
+ * request time and never shows a price older than PRODUCT_PRICE_MAX_AGE_HOURS.
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 8;
-
-export type PublicDeal = {
-  linkId: string;
-  merchant: string | null;
-  price: number | null;
-  currency: string | null;
-  availability: string | null;
-  verifiedAt: string;
-  isBest: boolean;
-};
-
-/** A Sovrn-verified promo code. Shown only while verifiedAt is recent (see couponIsCurrent). */
-export type PublicCoupon = {
-  id: string;
-  code: string;
-  description: string | null;
-  merchant: string | null;
-  originalPrice: number | null;
-  priceWithCode: number | null;
-  currency: string;
-  verifiedAt: string;
-};
-
-/** A code is shown only while Sovrn verified it within SOVRN_COUPON_MAX_AGE_DAYS; the API has no expiry date. */
-export function couponIsCurrent(c: Pick<PublicCoupon, "verifiedAt">, now = Date.now(), maxAgeDays = config.sovrn.couponMaxAgeDays()): boolean {
-  const t = Date.parse(c.verifiedAt);
-  return Number.isFinite(t) && now - t <= maxAgeDays * 86_400_000 && t <= now + 86_400_000;
-}
-
-export async function activeCoupons(reviewId: string): Promise<PublicCoupon[]> {
-  const rows = await db.sovrnCoupon.findMany({ where: { normalizedReviewId: reviewId, isActive: true, verified: true, verifiedAt: { not: null } }, orderBy: [{ rank: "asc" }], take: 3 });
-  return rows
-    .map((c) => ({ id: c.id, code: c.code, description: c.description, merchant: c.merchantName ?? c.merchantDomain, originalPrice: c.originalPrice, priceWithCode: c.priceWithCode, currency: c.currency, verifiedAt: c.verifiedAt!.toISOString() }))
-    .filter((c) => couponIsCurrent(c));
-}
+export const RENDER_MODEL_VERSION = 9;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -102,34 +69,14 @@ export type PageRenderModel = {
   /** Resolved, provenance-carrying facts for the single product a review covers (lib/products). */
   productData?: ProductData | null;
   rating: { value: number; scale: number } | null;
-  deals: PublicDeal[];
-  coupons?: PublicCoupon[];
+  /** FRESH commerce-engine offers for the PRIMARY product (lib/public/offers.ts). */
+  offers: PublicOffer[];
   /** Direct "where to buy" links built only from stored URLs (lib/public/retailer-links.ts). Never a price or a deal. */
   retailerLinks?: Array<Pick<RetailerLink, "url" | "label" | "merchant" | "kind">>;
   source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
   publishedAt: string | null;
   updatedAt: string;
 };
-
-export async function verifiedDeals(reviewId: string): Promise<PublicDeal[]> {
-  const links = await db.affiliateLink.findMany({
-    where: { normalizedReviewId: reviewId, isActive: true, verificationStatus: "VERIFIED_OK" },
-    include: { offerMatch: { select: { merchantName: true, price: true, currency: true, availability: true, matchStatus: true, rank: true } } },
-    orderBy: [{ isBest: "desc" }, { createdAt: "asc" }],
-    take: 4,
-  });
-  return links
-    .filter((l) => l.offerMatch && l.offerMatch.matchStatus === "MATCHED")
-    .map((l) => ({
-      linkId: l.id,
-      merchant: l.offerMatch?.merchantName ?? null,
-      price: l.offerMatch?.price ?? null,
-      currency: l.offerMatch?.currency ?? null,
-      availability: l.offerMatch?.availability ?? null,
-      verifiedAt: (l.lastVerifiedAt ?? l.updatedAt).toISOString(),
-      isBest: l.isBest,
-    }));
-}
 
 export type RenderInputs = {
   review: {
@@ -157,8 +104,7 @@ export type RenderInputs = {
   entities: { brand: string | null; productName: string; modelNumber: string | null; deviceType: string | null; platform: string | null; useCase: string | null; rating: number | null; ratingScale: number | null; source: string } | null;
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
   image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null } | null | undefined;
-  deals: PublicDeal[];
-  coupons?: PublicCoupon[];
+  offers: PublicOffer[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
   products?: PageRenderModel["products"];
@@ -175,7 +121,7 @@ function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | n
   return pros.length || cons.length ? { pros, cons } : null;
 }
 
-export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [], productData = null, retailerLinks = [] }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, offers, textRights = "FULL", products = [], productData = null, retailerLinks = [] }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   // Only a relevant image is shown; a failing stock photo falls back to the neutral category image.
@@ -233,13 +179,18 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     productData,
     // A rating belongs to a single-product review; comparisons and guides never carry one.
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
-    deals,
-    coupons,
-    retailerLinks: retailerLinks.map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
+    offers,
+    retailerLinks: dedupeRetailerLinks(retailerLinks, offers).map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
     source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
   };
+}
+
+/** "Where to buy" links whose domain already has a commerce offer are dropped (the offer link wins). */
+export function dedupeRetailerLinks<T extends Pick<RetailerLink, "url" | "merchant">>(links: T[], offers: Array<Pick<PublicOffer, "url">>): T[] {
+  const domains = new Set(offers.map((o) => offerDomain(o.url)).filter((d): d is string => Boolean(d)));
+  return links.filter((l) => !domains.has(l.merchant) && !domains.has(offerDomain(l.url) ?? ""));
 }
 
 export async function buildPageRenderModel(reviewId: string): Promise<PageRenderModel> {
@@ -255,7 +206,7 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
   const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
   const primary = review.contentEntities.find((c) => c.role === "PRIMARY");
   const productData = primary ? productDataOf((await db.productEntity.findUnique({ where: { id: primary.productEntityId }, select: { factSummary: true } }))?.factSummary) : null;
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products, productData, retailerLinks: await loadRetailerLinks(review.id) });
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], offers: await freshOffersForReview(review.id), textRights: await textRightsFor(review.source), products, productData, retailerLinks: await loadRetailerLinks(review.id) });
 }
 
 /**

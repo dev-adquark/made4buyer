@@ -38,13 +38,13 @@ const categoryOf = (href: string) => href.match(/^\/category\/([^/?#]+)/)?.[1] ?
 
 /** `shown`: category slugs listed in navigation (those with published content); other category suggestions are dropped. */
 function toGroups(g: SearchGroups, shown: ReadonlySet<string>): Group[] {
-  const review = (s: SearchGroups["reviews"][number], badge?: string): Item => ({ key: `r:${s.slug}:${badge ?? ""}`, href: `/review/${s.slug}${badge === "Verified offer" ? "#deal" : ""}`, title: s.productName, sub: [categoryName(s.categorySlug), s.brand].filter(Boolean).join(", "), image: s.image, swatch: s.categorySlug, badge });
+  const review = (s: SearchGroups["reviews"][number], badge?: string): Item => ({ key: `r:${s.slug}:${badge ?? ""}`, href: `/review/${s.slug}${badge === "Current price" ? "#deal" : ""}`, title: s.productName, sub: [categoryName(s.categorySlug), s.brand].filter(Boolean).join(", "), image: s.image, swatch: s.categorySlug, badge });
   return [
     { id: "reviews", label: "Reviews", items: g.reviews.map((s) => review(s)) },
     { id: "comparisons", label: "Comparisons", items: (g.comparisons ?? []).map((s) => ({ ...review(s), key: `cmp:${s.slug}`, title: s.title, badge: "Comparison" })) },
     { id: "products", label: "Products", items: (g.products ?? []).map((p) => ({ key: `p:${p.href}`, href: p.href, title: p.name, sub: p.count === 1 ? "1 article" : `${p.count} articles` })) },
     { id: "guides", label: "Buying guides", items: g.guides.map((s) => ({ ...review(s), key: `g:${s.slug}`, title: s.title, badge: s.kind === "AI_GUIDE" ? "AI guide" : "Source guide" })) },
-    { id: "deals", label: "Verified deals", items: g.deals.map((s) => review(s, "Verified offer")) },
+    { id: "deals", label: "Current prices", items: g.deals.map((s) => review(s, "Current price")) },
     { id: "categories", label: "Categories", items: g.categories.filter((c) => shown.has(categoryOf(c.href) ?? "")).map((c) => ({ key: `c:${c.href}`, href: c.href, title: c.name, sub: c.parent ? `in ${c.parent}` : "Category", swatch: c.slug })) },
     { id: "brands", label: "Brands", items: g.brands.map((b) => ({ key: `b:${b.name}`, href: b.href, title: b.name, sub: b.count === 1 ? "1 result" : `${b.count} results` })) },
   ].filter((x) => x.items.length > 0);
@@ -190,7 +190,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
                 aria-activedescendant={flat[active] ? `${listId}-${active}` : undefined}
                 autoComplete="off"
                 maxLength={100}
-                placeholder="Search products, brands, guides and deals"
+                placeholder="Search products, brands, guides and prices"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={onKeyDown}

@@ -1,5 +1,6 @@
 import { config, INSUFFICIENT_DATA } from "@/lib/config";
 import { db } from "@/lib/db";
+import { freshOfferWhere, publishedFreshOffers } from "@/lib/public/offers";
 
 /**
  * Success metrics as real queries over persisted data. Nothing here is estimated: a
@@ -43,11 +44,12 @@ export function defaultWindow(days = 30, end = new Date()): Window {
 
 const within = (w: Window) => ({ gte: w.start, lte: w.end });
 
-/** Published reviews that currently have ≥1 active VERIFIED_OK affiliate link on a matched offer. */
+/** Published reviews whose PRIMARY product currently has a fresh commerce-engine price. */
 export async function reviewsWithVerifiedDeal(where: { status: "PUBLISHED"; createdAt?: { gte: Date; lte: Date } }) {
-  return db.normalizedReview.count({
-    where: { ...where, affiliateLinks: { some: { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } } },
-  });
+  const offers = await publishedFreshOffers();
+  if (!where.createdAt) return offers.length;
+  const ids = offers.map((o) => o.review.id);
+  return ids.length ? db.normalizedReview.count({ where: { id: { in: ids }, createdAt: where.createdAt } }) : 0;
 }
 
 export async function successMetrics(w: Window = defaultWindow()): Promise<Metric[]> {
@@ -57,8 +59,8 @@ export async function successMetrics(w: Window = defaultWindow()): Promise<Metri
     db.normalizedReview.count({ where: { createdAt: within(w), status: "PUBLISHED" } }),
     db.normalizedReview.count({ where: { status: "PUBLISHED" } }),
     reviewsWithVerifiedDeal({ status: "PUBLISHED" }),
-    db.affiliateLink.count({ where: { isActive: true, lastVerifiedAt: within(w) } }),
-    db.affiliateLink.count({ where: { isActive: true, lastVerifiedAt: within(w), verificationStatus: "VERIFIED_OK" } }),
+    db.commerceOffer.count({ where: { status: { in: ["FRESH", "STALE"] }, product: { productEntityId: { not: null } } } }),
+    db.commerceOffer.count({ where: { ...freshOfferWhere(), product: { productEntityId: { not: null } } } }),
     db.ingestionRun.aggregate({ where: { startedAt: within(w) }, _sum: { totalFetched: true, duplicateCount: true } }),
     db.publishJob.count({ where: { action: "PUBLISH", createdAt: within(w) } }),
     db.publishJob.count({ where: { action: "PUBLISH", status: "FAILED", createdAt: within(w) } }),
@@ -68,8 +70,8 @@ export async function successMetrics(w: Window = defaultWindow()): Promise<Metri
 
   return [
     evaluateMetric({ key: "publishing_rate", label: "Publishing rate", formula: "published / valid ingested reviews (created in window)", numerator: publishedOfIngested, denominator: validIngested, target: 0.95, comparator: ">=" }),
-    evaluateMetric({ key: "deal_coverage", label: "Deal coverage", formula: "published reviews with a verified valid deal / published reviews", numerator: publishedWithDeal, denominator: published, target: 0.9, comparator: ">=" }),
-    evaluateMetric({ key: "link_health", label: "Link health", formula: "verified valid links / links revalidated in window", numerator: linksOk, denominator: linksChecked, target: 0.99, comparator: ">=" }),
+    evaluateMetric({ key: "deal_coverage", label: "Price coverage", formula: "published reviews with a fresh commerce price / published reviews", numerator: publishedWithDeal, denominator: published, target: 0.9, comparator: ">=" }),
+    evaluateMetric({ key: "price_freshness", label: "Price freshness", formula: "matched commerce offers observed within the price window / matched commerce offers", numerator: linksOk, denominator: linksChecked, target: 0.9, comparator: ">=" }),
     evaluateMetric({ key: "duplicate_rate", label: "Duplicate rate", formula: "duplicates / total fetched", numerator: runs._sum.duplicateCount ?? 0, denominator: runs._sum.totalFetched ?? 0, target: 0.05, comparator: "<=" }),
     evaluateMetric({ key: "page_error_rate", label: "Page error rate", formula: "failed publishes / publish attempts", numerator: publishFailed, denominator: publishAttempts, target: 0.02, comparator: "<=" }),
     evaluateMetric({ key: "categorization_acceptance", label: "Categorization acceptance", formula: "accepted high-confidence assignments / reviewed high-confidence assignments", numerator: highConfAccepted, denominator: highConfReviewed, target: 0.9, comparator: ">=" }),

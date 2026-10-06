@@ -63,7 +63,6 @@ export default async function CsvJobPage({ params, searchParams }: { params: Pro
               <th scope="col">Category</th>
               <th scope="col">Brand</th>
               <th scope="col">Product name</th>
-              <th scope="col">Deal ID</th>
               <th scope="col">Other</th>
               <th scope="col">Status</th>
               <th scope="col">Error</th>
@@ -79,7 +78,6 @@ export default async function CsvJobPage({ params, searchParams }: { params: Pro
                 <td data-label="Category">{i.overridePrimaryCategory ?? "—"}</td>
                 <td data-label="Brand">{i.entityBrandOverride ?? "—"}</td>
                 <td data-label="Product name">{i.entityProductNameOverride ?? "—"}</td>
-                <td data-label="Deal ID">{i.sovrnDealIdOverride ?? "—"}</td>
                 <td data-label="Other" className="small">{i.extraOverrides ? Object.entries(i.extraOverrides as Record<string, string | undefined>).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(", ") : "—"}</td>
                 <td data-label="Status">
                   <Badge value={i.processingStatus} />
@@ -92,7 +90,7 @@ export default async function CsvJobPage({ params, searchParams }: { params: Pro
             ))}
             {!job.items.length && (
               <tr>
-                <td colSpan={9}>No rows.</td>
+                <td colSpan={8}>No rows.</td>
               </tr>
             )}
           </tbody>

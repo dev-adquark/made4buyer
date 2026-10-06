@@ -10,7 +10,7 @@ import { withEnv } from "../support/env";
 let restore: () => void;
 beforeAll(async () => {
   await seedTaxonomy();
-  restore = withEnv({ FRESHNESS_MAX_DAYS: "7", AUTO_PUBLISH_ENABLED: "false", CONTENT_API_URL: undefined, SOVRN_API_URL: undefined, SOVRN_API_KEY: undefined });
+  restore = withEnv({ FRESHNESS_MAX_DAYS: "7", AUTO_PUBLISH_ENABLED: "false", CONTENT_API_URL: undefined });
 });
 afterAll(() => restore());
 beforeEach(() => resetDb());

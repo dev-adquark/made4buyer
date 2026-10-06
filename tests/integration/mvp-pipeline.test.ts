@@ -12,8 +12,8 @@ import { sampleEnvironment } from "../support/pipeline";
 
 /**
  * MVP launch path on the SAMPLE dataset (15 items → 13 reviews, 7 categories):
- * Content API → normalize → dedupe → entities → taxonomy → image → Sovrn → affiliate link →
- * verification → admin QA → publish. Coverage numbers here describe SAMPLE stub data only.
+ * Content API → normalize → dedupe → entities → taxonomy → image → commerce-offer check →
+ * admin QA → publish. Coverage numbers here describe SAMPLE stub data only.
  */
 let env: Awaited<ReturnType<typeof sampleEnvironment>>;
 beforeAll(async () => {
@@ -42,9 +42,8 @@ describe("MVP pipeline on sample data", () => {
     expect(new Set(published.map((p) => p.categorySlug)).size).toBeGreaterThanOrEqual(3);
 
     const withDeal = await reviewsWithVerifiedDeal({ status: "PUBLISHED" });
-    // Sample stub: 8 of 13 products have offers, one of which fails verification (404) → 7/13.
-    expect(withDeal).toBe(7);
-    expect(withDeal / published.length).toBeLessThan(0.7); // honest: the sample does NOT meet the 70% target
+    // No commerce-engine data in the sample: no prices, nothing invented.
+    expect(withDeal).toBe(0);
 
     // Public render model for a published page contains only public-safe data.
     const model = await buildPageRenderModel(published[0].id);

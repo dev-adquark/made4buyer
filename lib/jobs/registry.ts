@@ -6,13 +6,15 @@ import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
 import { withLock } from "./lock";
+import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline";
+import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfillWithCorrection } from "@/lib/images/hero-correction";
 import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
 import { runTitleYearFix } from "./title-years";
-import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob, runCouponRefresh, runProductEnrichment } from "./revalidation";
+import { runCacheCleanup, runFailedRetry, runPublishCycleJob, runProductEnrichment } from "./revalidation";
 
 /**
  * Scheduled jobs exposed at /api/cron/<name>. Every job runs under a DB lock (concurrent
@@ -51,8 +53,6 @@ export const JOBS = {
   ingest: { lockTtlMs: 20 * 60_000, run: (trigger: string) => (config.contentApi.url() ? runIngestion({ trigger }) : Promise.resolve({ status: "SKIPPED", reason: "CONTENT_API_URL not configured; reviews come from Apify sources" })), locked: false },
   "scrape-sources": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runScrapeSources(trigger), locked: true },
   "collect-scrapes": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCollectScrapes(trigger), locked: true },
-  "verify-links": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runLinkVerification({ trigger }), locked: true },
-  "revalidate-offers": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runOfferRefresh({ trigger }), locked: true },
   "retry-failed": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runFailedRetry({ trigger }), locked: true },
   "cleanup-cache": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runCacheCleanup({ trigger }), locked: true },
   "publish-cycle": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runPublishCycleJob({ trigger }), locked: true },
@@ -63,8 +63,11 @@ export const JOBS = {
   "enrich-images": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runImageBackfillWithCorrection(trigger, { limit: 60, pauseMs: 250 }), locked: true },
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
-  "refresh-coupons": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCouponRefresh({ trigger }), locked: true },
   "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
+  // Commerce intelligence engine (Apify, budget-capped): discover → start runs; collect → match → offers; first-party coupons.
+  "commerce-discover": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCommerceDiscover(trigger), locked: true },
+  "commerce-collect": { lockTtlMs: 20 * 60_000, run: async (trigger: string) => ({ ...(await runCommerceCollect(trigger)), coupons: await collectCouponRuns(trigger) }), locked: true },
+  "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -81,11 +84,11 @@ const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "daily-article": ["keyword_to_blog", "scheduled_publishing"],
   "publish-cycle": ["scheduled_publishing"],
   "enrich-images": ["image_enrichment"],
-  "revalidate-offers": ["affiliate_enrichment"],
-  "verify-links": ["affiliate_enrichment"],
   "retry-failed": ["retries"],
-  "refresh-coupons": ["coupons", "affiliate_enrichment"],
   "enrich-products": ["product_enrichment"],
+  "commerce-discover": ["commerce_engine"],
+  "commerce-collect": ["commerce_engine"],
+  "commerce-coupons": ["commerce_engine"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED"]);

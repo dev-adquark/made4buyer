@@ -27,7 +27,7 @@ export function byDepartment(categories: NavCategory[]) {
 // Order: Reviews · Categories (menu) · Deals · Compare · Guides
 const BEFORE: Array<[string, string]> = [["/reviews", "Reviews"]];
 const LINKS: Array<[string, string, boolean?]> = [
-  ["/deals", "Deals"],
+  ["/deals", "Prices"],
   ["/compare", "Compare"],
   ["/guides", "Guides"],
 ];
@@ -88,7 +88,6 @@ function MegaPanel({ category, feed, failed }: { category: NavCategory; feed: Na
                   <img src={r.image} alt="" width={76} height={52} loading="lazy" />
                   <span>
                     <strong>{r.title}</strong>
-                    {r.verifiedOffer && <span className="pill verified">Verified offer</span>}
                   </span>
                 </Link>
               </li>
@@ -125,14 +124,14 @@ function MegaPanel({ category, feed, failed }: { category: NavCategory; feed: Na
             )}
             {feed.deals.length > 0 && (
               <div>
-                <h3>Verified deals</h3>
+                <h3>Current prices</h3>
                 <ul className="mega-links">
                   {feed.deals.map((d) => (
-                    <li key={d.slug + (d.merchant ?? "")}>
+                    <li key={d.slug + d.merchant}>
                       <Link href={`/review/${d.slug}#deal`}>
                         {d.productName}
                         {money(d.price, d.currency) ? `, ${money(d.price, d.currency)}` : ""}
-                        {d.merchant ? ` at ${d.merchant}` : ""}
+                        {` at ${d.merchant}`}
                       </Link>
                     </li>
                   ))}

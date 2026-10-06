@@ -16,7 +16,7 @@ import { config } from "@/lib/config";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryPhotos } from "@/lib/public/category-images";
 import { prerenderNeedsDatabase } from "@/lib/public/isr";
-import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, verifiedDealRows } from "@/lib/public/queries";
+import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, freshDealRows } from "@/lib/public/queries";
 import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, money } from "@/lib/util/format";
@@ -54,7 +54,7 @@ export default async function Home() {
     latestByKind(["AI_GUIDE", "BUYING_GUIDE"], 3),
     latestByKind("COMPARISON", 3),
     categoryLedger(),
-    verifiedDealRows({ take: 6 }),
+    freshDealRows({ take: 6 }),
     trendingReviews(7, 4),
     comparePair(),
     trustStats(),
@@ -67,7 +67,7 @@ export default async function Home() {
   const activeCats = ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0);
   const tickerItems: TickerItem[] = [
     ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
-    ...deals.slice(0, 4).map((d) => ({ key: `d-${d.linkId}`, href: `/review/${d.review.slug}#deal`, label: "Verified deal", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
+    ...deals.slice(0, 4).map((d) => ({ key: `d-${d.offerId}`, href: `/review/${d.review.slug}#deal`, label: "Current price", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
     ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "Guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
     ...activeCats.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
   ];
@@ -83,7 +83,7 @@ export default async function Home() {
             <span className="label">Edition of {dateline(new Date())}</span>
             <span className="label muted">
               {stats.published} {stats.published === 1 ? "review" : "reviews"}
-              {stats.comparisons ? `, ${stats.comparisons} ${stats.comparisons === 1 ? "comparison" : "comparisons"}` : ""} published, {stats.verifiedOffers} verified {stats.verifiedOffers === 1 ? "offer" : "offers"} live
+              {stats.comparisons ? `, ${stats.comparisons} ${stats.comparisons === 1 ? "comparison" : "comparisons"}` : ""} published, {stats.pricedProducts} with a current price
             </span>
           </div>
           <h1 id="hero-title" className="statement">
@@ -92,7 +92,7 @@ export default async function Home() {
           </h1>
           <div className="hero-body">
             <div className="hero-copy">
-              <p className="lede">A buying guide for everything you buy: reviews filed by what you need, comparisons built only from facts we hold, and offers we check before we show them. We’re starting with technology.</p>
+              <p className="lede">A buying guide for everything you buy: reviews filed by what you need, comparisons built only from facts we hold, and prices shown only while recently checked. We’re starting with technology.</p>
               <SearchCombobox variant="hero" label="Search products, brands and guides" />
               <div className="btnrow">
                 <Link className="btn primary large" href="/match" data-cursor="Start">
@@ -108,12 +108,12 @@ export default async function Home() {
                   <span className="label muted">Reviews published</span>
                 </li>
                 <li>
-                  <span className="n">{stats.verifiedOffers}</span>
-                  <span className="label muted">Verified offers</span>
+                  <span className="n">{stats.pricedProducts}</span>
+                  <span className="label muted">Products with a current price</span>
                 </li>
                 <li>
-                  <span className="n">{stats.checkedThisWeek}</span>
-                  <span className="label muted">Links re-checked this week</span>
+                  <span className="n">{stats.pricesCheckedThisWeek}</span>
+                  <span className="label muted">Prices checked this week</span>
                 </li>
               </ul>
               <SponsoredSlot position="HOME_HERO" />
@@ -137,24 +137,24 @@ export default async function Home() {
                 </div>
               )}
               {heroDeal ? (
-                <Link className="clip deal" href={`/review/${heroDeal.review.slug}#deal`} data-depth="0.7" data-cursor="View deal" style={style(heroDeal.review.categorySlug)}>
+                <Link className="clip deal" href={`/review/${heroDeal.review.slug}#deal`} data-depth="0.7" data-cursor="Prices" style={style(heroDeal.review.categorySlug)}>
                   <span className="clip-body">
-                    <TrustLabel kind="verified" />
-                    <span className="price">{money(heroDeal.price, heroDeal.currency) ?? "At retailer"}</span>
+                    <TrustLabel kind="checked">Price checked</TrustLabel>
+                    <span className="price">{money(heroDeal.price, heroDeal.currency)}</span>
                     <span className="clip-title" style={{ fontSize: 15 }}>
                       {heroDeal.review.productName}
                     </span>
                     <span className="label muted">
-                      {heroDeal.merchant ?? "Retailer not reported"}, checked {dateline(heroDeal.verifiedAt)}
+                      {heroDeal.seller}, checked {dateline(heroDeal.observedAt)}
                     </span>
                   </span>
                 </Link>
               ) : (
                 <div className="clip deal" data-depth="0.7" style={{ borderTopColor: "var(--rule-strong)" }}>
                   <span className="clip-body">
-                    <TrustLabel kind="none">No verified offers yet</TrustLabel>
+                    <TrustLabel kind="none">No current prices yet</TrustLabel>
                     <span className="clip-title" style={{ fontSize: 15 }}>
-                      We only show an offer after following its link to the retailer.
+                      We show a price only while we have checked it recently.
                     </span>
                   </span>
                 </div>
@@ -279,7 +279,7 @@ export default async function Home() {
                         <dd>{c.guides}</dd>
                       </div>
                       <div>
-                        <dt>Deals</dt>
+                        <dt>Prices</dt>
                         <dd>{c.deals}</dd>
                       </div>
                     </dl>
@@ -291,17 +291,17 @@ export default async function Home() {
         </ul>
       </section>
 
-      {/* ── Verified deals ── */}
+      {/* ── Current prices ── */}
       <section className="section" aria-labelledby="deals-title">
         <div className="wrap">
-          <SectionHeader id="deals-title" label={`${stats.verifiedOffers} live`} title="Real deals, checked first" action={deals.length ? <Link className="arrow-link" href="/deals">All verified deals</Link> : undefined}>
-            Prices and merchants are the retailer’s, as reported. We followed each link before listing it.
+          <SectionHeader id="deals-title" label={`${stats.pricedProducts} current`} title="Current prices, recently checked" action={deals.length ? <Link className="arrow-link" href="/deals">All current prices</Link> : undefined}>
+            Prices as stated on the maker’s own store or a retailer’s product page, with the time we checked. An older price is never shown.
           </SectionHeader>
           {deals.length ? (
             <DealLedger rows={deals.slice(0, 6)} />
           ) : (
-            <EmptyState title="No verified offers yet." label="Deals">
-              We list an offer only after following its link to the retailer, and we re-check it on a schedule. New offers appear here automatically.
+            <EmptyState title="No current prices yet." label="Prices">
+              We list a price only while we have checked it recently at the maker or a retailer. Prices appear here automatically once checked.
             </EmptyState>
           )}
         </div>
@@ -432,8 +432,8 @@ export default async function Home() {
             </li>
             <li>
               <div>
-                <h3>We check the offer</h3>
-                <p>Offer links are followed to the retailer before they’re shown, then re-checked on a schedule.</p>
+                <h3>We check the price</h3>
+                <p>Prices are read from the maker’s or a retailer’s product page and shown only while recently checked.</p>
               </div>
             </li>
             <li>
@@ -462,8 +462,8 @@ export default async function Home() {
               <span className="l">Published {stats.guides === 1 ? "guide" : "guides"}</span>
             </li>
             <li>
-              <span className="n">{stats.verifiedOffers}</span>
-              <span className="l">Verified {stats.verifiedOffers === 1 ? "offer" : "offers"} live</span>
+              <span className="n">{stats.pricedProducts}</span>
+              <span className="l">{stats.pricedProducts === 1 ? "Product" : "Products"} with a current price</span>
             </li>
             <li>
               <span className="n">{stats.categoriesCovered}</span>
@@ -473,16 +473,16 @@ export default async function Home() {
           <ul className="principles">
             <li>
               <h3>Nothing invented</h3>
-              <p>Prices, merchants and availability come from the offer provider. Missing information is shown as missing.</p>
+              <p>Prices, sellers and availability are what the seller’s own page stated when we checked. Missing information is shown as missing.</p>
             </li>
             <li>
               <h3>Ratings only when they exist</h3>
               <p>We show a rating only when the original reviewer gave one. AI guides never carry a rating.</p>
             </li>
             <li>
-              <h3>Commission never picks the offer</h3>
+              <h3>Commission never picks the seller</h3>
               <p>
-                Offers are chosen by how well they match the product, not by payout. <Link href="/disclosure">How we make money</Link>
+                Sellers are listed only for the exact product, ordered by price, never by payout. <Link href="/disclosure">How we make money</Link>
               </p>
             </li>
           </ul>

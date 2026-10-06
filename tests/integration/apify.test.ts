@@ -2,7 +2,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runCollectScrapes, runScrapeSources, sourceKey } from "@/lib/pipeline/apify";
 import { buildPageRenderModel } from "@/lib/pipeline/render-model";
-import { fetchSovrnOffers } from "@/lib/sovrn/client";
 import { seedTaxonomy } from "@/lib/taxonomy/persist";
 import { startStubServer } from "../../scripts/support/stub-server";
 import { resetDb } from "../support/db";
@@ -14,8 +13,8 @@ let restore: () => void;
 
 beforeAll(async () => {
   await seedTaxonomy();
-  stub = await startStubServer({ sovrnKey: "sovrn-test" });
-  restore = withEnv({ APIFY_API_TOKEN: "test-apify-token", APIFY_API_BASE_URL: `${stub.base}/apify/v2`, CONTENT_API_URL: undefined, SOVRN_API_URL: `${stub.base}/sovrn`, SOVRN_API_KEY: "sovrn-test" });
+  stub = await startStubServer();
+  restore = withEnv({ APIFY_API_TOKEN: "test-apify-token", APIFY_API_BASE_URL: `${stub.base}/apify/v2`, CONTENT_API_URL: undefined });
 });
 afterAll(async () => {
   restore();
@@ -107,15 +106,5 @@ describe("Apify scrape → collect → ingestion", () => {
     expect(collected.results?.[0]).toMatchObject({ status: "SOURCE_DISABLED" });
     expect(await db.contentItem.count()).toBe(0);
     expect((await db.apifyRun.findFirstOrThrow()).status).toBe("SOURCE_DISABLED");
-  });
-});
-
-describe("Sovrn edge cases", () => {
-  it("distinguishes rate limits, empty results and rejected credentials", async () => {
-    expect(await fetchSovrnOffers({ productName: "ratelimit test" })).toMatchObject({ status: "RATE_LIMITED", httpStatus: 429 });
-    expect(await fetchSovrnOffers({ productName: "Nothing Matches This Product Zz" })).toMatchObject({ status: "EMPTY" });
-    const r = withEnv({ SOVRN_API_KEY: "wrong" });
-    expect(await fetchSovrnOffers({ productName: "Pixel 10", brand: "Google" })).toMatchObject({ status: "AUTH_FAILED" });
-    r();
   });
 });

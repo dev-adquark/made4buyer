@@ -16,6 +16,3 @@ process.env.COMMONS_SEARCH_ENABLED ??= "false";
 
 // Hero-image rule changes are dated in production; the suite never depends on the wall clock.
 process.env.IMAGE_RULES_CHANGED_AT ??= "2000-01-01T00:00:00Z";
-
-// No live Sovrn Link Check calls from the suite; tests that need it enable it and point SOVRN_LINK_CHECK_URL at a local server.
-process.env.SOVRN_LINK_CHECK_ENABLED ??= "false";

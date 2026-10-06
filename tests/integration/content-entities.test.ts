@@ -42,7 +42,6 @@ let restore: () => void;
 beforeAll(async () => {
   await seedTaxonomy();
   restore = withEnv({
-    SOVRN_API_URL: undefined,
     PEXELS_API_KEY: undefined,
     IMAGE_ENRICHMENT_URL: undefined,
   });

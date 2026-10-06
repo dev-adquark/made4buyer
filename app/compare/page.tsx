@@ -6,17 +6,17 @@ import TrackOnce from "@/components/track-once";
 import { db } from "@/lib/db";
 import { LATEST_FIRST } from "@/lib/public/queries";
 import { placeholderPath, publicImageUrl } from "@/lib/pipeline/images";
-import { verifiedDeals } from "@/lib/pipeline/render-model";
+import { freshOffersForReview } from "@/lib/public/offers";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { availabilityLabel, money, shortDate } from "@/lib/util/format";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Compare products", description: "Put two reviewed products side by side: specs, verdicts and verified offers from the reviews we publish.", robots: { index: false, follow: true }, alternates: { canonical: "/compare" } };
+export const metadata: Metadata = { title: "Compare products", description: "Put two reviewed products side by side: specs, verdicts and recently checked prices from the reviews we publish.", robots: { index: false, follow: true }, alternates: { canonical: "/compare" } };
 
 const SECTIONS: CompareSection[] = [
   { title: "Overview", rows: ["Brand", "Category", "Type", "Model"] },
   { title: "Who it’s for", rows: ["Best for", "Platform", "Price tier"] },
-  { title: "Verified offer", rows: ["Verified offer", "Price", "Merchant", "Availability", "Link last checked"] },
+  { title: "Current price", rows: ["Price", "Seller", "Availability", "Price last checked"] },
 ];
 
 export default async function ComparePage({ searchParams }: { searchParams: Promise<{ ids?: string }> }) {
@@ -36,9 +36,9 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
     db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, take: 60, select: { id: true, slug: true, canonicalTitle: true, productName: true, brand: true, categorySlug: true } }),
   ]);
   const selected = ids.map((id) => selectedRaw.find((r) => r.id === id)).filter((r): r is (typeof selectedRaw)[number] => Boolean(r));
-  const deals = await Promise.all(selected.map((r) => verifiedDeals(r.id)));
+  const deals = await Promise.all(selected.map((r) => freshOffersForReview(r.id)));
   const columns: CompareColumn[] = selected.map((r, i) => {
-    const best = deals[i].find((d) => d.isBest) ?? deals[i][0];
+    const best = deals[i].find((d) => d.price !== null);
     const tags = (type: string) => r.assignments.filter((a) => a.tagType === type).map((a) => a.categoryTag.name);
     return {
       id: r.id,
@@ -55,11 +55,10 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
         "Best for": tags("INTENT").slice(0, 3).join(", ") || r.entities?.useCase || null,
         Platform: tags("PLATFORM").slice(0, 3).join(", ") || r.entities?.platform || null,
         "Price tier": tags("PRICE_TIER")[0] ?? null,
-        "Verified offer": best ? "Yes" : "No verified offer currently available",
-        Price: best ? money(best.price, best.currency) : null,
-        Merchant: best?.merchant ?? null,
-        Availability: best ? availabilityLabel(best.availability) : null,
-        "Link last checked": best ? shortDate(best.verifiedAt) : null,
+        Price: best ? money(best.price, best.currency) : "Price currently unavailable",
+        Seller: best?.seller ?? null,
+        Availability: best?.availability ? availabilityLabel(best.availability) : null,
+        "Price last checked": best ? shortDate(best.observedAt) : null,
       },
     };
   });
@@ -72,7 +71,7 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
         <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Compare", href: "/compare" }]} />
           <h1>Compare products</h1>
-          <p className="lede">Side by side, using only stored review data and verified offers. Anything we don’t know is marked as not available.</p>
+          <p className="lede">Side by side, using only stored review data and recently checked prices. Anything we don’t know is marked as not available.</p>
         </div>
       </section>
       <section className="section">

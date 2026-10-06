@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { publicImageUrl, relevantImage } from "@/lib/pipeline/images";
 import { entityKey } from "@/lib/entities/resolve";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
+import { publishedFreshOffers } from "./offers";
 
 /** Public read models. Only PUBLISHED reviews are ever returned. */
 
@@ -15,8 +16,6 @@ export const TRENDING_MIN_VIEWS = 5;
  * we published. Old reviews ingested today never jump ahead of genuinely new ones.
  */
 export const LATEST_FIRST = [{ sourcePublishedAt: { sort: "desc", nulls: "last" } }, { publishedAt: "desc" }, { id: "asc" }] satisfies Prisma.NormalizedReviewOrderByWithRelationInput[];
-
-export const VERIFIED_LINK = { isActive: true, verificationStatus: "VERIFIED_OK", offerMatch: { matchStatus: "MATCHED" } } satisfies Prisma.AffiliateLinkWhereInput;
 
 export const cardSelect = {
   id: true,
@@ -35,8 +34,6 @@ export const cardSelect = {
   generationMeta: true,
   entities: { select: { source: true } },
   images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true } },
-  // Only a VERIFIED_OK link on a matched offer counts as a verified offer.
-  affiliateLinks: { where: VERIFIED_LINK, take: 1, select: { id: true } },
 } satisfies Prisma.NormalizedReviewSelect;
 
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;
@@ -127,10 +124,6 @@ export async function searchReviews(q: string, take = 30, opts: { type?: SearchK
   return rows.sort((a, b) => score(b) - score(a)).slice(0, take);
 }
 
-export function hasVerifiedOffer(r: ReviewCard): boolean {
-  return r.affiliateLinks.length > 0;
-}
-
 export async function publishedReviews(page: number, pageSize = 24, type?: SearchKind | null) {
   const kinds = kindsFor(type);
   const where = { status: "PUBLISHED", ...(kinds ? { kind: { in: kinds } } : {}) } satisfies Prisma.NormalizedReviewWhereInput;
@@ -139,16 +132,6 @@ export async function publishedReviews(page: number, pageSize = 24, type?: Searc
     db.normalizedReview.findMany({ where, orderBy: LATEST_FIRST, skip: (page - 1) * pageSize, take: pageSize, select: cardSelect }),
   ]);
   return { total, rows, pages: Math.max(1, Math.ceil(total / pageSize)) };
-}
-
-/** Published reviews that currently have a verified offer, best-verified first. */
-export async function reviewsWithDeals(take = 24, categorySlug?: string) {
-  return db.normalizedReview.findMany({
-    where: { status: "PUBLISHED", ...(categorySlug ? { categorySlug } : {}), affiliateLinks: { some: VERIFIED_LINK } },
-    orderBy: LATEST_FIRST,
-    take,
-    select: cardSelect,
-  });
 }
 
 /**
@@ -171,12 +154,12 @@ export async function trendingReviews(days = 7, take = 6) {
   return ranked.flatMap((r) => (bySlug.has(r.slug) ? [{ review: bySlug.get(r.slug)!, views: r.views }] : [])).slice(0, take);
 }
 
-export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; verifiedOffer: boolean; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
+export type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
 
 /** Instant search suggestions (published reviews only). */
 export async function suggest(q: string, take = 6): Promise<Suggestion[]> {
   const rows = await searchReviews(q, take);
-  return rows.map((r) => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r), kind: r.kind }));
+  return rows.map((r) => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, kind: r.kind }));
 }
 
 export const publishedGuides = cache(async (page = 1, pageSize = 24) => {
@@ -193,76 +176,63 @@ export async function latestByKind(kind: ContentKind | ContentKind[], take = 6, 
   return db.normalizedReview.findMany({ where: { status: "PUBLISHED", kind: { in: Array.isArray(kind) ? kind : [kind] }, ...(categorySlug ? { categorySlug } : {}) }, orderBy: LATEST_FIRST, take, select: cardSelect });
 }
 
-/** One row per verified offer (VERIFIED_OK link on a matched offer) of a published review. */
-export type DealRow = { linkId: string; merchant: string | null; price: number | null; currency: string | null; availability: string | null; verifiedAt: Date; isBest: boolean; review: ReviewCard };
+/** One row per published review with a fresh commerce offer (its best fresh price). */
+export type DealRow = { offerId: string; seller: string; sellerType: string; price: number | null; currency: string | null; availability: string | null; observedAt: Date; affiliated: boolean; review: ReviewCard };
 
-/** Verified offers per category and the newest check, without loading full cards. */
+/** Fresh offers per category and the newest observation, without loading full cards. */
 export async function dealLedgerSummary(): Promise<{ counts: Map<string, number>; newest: Date | null }> {
-  const links = await db.affiliateLink.findMany({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } }, select: { lastVerifiedAt: true, updatedAt: true, review: { select: { categorySlug: true } } } });
+  const offers = await publishedFreshOffers();
   const counts = new Map<string, number>();
   let newest: Date | null = null;
-  for (const l of links) {
-    if (l.review.categorySlug) counts.set(l.review.categorySlug, (counts.get(l.review.categorySlug) ?? 0) + 1);
-    const at = l.lastVerifiedAt ?? l.updatedAt;
+  for (const o of offers) {
+    if (o.review.categorySlug) counts.set(o.review.categorySlug, (counts.get(o.review.categorySlug) ?? 0) + 1);
+    const at = new Date(o.observedAt);
     if (!newest || at > newest) newest = at;
   }
   return { counts, newest };
 }
 
-export async function verifiedDealRows({ categorySlug, merchant, q, take = 60 }: { categorySlug?: string; merchant?: string; q?: string; take?: number } = {}): Promise<DealRow[]> {
-  const terms = (q ?? "").split(/\s+/).filter((t) => t.length >= 2).slice(0, 6);
-  const links = await db.affiliateLink.findMany({
-    where: {
-      ...VERIFIED_LINK,
-      ...(merchant ? { offerMatch: { matchStatus: "MATCHED", merchantName: merchant } } : {}),
-      review: {
-        status: "PUBLISHED",
-        ...(categorySlug ? { categorySlug } : {}),
-        ...(terms.length ? { AND: terms.map((t) => ({ OR: [{ productName: { contains: t, mode: "insensitive" as const } }, { brand: { contains: t, mode: "insensitive" as const } }, { canonicalTitle: { contains: t, mode: "insensitive" as const } }] })) } : {}),
-      },
-    },
-    orderBy: [{ lastVerifiedAt: "desc" }, { id: "asc" }],
-    take,
-    select: { id: true, isBest: true, lastVerifiedAt: true, updatedAt: true, offerMatch: { select: { merchantName: true, price: true, currency: true, availability: true } }, review: { select: cardSelect } },
-  });
-  return links.map((l) => ({
-    linkId: l.id,
-    merchant: l.offerMatch?.merchantName ?? null,
-    price: l.offerMatch?.price ?? null,
-    currency: l.offerMatch?.currency ?? null,
-    availability: l.offerMatch?.availability ?? null,
-    verifiedAt: l.lastVerifiedAt ?? l.updatedAt,
-    isBest: l.isBest,
-    review: l.review,
-  }));
+/** Published reviews whose PRIMARY product has a fresh commerce price, newest observation first. */
+export async function freshDealRows({ categorySlug, merchant, q, take = 60 }: { categorySlug?: string; merchant?: string; q?: string; take?: number } = {}): Promise<DealRow[]> {
+  const terms = (q ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+    .slice(0, 6);
+  const offers = (await publishedFreshOffers({ categorySlug })).filter((o) => !merchant || o.seller === merchant);
+  if (!offers.length) return [];
+  const cards = await db.normalizedReview.findMany({ where: { id: { in: offers.map((o) => o.review.id) }, status: "PUBLISHED" }, select: cardSelect });
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  const rows: DealRow[] = [];
+  for (const o of offers) {
+    const card = byId.get(o.review.id);
+    if (!card) continue;
+    const hay = `${card.productName} ${card.brand ?? ""} ${card.canonicalTitle}`.toLowerCase();
+    if (terms.some((t) => !hay.includes(t))) continue;
+    rows.push({ offerId: o.id, seller: o.seller, sellerType: o.sellerType, price: o.price, currency: o.currency, availability: o.availability, observedAt: new Date(o.observedAt), affiliated: o.affiliated, review: card });
+    if (rows.length >= take) break;
+  }
+  return rows;
 }
 
-/** Merchants that currently have at least one verified offer, for the deals filter. */
+/** Sellers that currently have at least one fresh price on a published review, for the deals filter. */
 export async function dealMerchants() {
-  const rows = await db.sovrnOfferMatch.groupBy({
-    by: ["merchantName"],
-    where: { matchStatus: "MATCHED", merchantName: { not: null }, review: { status: "PUBLISHED" }, affiliateLinks: { some: { isActive: true, verificationStatus: "VERIFIED_OK" } } },
-    _count: { _all: true },
-  });
-  return rows.map((r) => ({ name: r.merchantName!, count: r._count._all })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  const counts = new Map<string, number>();
+  for (const o of await publishedFreshOffers()) counts.set(o.seller, (counts.get(o.seller) ?? 0) + 1);
+  return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 /**
- * Published reviews that had an offer link which is no longer verified (failed re-check or
- * deactivated) and have no verified offer now. Only the last check date is public.
+ * Published reviews that had commerce offers whose prices are no longer recent (deal status
+ * STALE at the last check). Only the last check date is public.
  */
 export async function lapsedOffers(take = 12, categorySlug?: string) {
-  const reviews = await db.normalizedReview.findMany({
-    where: {
-      status: "PUBLISHED",
-      ...(categorySlug ? { categorySlug } : {}),
-      affiliateLinks: { some: { OR: [{ isActive: false }, { verificationStatus: { notIn: ["VERIFIED_OK", "PENDING"] } }] }, none: VERIFIED_LINK },
-    },
+  return db.normalizedReview.findMany({
+    where: { status: "PUBLISHED", kind: "REVIEW", dealStatus: "STALE", ...(categorySlug ? { categorySlug } : {}) },
     orderBy: [{ dealCheckedAt: "desc" }, { id: "asc" }],
     take,
     select: { ...cardSelect, dealCheckedAt: true },
   });
-  return reviews;
 }
 
 /** Real facet values for a set of published reviews, with counts. */
@@ -291,9 +261,9 @@ export async function facetCounts(where: Prisma.NormalizedReviewWhereInput) {
 
 export type NavFeed = {
   category: string;
-  latest: Array<{ slug: string; title: string; image: string; verifiedOffer: boolean }>;
+  latest: Array<{ slug: string; title: string; image: string }>;
   guides: Array<{ slug: string; title: string }>;
-  deals: Array<{ slug: string; productName: string; merchant: string | null; price: number | null; currency: string | null }>;
+  deals: Array<{ slug: string; productName: string; merchant: string; price: number | null; currency: string | null }>;
   trending: Array<{ slug: string; title: string; views: number }>;
   counts: Record<string, number>;
   total: number;
@@ -304,7 +274,7 @@ export async function navFeed(categorySlug: string): Promise<NavFeed> {
   const [latest, guides, deals, trending, subs] = await Promise.all([
     latestByKind("REVIEW", 3, categorySlug),
     latestByKind("AI_GUIDE", 3, categorySlug),
-    verifiedDealRows({ categorySlug, take: 3 }),
+    freshDealRows({ categorySlug, take: 3 }),
     trendingReviews(7, 30),
     db.normalizedReview.groupBy({ by: ["subcategorySlug"], where: { status: "PUBLISHED", categorySlug }, _count: { _all: true } }),
   ]);
@@ -316,9 +286,9 @@ export async function navFeed(categorySlug: string): Promise<NavFeed> {
   }
   return {
     category: categorySlug,
-    latest: latest.map((r) => ({ slug: r.slug, title: r.productName, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r) })),
+    latest: latest.map((r) => ({ slug: r.slug, title: r.productName, image: cardImage(r).url })),
     guides: guides.map((r) => ({ slug: r.slug, title: r.canonicalTitle })),
-    deals: deals.map((d) => ({ slug: d.review.slug, productName: d.review.productName, merchant: d.merchant, price: d.price, currency: d.currency })),
+    deals: deals.map((d) => ({ slug: d.review.slug, productName: d.review.productName, merchant: d.seller, price: d.price, currency: d.currency })),
     trending: trending.filter((t) => t.review.categorySlug === categorySlug).slice(0, 3).map((t) => ({ slug: t.review.slug, title: t.review.productName, views: t.views })),
     counts,
     total,
@@ -387,8 +357,9 @@ export type SearchGroups = {
 /** Grouped instant search across reviews, guides, deals, categories and brands. */
 export async function searchGroups(q: string): Promise<SearchGroups> {
   const term = q.trim().toLowerCase();
-  const rows = await searchReviews(q, 24);
-  const toS = (r: ReviewCard): Suggestion => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, verifiedOffer: hasVerifiedOffer(r), kind: r.kind });
+  const [rows, fresh] = await Promise.all([searchReviews(q, 24), publishedFreshOffers()]);
+  const priced = new Set(fresh.map((o) => o.review.id));
+  const toS = (r: ReviewCard): Suggestion => ({ slug: r.slug, title: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug, image: cardImage(r).url, kind: r.kind });
   const categories: SearchGroups["categories"] = [];
   for (const c of CATEGORIES) {
     if (c.name.toLowerCase().includes(term) || c.aliases.some((a) => a.includes(term))) categories.push({ slug: c.slug, name: c.name, href: `/category/${c.slug}`, parent: null });
@@ -411,7 +382,7 @@ export async function searchGroups(q: string): Promise<SearchGroups> {
     comparisons: rows.filter((r) => r.kind === "COMPARISON").slice(0, 3).map(toS),
     products: products.map((p) => ({ name: p.name, href: `/product/${p.slug}`, count: p._count.content })),
     guides: rows.filter((r) => r.kind === "AI_GUIDE" || r.kind === "BUYING_GUIDE").slice(0, 3).map(toS),
-    deals: rows.filter(hasVerifiedOffer).slice(0, 3).map(toS),
+    deals: rows.filter((r) => priced.has(r.id)).slice(0, 3).map(toS),
     categories: categories.slice(0, 4),
     brands,
   };
@@ -441,22 +412,24 @@ export async function comparePair() {
 /** Stored counts shown on the trust section. Nothing here is estimated. */
 export async function trustStats() {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-  const [published, comparisons, guides, verifiedOffers, checkedThisWeek, categories] = await Promise.all([
+  const [published, comparisons, guides, fresh, categories] = await Promise.all([
     db.normalizedReview.count({ where: { status: "PUBLISHED", kind: "REVIEW" } }),
     db.normalizedReview.count({ where: { status: "PUBLISHED", kind: "COMPARISON" } }),
     db.normalizedReview.count({ where: { status: "PUBLISHED", kind: { in: ["AI_GUIDE", "BUYING_GUIDE"] } } }),
-    db.affiliateLink.count({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } } }),
-    db.affiliateLink.count({ where: { lastVerifiedAt: { gte: weekAgo }, review: { status: "PUBLISHED" } } }),
+    publishedFreshOffers(),
     categoryCounts(),
   ]);
-  return { published, comparisons, guides, verifiedOffers, checkedThisWeek, categoriesCovered: categories.filter((c) => c.count > 0).length };
+  // Products with a fresh price (one per review) and how many of those prices were observed this week.
+  const pricedProducts = fresh.length;
+  const pricesCheckedThisWeek = fresh.filter((o) => Date.parse(o.observedAt) >= weekAgo.getTime()).length;
+  return { published, comparisons, guides, pricedProducts, pricesCheckedThisWeek, categoriesCovered: categories.filter((c) => c.count > 0).length };
 }
 
-/** Per-category counts of published reviews, guides and live verified offers (all stored data). */
+/** Per-category counts of published reviews, guides and products with a fresh price (all stored data). */
 export const categoryLedger = cache(async () => {
   const [byKind, deals] = await Promise.all([
     db.normalizedReview.groupBy({ by: ["categorySlug", "kind"], where: { status: "PUBLISHED", categorySlug: { not: null } }, _count: { _all: true } }),
-    db.affiliateLink.findMany({ where: { ...VERIFIED_LINK, review: { status: "PUBLISHED" } }, select: { review: { select: { categorySlug: true } } } }),
+    publishedFreshOffers(),
   ]);
   return CATEGORIES.map((c) => ({
     slug: c.slug,

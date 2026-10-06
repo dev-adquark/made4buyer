@@ -10,8 +10,6 @@ type Fields = Record<string, unknown>;
 const SECRET_KEY = /(key|secret|token|password|authorization|cookie|credential|assertion|private)/i;
 const SECRET_ENV = [
   "CONTENT_API_KEY",
-  "SOVRN_API_KEY",
-  "SOVRN_SITE_KEY",
   "IMAGE_ENRICHMENT_API_KEY",
   "PEXELS_API_KEY",
   "APIFY_API_TOKEN",

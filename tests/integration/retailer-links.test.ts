@@ -13,7 +13,7 @@ const body = "The Framework Laptop 13 is a repairable ultraportable with swappab
 
 beforeAll(async () => {
   await seedTaxonomy();
-  restore = withEnv({ SOVRN_API_URL: undefined, CONTENT_API_URL: undefined, AUTO_PUBLISH_ENABLED: undefined });
+  restore = withEnv({ CONTENT_API_URL: undefined, AUTO_PUBLISH_ENABLED: undefined });
 });
 afterAll(() => restore());
 beforeEach(async () => {
@@ -32,8 +32,8 @@ describe("Where-to-buy links in the page render model", () => {
     const review = await publishedReview("https://shop.retailer.test/p/fw13?utm_source=news&color=black");
     const model = await buildPageRenderModel(review.id);
     expect(model.retailerLinks).toEqual([{ url: "https://shop.retailer.test/p/fw13?color=black", label: "View at retailer.test", merchant: "retailer.test", kind: "retailer" }]);
-    // No price, no deal: the verified-offer path is unchanged.
-    expect(model.deals).toEqual([]);
+    // No price: without commerce-engine data there are no offers.
+    expect(model.offers).toEqual([]);
 
     await persistPageRenderModel(review.id);
     const stored = await db.pageRenderModel.findUniqueOrThrow({ where: { normalizedReviewId: review.id } });

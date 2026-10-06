@@ -5,7 +5,7 @@ import { safeFetch } from "@/lib/net/safe-fetch";
 import { checkRobots } from "@/lib/pipeline/apify";
 import { isTechCategory } from "@/lib/content/calendar";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
-import { canonicalProductUrl } from "@/lib/sovrn/coupons";
+import { canonicalProductUrl } from "@/lib/net/product-url";
 import { completeness, maxAgeMs, priceTier, refreshDue, resolveFacts, volatility } from "./facts";
 import { qualityScore, type QualityBand } from "./quality";
 import { wikidataFacts } from "./wikidata";
@@ -17,9 +17,8 @@ import type { ExtractedProduct, Fact, FactField, ProductIdentity, ResolvedFact }
  * store provenance → refresh. Each field is enriched independently from every legitimate source
  * we can reach for that exact product:
  *   - the review source's own structured data (pros, cons, rating, identifiers, stated price),
- *   - product pages we already know for it: the product/offer URL the source linked and the
- *     retailer page behind a verified Sovrn offer (classified manufacturer / retailer / other),
- *   - Sovrn matched offers (structured feed: price, merchant),
+ *   - product pages we already know for it: the product/offer URL the source linked and stored
+ *     official/retailer URLs (classified manufacturer / retailer / other),
  *   - Wikidata / Wikimedia Commons (free; stable facts and licensed photos only, never prices).
  * A page is used only after an exact-product check (GTIN / MPN / model, else brand + name with no
  * differing variant tokens). Nothing is guessed: a field no source states stays unknown.
@@ -99,7 +98,6 @@ async function loadEntity(id: string) {
               sourceAvailability: true,
               sourcePriceObservedAt: true,
               entities: { select: { source: true, rating: true, ratingScale: true } },
-              affiliateLinks: { where: { isActive: true, verificationStatus: "VERIFIED_OK" }, select: { finalUrl: true, offerMatch: { select: { merchantName: true, price: true, currency: true, availability: true, matchStatus: true, updatedAt: true } } } },
             },
           },
         },
@@ -129,13 +127,6 @@ function reviewFacts(e: Awaited<ReturnType<typeof loadEntity>>): Fact[] {
         const priceSrc = { ...src, observedAt: r.sourcePriceObservedAt };
         out.push(...[fact("price", r.sourcePrice, priceSrc, r.sourceCurrency), fact("currency", r.sourceCurrency, priceSrc), fact("availability", r.sourceAvailability, priceSrc)].filter((f): f is Fact => Boolean(f)));
       }
-    }
-    // Sovrn matched offers whose link was verified: structured feed price and merchant.
-    for (const l of r.affiliateLinks) {
-      const m = l.offerMatch;
-      if (!m || m.matchStatus !== "MATCHED") continue;
-      const s = { source: "STRUCTURED_FEED" as const, sourceName: `Sovrn: ${m.merchantName ?? "merchant"}`, sourceUrl: l.finalUrl, observedAt: m.updatedAt, matchBasis: "sovrn-match" };
-      out.push(...[fact("price", m.price, s, m.currency), fact("currency", m.currency, s), fact("availability", m.availability, s), fact("retailer", m.merchantName, s)].filter((f): f is Fact => Boolean(f)));
     }
   }
   return out;
@@ -215,7 +206,7 @@ export function summarize(facts: Fact[], categorySlug: string | null, now: Date)
   const quality = qualityScore(resolved, { applicable, productNameKnown: true, image: licensedImage ? "LICENSED_PRODUCT" : "NEUTRAL_CATEGORY" });
   // Earliest moment any stored fact reaches half its life (refreshDue).
   const next = facts.map((f) => f.observedAt.getTime() + maxAgeMs(volatility(f.field)) / 2).sort((a, b) => a - b)[0];
-  const ranks = ["gtin", "mpn", "model", "wikidata:gtin", "brand+name", "wikidata:brand+name", "sovrn-match", "review-source"];
+  const ranks = ["gtin", "mpn", "model", "wikidata:gtin", "brand+name", "wikidata:brand+name", "review-source"];
   const identityBasis = facts.map((f) => f.matchBasis).sort((a, b) => (ranks.indexOf(a) + 99) % 99 - ((ranks.indexOf(b) + 99) % 99))[0] ?? null;
   return { resolvedAt: now.toISOString(), ...c, fields, priceTier: tier, platform: platformNA ? "NOT_APPLICABLE" : null, quality, nextRefreshAt: next ? new Date(next).toISOString() : null, identityBasis };
 }
@@ -232,10 +223,8 @@ export async function enrichProduct(entityId: string, now = new Date()): Promise
   // Known product pages for this exact product; skipped while their facts are still fresh.
   const urls = new Set<string>();
   for (const link of e.content) {
-    for (const u of [link.review.sourceProductUrl, ...link.review.affiliateLinks.map((l) => l.finalUrl)]) {
-      const c = canonicalProductUrl(u);
-      if (c) urls.add(c);
-    }
+    const c = canonicalProductUrl(link.review.sourceProductUrl);
+    if (c) urls.add(c);
   }
   for (const f of stored) if ((f.field === "officialUrl" || f.field === "retailerUrl") && typeof f.value === "string") urls.add(f.value);
   for (const url of [...urls].slice(0, 4)) {

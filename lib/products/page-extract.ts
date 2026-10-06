@@ -515,8 +515,11 @@ function mergeGroup(group: ExtractedProduct[]): ExtractedProduct | null {
   return best;
 }
 
-function titleSegments(html: string, meta: Map<string, string>): string[] {
-  const raw = [meta.get("og:title"), meta.get("twitter:title"), firstTagText(html, "h1"), firstTagText(html, "title")];
+/** Page title texts besides meta: the first <h1> and the <title>. */
+type PageTitles = { h1?: string; title?: string };
+
+function titleSegments(page: PageTitles, meta: Map<string, string>): string[] {
+  const raw = [meta.get("og:title"), meta.get("twitter:title"), page.h1, page.title];
   const out = new Set<string>();
   for (const t of raw) {
     if (!t) continue;
@@ -527,18 +530,22 @@ function titleSegments(html: string, meta: Map<string, string>): string[] {
   return [...out];
 }
 
-function pickProduct(html: string, pageUrl: string, cands: Candidate[], meta: Map<string, string>): ExtractedProduct | null {
+type Picked = { product: ExtractedProduct; nodes: Array<Record<string, unknown>> };
+
+function pickProduct(page: PageTitles, pageUrl: string, cands: Candidate[], meta: Map<string, string>): Picked | null {
   const mapped = cands
     .map((c) => ({ ...c, p: mapNode(c.node, pageUrl), urlHit: urlMatches(c.node, pageUrl) }))
     .filter((c) => c.p.name);
   if (!mapped.length) return null;
 
-  const fromGroup = (list: typeof mapped): ExtractedProduct | null => {
+  const fromGroup = (list: typeof mapped): Picked | null => {
     const keys = new Set(list.map((c) => nameKey(c.p.name!)));
     if (keys.size !== 1) return null;
     // Include every same-named description on the page (e.g. a second block carrying the offers).
     const key = [...keys][0];
-    return mergeGroup(mapped.filter((c) => nameKey(c.p.name!) === key).map((c) => c.p));
+    const group = mapped.filter((c) => nameKey(c.p.name!) === key);
+    const product = mergeGroup(group.map((c) => c.p));
+    return product ? { product, nodes: group.map((c) => c.node) } : null;
   };
 
   // 1. Only one product described (possibly several times).
@@ -554,7 +561,7 @@ function pickProduct(html: string, pageUrl: string, cands: Candidate[], meta: Ma
     if (r) return r;
   }
   // 4. The product the page's title / h1 names, exactly.
-  const titles = titleSegments(html, meta);
+  const titles = titleSegments(page, meta);
   if (titles.length) {
     const hits = mapped.filter((c) => titles.includes(nameKey(c.p.name!)));
     return hits.length ? fromGroup(hits) : null;
@@ -579,22 +586,67 @@ function metaAvailability(v: string): string {
   return map[k] ?? stripSchema(v);
 }
 
-/**
- * Reads the page's own product from its structured data. Returns null when no product name can be
- * established or when the page lists several products and none is clearly the page's own.
- */
-export function extractProductFromHtml(html: string, pageUrl: string): ExtractedProduct | null {
-  if (!html) return null;
-  const roots = jsonLdBlocks(html)
-    .map(parseJsonLd)
-    .filter((v) => v !== undefined);
+/** One offer exactly as a page's JSON-LD states it (Offer, or AggregateOffer without sub-offers). Absent fields are omitted. */
+export type JsonLdOffer = {
+  type: "Offer" | "AggregateOffer";
+  price?: number;
+  listPrice?: number;
+  /** AggregateOffer only: the dearest seller's price (never a list price). */
+  highPrice?: number;
+  currency?: string;
+  availability?: string;
+  seller?: string;
+  /** Absolute offer URL when stated. */
+  url?: string;
+};
+
+function offerList(nodes: Array<Record<string, unknown>>, pageUrl: string): JsonLdOffer[] {
+  const out: JsonLdOffer[] = [];
+  const seen = new Set<object>();
+  const push = (o: Record<string, unknown>) => {
+    if (seen.has(o)) return;
+    seen.add(o);
+    const aggregate = typesOf(o).includes("aggregateoffer");
+    const subs = aggregate ? asArray(o.offers).filter(isObj) : [];
+    if (subs.length) {
+      for (const sub of subs) push(sub);
+      return;
+    }
+    const info = readOffer(o);
+    const offer: JsonLdOffer = { type: aggregate ? "AggregateOffer" : "Offer" };
+    if (info.price != null) offer.price = info.price;
+    if (info.listPrice != null) offer.listPrice = info.listPrice;
+    const high = aggregate ? positive(o.highPrice) : undefined;
+    if (high != null) offer.highPrice = high;
+    if (info.currency) offer.currency = info.currency;
+    if (info.availability) offer.availability = info.availability;
+    if (info.seller) offer.seller = info.seller;
+    const u = scalar(o.url);
+    if (u) {
+      try {
+        const abs = new URL(u, pageUrl);
+        if (/^https?:$/.test(abs.protocol)) offer.url = abs.toString();
+      } catch {
+        // unusable offer URL: omitted
+      }
+    }
+    out.push(offer);
+  };
+  for (const n of nodes) for (const o of asArray(n.offers)) if (isObj(o)) push(o);
+  return out;
+}
+
+/** Shared by the HTML and JSON-LD entry points: one implementation of picking and meta fallback. */
+function extractFromParts(roots: unknown[], pageUrl: string, meta: Map<string, string>, page: PageTitles): Picked | null {
   const cands = collectProducts(roots);
-  const meta = readMeta(html);
 
   let product: ExtractedProduct | null = null;
+  let nodes: Array<Record<string, unknown>> = [];
   if (cands.length) {
-    product = pickProduct(html, pageUrl, cands, meta);
-    if (!product) return null; // products present but ambiguous: never guess
+    const picked = pickProduct(page, pageUrl, cands, meta);
+    if (!picked) return null; // products present but ambiguous: never guess
+    product = picked.product;
+    nodes = picked.nodes;
   } else {
     const ogType = (meta.get("og:type") || "").toLowerCase();
     if (ogType === "product" || ogType === "product.item" || ogType === "og:product") {
@@ -636,7 +688,52 @@ export function extractProductFromHtml(html: string, pageUrl: string): Extracted
     }
   }
   if (usedMeta || !product.extractedFrom.length) product.extractedFrom = [...product.extractedFrom, "meta"];
-  return product;
+  return { product, nodes };
+}
+
+/**
+ * Reads the page's own product from its structured data. Returns null when no product name can be
+ * established or when the page lists several products and none is clearly the page's own.
+ */
+export function extractProductFromHtml(html: string, pageUrl: string): ExtractedProduct | null {
+  if (!html) return null;
+  const roots = jsonLdBlocks(html)
+    .map(parseJsonLd)
+    .filter((v) => v !== undefined);
+  return extractFromParts(roots, pageUrl, readMeta(html), { h1: firstTagText(html, "h1"), title: firstTagText(html, "title") })?.product ?? null;
+}
+
+/** Already-collected page parts (e.g. from a browser page function): JSON-LD blocks, meta tags and titles. */
+function partsOf(blocks: unknown[], meta?: Record<string, string | null | undefined>, page?: { title?: string | null; h1?: string | null }) {
+  // Blocks may be parsed objects or the raw script text (parsed here with the same tolerant repairs).
+  const roots = (Array.isArray(blocks) ? blocks : [])
+    .map((b) => (typeof b === "string" ? parseJsonLd(b) : b))
+    .filter((v) => v !== undefined && v !== null);
+  const m = new Map<string, string>();
+  for (const [k, v] of Object.entries(meta ?? {})) {
+    const key = k.trim().toLowerCase();
+    const content = typeof v === "string" ? cleanText(v) : "";
+    if (key && content && !m.has(key)) m.set(key, content);
+  }
+  const t = (v: string | null | undefined) => (typeof v === "string" ? cleanText(v) || undefined : undefined);
+  return { roots, meta: m, titles: { h1: t(page?.h1), title: t(page?.title) } };
+}
+
+/**
+ * Same as extractProductFromHtml, for a page already split into its JSON-LD blocks (parsed or raw
+ * text), meta tags ({"og:title": …, "product:price:amount": …}) and title texts. One implementation:
+ * the same product picking, field mapping and meta fallback.
+ */
+export function extractProductFromJsonLd(blocks: unknown[], pageUrl: string, meta?: Record<string, string | null | undefined>, page?: { title?: string | null; h1?: string | null }): ExtractedProduct | null {
+  const p = partsOf(blocks, meta, page);
+  return extractFromParts(p.roots, pageUrl, p.meta, p.titles)?.product ?? null;
+}
+
+/** Every Offer the page's own product states (the same product extractProductFromJsonLd picks), as stated. */
+export function extractOffersFromJsonLd(blocks: unknown[], pageUrl: string, meta?: Record<string, string | null | undefined>, page?: { title?: string | null; h1?: string | null }): JsonLdOffer[] {
+  const p = partsOf(blocks, meta, page);
+  const picked = extractFromParts(p.roots, pageUrl, p.meta, p.titles);
+  return picked ? offerList(picked.nodes, pageUrl) : [];
 }
 
 // ---------------------------------------------------------------------------------------------

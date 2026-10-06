@@ -37,7 +37,7 @@ export default async function CsvPage({ searchParams }: { searchParams: SearchPa
             Download template
           </a>
         </form>
-        <p className="small muted">Uploading only validates and previews. Overrides are applied when you press “Process” on the job page; each change is audited, then categorization, Sovrn matching, affiliate links and verification re-run for the affected reviews.</p>
+        <p className="small muted">Uploading only validates and previews. Overrides are applied when you press “Process” on the job page; each change is audited, then categorization and the commerce-offer check re-run for the affected reviews.</p>
       </section>
       <h2>Import jobs</h2>
       <div className="table-wrap">

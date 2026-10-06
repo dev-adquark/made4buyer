@@ -3,15 +3,14 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
-import { canonicalProductUrl } from "@/lib/sovrn/coupons";
-import { isProviderAffiliateUrl } from "@/lib/sovrn/offers";
+import { canonicalProductUrl, isAffiliateRedirectUrl } from "@/lib/net/product-url";
 
 /**
  * "Where to buy": plain, direct links to the maker's site or a retailer, built ONLY from URLs
  * already stored for the review (the source's own product link and product facts from the
  * maker's or a retailer's page). Never a price, never a "deal", never an invented merchant.
- * They are direct links (no /go redirect) so Sovrn Commerce can handle them on the page; a
- * Sovrn-verified offer stays a separate, labelled path (verifiedDeals).
+ * They are plain direct links (no affiliate tracking). Priced offers come from the commerce
+ * engine (lib/public/offers.ts) and are shown separately; the page de-duplicates by domain.
  */
 
 export type RetailerLink = {
@@ -85,7 +84,7 @@ export function linkableUrl(raw: unknown, excludedDomains: Set<string>): { url: 
   const host = v.url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   // A store is never an IP literal or a loopback name (even when tests allow loopback fetches).
   if (net.isIP(host) || host === "localhost" || host.endsWith(".localhost")) return undefined;
-  if (isProviderAffiliateUrl(v.url.toString())) return undefined;
+  if (isAffiliateRedirectUrl(v.url.toString())) return undefined;
   if (ASSET_HOSTS.some((re) => re.test(host)) || ASSET_SUBDOMAIN.test(host) || ASSET_PATH.test(v.url.pathname)) return undefined;
   const merchant = registrableDomain(host);
   if (merchant.includes("made4buyers") || excludedDomains.has(merchant)) return undefined;
