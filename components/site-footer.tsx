@@ -23,7 +23,7 @@ export default async function SiteFooter({ categories: taxonomy }: { categories:
           </Link>
           <p style={{ marginTop: 14, maxWidth: "40ch" }}>Reviews sorted by what you need, comparisons built only from facts we hold, and offers we check before we show them.</p>
           <p className="footer-disclosure">
-            <strong>Affiliate disclosure.</strong> Some offer links earn us a commission if you buy. It never decides which offer we show, and every offer link is checked first.{" "}
+            <strong>Affiliate disclosure.</strong> Some links to retailers earn us a commission if you buy, through Sovrn Commerce. It never decides what we review or which offer we show, and a verified offer is shown only after its link is checked.{" "}
             <Link href="/disclosure">Read the disclosure</Link>
           </p>
         </div>

@@ -1,6 +1,7 @@
 import type { ImageSourceType, LicenseState, Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { loadRetailerLinks, type RetailerLink } from "@/lib/public/retailer-links";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
 import { AI_GUIDE_SOURCE } from "./ai-guides";
@@ -14,7 +15,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 7;
+export const RENDER_MODEL_VERSION = 8;
 
 export type PublicDeal = {
   linkId: string;
@@ -103,6 +104,8 @@ export type PageRenderModel = {
   rating: { value: number; scale: number } | null;
   deals: PublicDeal[];
   coupons?: PublicCoupon[];
+  /** Direct "where to buy" links built only from stored URLs (lib/public/retailer-links.ts). Never a price or a deal. */
+  retailerLinks?: Array<Pick<RetailerLink, "url" | "label" | "merchant" | "kind">>;
   source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
   publishedAt: string | null;
   updatedAt: string;
@@ -160,6 +163,7 @@ export type RenderInputs = {
   textRights?: "FULL" | "EXCERPT";
   products?: PageRenderModel["products"];
   productData?: ProductData | null;
+  retailerLinks?: RetailerLink[];
 };
 
 /** Pure composition of the PageRenderModel (shared by the DB builder and the dry-run). */
@@ -171,7 +175,7 @@ function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | n
   return pros.length || cons.length ? { pros, cons } : null;
 }
 
-export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [], productData = null }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [], productData = null, retailerLinks = [] }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   // Only a relevant image is shown; a failing stock photo falls back to the neutral category image.
@@ -231,6 +235,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, de
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     deals,
     coupons,
+    retailerLinks: retailerLinks.map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
     source: { name: e?.source ?? review.source, url: review.sourceUrl, author: review.author, publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
@@ -250,7 +255,7 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
   const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
   const primary = review.contentEntities.find((c) => c.role === "PRIMARY");
   const productData = primary ? productDataOf((await db.productEntity.findUnique({ where: { id: primary.productEntityId }, select: { factSummary: true } }))?.factSummary) : null;
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products, productData });
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], deals: await verifiedDeals(review.id), coupons: await activeCoupons(review.id), textRights: await textRightsFor(review.source), products, productData, retailerLinks: await loadRetailerLinks(review.id) });
 }
 
 /**

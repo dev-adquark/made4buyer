@@ -630,6 +630,12 @@ legend { font-weight: 700; padding: 0 6px; }
 .no-offer strong { font: 800 26px/1 var(--f-display); font-variation-settings: "wdth" 72; display: block; margin-bottom: 8px; }
 .no-offer p { margin: 0; color: var(--muted); font-size: 14.5px; }
 .disclosure { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
+.where-to-buy { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.where-to-buy h3 { font: 500 12px var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; margin: 0 0 6px; }
+.where-to-buy ul { list-style: none; padding: 0; margin: 0 0 6px; }
+.where-to-buy li { padding: 4px 0; overflow-wrap: anywhere; }
+.where-to-buy a { color: var(--ink); font-weight: 700; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.where-to-buy p { margin: 0; }
 .entity-list { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-wrap: wrap; gap: 10px; }
 .entity-list li { border: 1.5px solid var(--ink); padding: 8px 14px; font-family: var(--f-ui); font-weight: 600; background: var(--cat-soft, transparent); }
 .entity-list a { color: var(--ink); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }

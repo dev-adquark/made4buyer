@@ -516,6 +516,24 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 <p>We only show a deal after confirming its link reaches the retailer.</p>
               </div>
             )}
+            {/* Direct links (no /go redirect) built only from stored URLs: never a price, never a "deal". */}
+            {(m.retailerLinks ?? []).length > 0 && (
+              <div className="where-to-buy">
+                <h3>Where to buy</h3>
+                <ul>
+                  {(m.retailerLinks ?? []).map((l) => (
+                    <li key={l.url}>
+                      <a href={l.url} rel="sponsored nofollow noopener" target="_blank">
+                        {l.label}
+                        <span className="visually-hidden"> (opens in a new tab)</span>
+                      </a>
+                      {l.kind === "official" && <span className="small muted"> · {l.merchant}</span>}
+                    </li>
+                  ))}
+                </ul>
+                <p className="small muted">Links go to the retailer or the maker&rsquo;s site. We may earn a commission if you buy.</p>
+              </div>
+            )}
             {(m.coupons ?? []).filter((c) => couponIsCurrent(c)).map((c) => (
               <div key={c.id} className="coupon" style={{ marginTop: 14, borderTop: "1px solid var(--line, #ddd)", paddingTop: 12 }}>
                 <div className="verified-head">Verified coupon</div>
@@ -538,7 +556,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               </div>
             ))}
             <p className="disclosure">
-              Made4Buyers may earn a commission from qualifying purchases made through offer links. <Link href="/disclosure">Affiliate disclosure</Link>
+              Made4Buyers may earn a commission from qualifying purchases made through links on this page. <Link href="/disclosure">Affiliate disclosure</Link>
             </p>
           </section>
           <SponsoredSlot position="REVIEW_SIDEBAR" categorySlug={m.category?.slug} />
