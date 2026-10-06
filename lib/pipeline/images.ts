@@ -6,7 +6,7 @@ import type { ImageType } from "@/lib/images/provenance";
 import { isCommonsFileUrl, isFreeLicence, type CommonsImage } from "@/lib/products/commons-image";
 import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
 import { productTypeTopic } from "@/lib/images/product-type";
-import type { ImageTopic } from "./image-topics";
+import { imageTopic, photoMatchesTopic, type ImageTopic } from "./image-topics";
 import { searchCommonsProductPhoto } from "@/lib/images/commons-search";
 
 /**
@@ -233,6 +233,15 @@ async function fromProductImages(images: CommonsImage[], issues: ImageDecision["
     };
   }
   return null;
+}
+
+/**
+ * True when a stored stock photo still passes today's relevance rule for this content: its own
+ * description must name the product type (single product) or the topic (category content).
+ */
+export function stockPhotoStillRelevant(altText: string | null | undefined, input: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean }): boolean {
+  const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? (input.singleProduct ? null : imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug }));
+  return Boolean(topic && altText && photoMatchesTopic(altText, topic));
 }
 
 export async function enrichImage(input: ImageInput): Promise<ImageDecision> {

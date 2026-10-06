@@ -58,3 +58,16 @@ describe("regressions from the live audit", () => {
     expect(type("9 Best Carry-On Luggage to Upgrade Your Airport Aesthetic")).toBe("product-type:suitcase");
   });
 });
+
+describe("stored stock photos are re-checked before being kept", () => {
+  it("a photo that fails today's rule is no longer worth keeping", async () => {
+    const { stockPhotoStillRelevant } = await import("@/lib/pipeline/images");
+    const olight = { productName: "imini 2", title: "Olight imini 2 Review", categorySlug: "luggage-travel", singleProduct: true };
+    expect(stockPhotoStillRelevant("Compact white drone on camouflage gear, surrounded by flashlights", olight)).toBe(false);
+    expect(stockPhotoStillRelevant("Small flashlight held in hand", olight)).toBe(true);
+    const shavers = { productName: "6 Best Panasonic Electric Shavers for Every Budget", title: "6 Best Panasonic Electric Shavers for Every Budget", categorySlug: "personal-care", singleProduct: false };
+    expect(stockPhotoStillRelevant("A collection of skincare products arranged stylishly", shavers)).toBe(false);
+    expect(stockPhotoStillRelevant("Electric shaver on a bathroom shelf", shavers)).toBe(true);
+    expect(stockPhotoStillRelevant(null, shavers)).toBe(false);
+  });
+});

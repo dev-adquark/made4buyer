@@ -13,7 +13,7 @@ import { detectContentKind, setAutoEntities } from "@/lib/entities/resolve";
 import { getSwitches } from "@/lib/automation/settings";
 import { extractEntities, lowConfidenceFields, type EntityField } from "./entities";
 import { recordFailure, resolveFailures } from "./failures";
-import { enrichImage, neutralCategoryDecision, probeImage } from "./images";
+import { enrichImage, neutralCategoryDecision, probeImage, stockPhotoStillRelevant } from "./images";
 import { inferImageType } from "@/lib/images/provenance";
 import { commonsImagesFor, primaryProductOf } from "@/lib/products/commons-image";
 import type { PexelsSearchResult } from "./pexels";
@@ -274,7 +274,15 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   if (existing && sameImage(existing, data)) {
     // Same image as before: refresh its provenance in place (idempotent, no new row, no re-render).
     asset = await db.imageAsset.update({ where: { id: existing.id }, data: { ...data, failureReason: data.failureReason ?? null, matchConfidence: data.matchConfidence ?? null, sourcePageUrl: data.sourcePageUrl ?? null } });
-  } else if (existing && !opts.replaceExisting && imageRank(existing, ctx) > imageRank(data, ctx) && existing.sourceUrl && (await probeImage(existing.sourceUrl)).ok) {
+  } else if (
+    existing &&
+    !opts.replaceExisting &&
+    imageRank(existing, ctx) > imageRank(data, ctx) &&
+    // A stock photo that no longer passes the relevance rule is not worth keeping over anything.
+    (existing.sourceType !== "ENRICHMENT_SERVICE" || stockPhotoStillRelevant(existing.altText, { productName: current.productName, title: current.canonicalTitle, categorySlug: current.categorySlug, subcategorySlug: current.subcategorySlug, singleProduct })) &&
+    existing.sourceUrl &&
+    (await probeImage(existing.sourceUrl)).ok
+  ) {
     // Never replace a working image with a worse one (e.g. a placeholder after a rate limit).
     log.info("image kept", { stage: "IMAGE_ENRICHMENT", reviewId: review.id, kept: existing.providerPhotoId ?? existing.sourceType, candidate: data.isFallback ? "placeholder" : data.subject, providerStatus });
     // Stamp provenance on a row stored before provenance existed.
