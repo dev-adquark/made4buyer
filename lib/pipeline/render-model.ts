@@ -5,7 +5,7 @@ import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
 import { AI_GUIDE_SOURCE } from "./ai-guides";
 import { contentSourceName } from "./content-source";
-import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
+import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
 
 /**
  * Stage PAGE_RENDER. The PageRenderModel is the complete, public-safe description of a
@@ -14,7 +14,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 6;
+export const RENDER_MODEL_VERSION = 7;
 
 export type PublicDeal = {
   linkId: string;
@@ -174,7 +174,9 @@ function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | n
 export function composeRenderModel({ review, entities: e, assignments, image, deals, coupons = [], textRights = "FULL", products = [], productData = null }: RenderInputs): PageRenderModel {
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
-  const pub = publicImageUrl(image, review.categorySlug);
+  // Only a relevant image is shown; a failing stock photo falls back to the neutral category image.
+  const shown = relevantImage(image, { productName: review.productName, title: review.canonicalTitle, categorySlug: review.categorySlug, subcategorySlug: review.subcategorySlug, singleProduct: (review.kind ?? "REVIEW") === "REVIEW" || products.some((p) => p.role === "PRIMARY") });
+  const pub = publicImageUrl(shown, review.categorySlug);
 
   const keyEntities: Array<{ label: string; value: string }> = [];
   if (e?.brand) keyEntities.push({ label: "Brand", value: e.brand });

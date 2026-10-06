@@ -1,7 +1,7 @@
 import type { ContentKind, Prisma } from "@prisma/client";
 import { cache } from "react";
 import { db } from "@/lib/db";
-import { publicImageUrl } from "@/lib/pipeline/images";
+import { publicImageUrl, relevantImage } from "@/lib/pipeline/images";
 import { entityKey } from "@/lib/entities/resolve";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 
@@ -34,7 +34,7 @@ export const cardSelect = {
   author: true,
   generationMeta: true,
   entities: { select: { source: true } },
-  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true } },
+  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true } },
   // Only a VERIFIED_OK link on a matched offer counts as a verified offer.
   affiliateLinks: { where: VERIFIED_LINK, take: 1, select: { id: true } },
 } satisfies Prisma.NormalizedReviewSelect;
@@ -42,7 +42,8 @@ export const cardSelect = {
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;
 
 export function cardImage(r: ReviewCard) {
-  return publicImageUrl(r.images[0], r.categorySlug);
+  // Same display guard as the review page: only relevant images.
+  return publicImageUrl(relevantImage(r.images[0], { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct: r.kind === "REVIEW" }), r.categorySlug);
 }
 
 export const categoryCounts = cache(async () => {

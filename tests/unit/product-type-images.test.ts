@@ -71,3 +71,16 @@ describe("stored stock photos are re-checked before being kept", () => {
     expect(stockPhotoStillRelevant(null, shavers)).toBe(false);
   });
 });
+
+describe("display guard: only relevant images are shown", () => {
+  it("drops a failing stock photo, keeps relevant ones and every licensed product photo", async () => {
+    const { relevantImage } = await import("@/lib/pipeline/images");
+    const olight = { productName: "imini 2", title: "Olight imini 2 Review", categorySlug: "luggage-travel", singleProduct: true };
+    expect(relevantImage({ sourceType: "ENRICHMENT_SERVICE", altText: "Compact white drone on camouflage gear" }, olight)).toBeNull();
+    expect(relevantImage({ sourceType: "ENRICHMENT_SERVICE", altText: "Flashlight beam at night" }, olight)).not.toBeNull();
+    expect(relevantImage({ sourceType: "WIKIMEDIA_COMMONS", altText: null }, olight)).not.toBeNull();
+    expect(relevantImage({ sourceType: "PLACEHOLDER", altText: null }, olight)).not.toBeNull();
+    const vpn = { productName: "ExpressVPN", title: "ExpressVPN Review", categorySlug: "security-software", singleProduct: true };
+    expect(relevantImage({ sourceType: "ENRICHMENT_SERVICE", altText: "Person holding tablet with VPN connection" }, vpn)).not.toBeNull();
+  });
+});

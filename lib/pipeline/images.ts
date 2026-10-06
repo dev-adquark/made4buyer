@@ -244,6 +244,20 @@ export function stockPhotoStillRelevant(altText: string | null | undefined, inpu
   return Boolean(topic && altText && photoMatchesTopic(altText, topic));
 }
 
+/**
+ * Display guard: only relevant images are ever shown. A stored stock photo that fails today's
+ * relevance rule is dropped (the caller then shows the neutral category image). Licensed product
+ * photos (Commons, the source's licensed image) and our placeholders pass unchanged.
+ */
+export function relevantImage<T extends { sourceType: string; altText?: string | null }>(
+  asset: T | null | undefined,
+  ctx: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean },
+): T | null {
+  if (!asset) return null;
+  if (asset.sourceType !== "ENRICHMENT_SERVICE") return asset;
+  return stockPhotoStillRelevant(asset.altText, ctx) ? asset : null;
+}
+
 export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   const issues: ImageDecision["issues"] = [];
   const now = new Date();
