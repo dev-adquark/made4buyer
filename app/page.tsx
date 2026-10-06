@@ -69,7 +69,7 @@ export default async function Home() {
     ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
     ...deals.slice(0, 4).map((d) => ({ key: `d-${d.linkId}`, href: `/review/${d.review.slug}#deal`, label: "Verified deal", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
     ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "Guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
-    ...ledger.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
+    ...activeCats.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
   ];
 
   return (
