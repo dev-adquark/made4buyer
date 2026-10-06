@@ -21,7 +21,7 @@ export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2
           <TrustLabel kind="verified" />
         </div>
         <div className="dc-main">
-          <SafeImg src={cardImage(r).url} fallback={placeholderPath(r.categorySlug)} alt="" width={84} height={84} loading="lazy" />
+          <SafeImg src={cardImage(r).url} fallback={placeholderPath(r.categorySlug)} alt="" width={84} height={84} sizes="84px" loading="lazy" decoding="async" />
           <div>
             <H style={{ font: "inherit", margin: 0 }}>
               <Link className="dc-title" href={`/review/${r.slug}`} data-cursor="Read">

@@ -69,7 +69,18 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption, cap
   return (
     <figure className="doc-figure">
       <div className="frame" ref={frame}>
-        <SafeImg src={src} fallback={fallback} alt={alt} width={width} height={height} fetchPriority="high" decoding="async" />
+        <SafeImg
+          src={src}
+          fallback={fallback}
+          alt={alt}
+          width={width}
+          height={height}
+          // Half of the two-column article hero (full width under 1000px), filling a 4:3 frame.
+          sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 48vw, 700px"
+          responsive={{ sourceWidth: width, sourceHeight: height, boxAspect: 4 / 3, maxWidth: 1400 }}
+          fetchPriority="high"
+          decoding="async"
+        />
       </div>
       {caption && (
         <figcaption className="figcaption">
