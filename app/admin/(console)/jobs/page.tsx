@@ -20,6 +20,7 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "retry-failed": "Retry due retryable failures with bounded attempts.",
   "cleanup-cache": "Delete expired Sovrn cache rows, sessions, rate-limit buckets and stale locks.",
   "publish-cycle": "Publish QA-passing reviews automatically (pause it in Admin → Automation).",
+  "fix-title-years": "Remove years from external titles that are newer than the source's own published/updated date (original kept in sourceData.originalTitle). Never changes slugs, bodies or Keyword-to-Blog posts; rebuilds live pages.",
   "enrich-products": "Enrich product facts field by field (review source, known manufacturer/retailer pages, Sovrn offers) with provenance; exact-product match required; never guesses.",
   "refresh-coupons": "Look up Sovrn promo codes for published products with a real retailer URL; retire codes Sovrn no longer returns.",
   "daily-article": "Publish the scheduled article for the due slot (MORNING 08:00, EVENING 19:00 Asia/Kolkata): next topic from the queue, duplicate checks, Keyword-to-Blog, content and SEO QA, unique image, then publish. Does nothing when no slot is due or it is already published. See Admin → Daily articles.",
