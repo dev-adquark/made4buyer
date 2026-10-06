@@ -45,3 +45,16 @@ describe("Commons file title must name the exact product", () => {
     expect(fileTitleMatches("File:Breville Barista Express.jpg", "Barista Express", null)).toBe(false);
   });
 });
+
+describe("regressions from the live audit", () => {
+  it("rejects the drone-for-flashlight and living-room-for-purifier photos; guides read their type from the title", () => {
+    const flashlight = productTypeTopic({ productName: "imini 2", title: "Olight imini 2 Review" })!;
+    expect(photoMatchesTopic("Compact white drone on camouflage gear with light", flashlight)).toBe(false);
+    expect(photoMatchesTopic("Small LED flashlight in hand", flashlight)).toBe(true);
+    const purifier = productTypeTopic({ productName: "Airmega ProX" })!;
+    expect(photoMatchesTopic("Interior of modern living room with fresh air", purifier)).toBe(false);
+    expect(type("6 Best Panasonic Electric Shavers for Every Budget", "6 Best Panasonic Electric Shavers for Every Budget", "personal-care")).toBe("product-type:shaver");
+    expect(type("Coffee & espresso machines", "Selecting the Right Coffee or Espresso Machine for Your Needs", "kitchen-appliances")).toBe("product-type:espresso");
+    expect(type("9 Best Carry-On Luggage to Upgrade Your Airport Aesthetic")).toBe("product-type:suitcase");
+  });
+});

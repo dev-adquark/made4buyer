@@ -51,7 +51,7 @@
     },
     {
       "path": "/api/cron/enrich-images",
-      "schedule": "15 9 * * *"
+      "schedule": "55 9 * * *"
     },
     {
       "path": "/api/cron/daily-article?slot=morning",

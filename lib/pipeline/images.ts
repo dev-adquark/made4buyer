@@ -319,8 +319,10 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     return neutralCategoryDecision(input.categorySlug, issues, typed.reason ?? `no on-topic photo of ${topic.label}`, typed.providerStatus);
   }
 
-  // Category-level content: a labelled illustrative topic photo.
-  const service = await fromService(input);
+  // Category-level content: a labelled illustrative photo. When the title names a product type
+  // ("electric shavers", "espresso machine", "carry-on luggage") that type is the topic; otherwise
+  // the category's topic.
+  const service = await fromService(input, productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? undefined);
   if (service.image) {
     const probe = await probeImage(service.image.url);
     if (probe.ok) {
