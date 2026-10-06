@@ -17,6 +17,7 @@ import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
 import { runIntegrityChecks } from "./integrity";
 import { automationHealth } from "@/lib/automation/daily-article";
 import { validateContentItem } from "@/lib/pipeline/validate";
+import { fetchSovrnCampaigns, sovrnApprovalStatus } from "@/lib/sovrn/account";
 import { buildSovrnRequestUrl } from "@/lib/sovrn/client";
 import { buildQueryString, extractOfferArray, isProviderAffiliateUrl, normalizeOffers, rankOffers } from "@/lib/sovrn/offers";
 
@@ -198,13 +199,23 @@ async function keywordToBlog() {
   add("keywordToBlog", "PROVIDER_ERROR", { httpStatus: res.status, code, error: res.error?.kind });
 }
 
-/** Sovrn's approval of this site is only knowable from the Sovrn dashboard; it is never inferred. */
-function sovrnSite() {
-  const status = config.sovrn.siteStatus();
+/** Sovrn's approval of this site: live from the Campaigns API (campaign matching SOVRN_SITE_KEY), else SOVRN_SITE_STATUS. */
+async function sovrnSite() {
+  const account = await fetchSovrnCampaigns({ bypassCache: true });
+  const approval = await sovrnApprovalStatus();
+  const { status, source } = approval;
   add("sovrnSiteApproval", status === "APPROVED" ? "OK" : status === "DENIED" ? "FAIL" : "EMPTY", {
-    SOVRN_SITE_STATUS: status,
+    status,
+    source,
+    campaignId: approval.campaign?.campaignId ?? null,
+    campaignName: approval.campaign?.name ?? null,
+    accountCampaigns: account.status === "OK" ? account.campaigns.length : null,
+    campaignsApi: account.status === "OK" ? "OK" : `${account.status}: ${account.message}`,
+    SOVRN_SITE_STATUS: config.sovrn.siteStatus(),
     commerceScript: config.sovrn.commerceScript() ? (config.sovrn.siteKey() ? "installed on public pages" : "enabled but SOVRN_SITE_KEY missing") : "not installed (SOVRN_COMMERCE_SCRIPT=false)",
-    note: status === "APPROVED" ? "set by the site owner from the Sovrn dashboard" : "Complete Sovrn's site approval, then set SOVRN_SITE_STATUS to what the Sovrn dashboard shows.",
+    note:
+      approval.message ??
+      (status === "APPROVED" ? "approved by Sovrn" : "Complete Sovrn's site review in the Sovrn dashboard; until approved, merchants are not affiliatable and the price API refuses requests."),
   });
 }
 
@@ -242,7 +253,7 @@ export async function runLiveCheck(options: LiveCheckOptions = {}) {
   await gsc();
   await apify();
   await keywordToBlog();
-  sovrnSite();
+  await sovrnSite();
   await integrity();
   await automation();
   const failed = results.filter((r) => !["OK", "BLOCKED_BY_ENVIRONMENT", "EMPTY"].includes(r.status));

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { fetchSovrnOffers } from "@/lib/sovrn/client";
 import { generateAffiliateUrl } from "@/lib/sovrn/affiliate";
+import { checkLink } from "@/lib/sovrn/link-check";
 import { rankOffers, selectionReason, type RankedOffer } from "@/lib/sovrn/offers";
 import { classify } from "@/lib/taxonomy/classify";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
@@ -454,6 +455,26 @@ export async function runAffiliateStage(reviewId: string, selected: OfferStageRe
         normalizedReviewId: reviewId,
       });
       continue;
+    }
+    // A wrapped merchant URL earns nothing if Sovrn cannot affiliate it for this site. Only a definite
+    // "not affiliatable" answer blocks the link; a failed check keeps today's behaviour (verification still runs).
+    if (generated.method === "LINK_WRAPPER" && config.sovrn.linkCheckEnabled()) {
+      const check = await checkLink(generated.destinationUrl).catch((error: unknown) => {
+        log.warn("sovrn link check errored", { stage: "AFFILIATE_LINK", reviewId, error: error instanceof Error ? error.message : String(error) });
+        return undefined;
+      });
+      if (check?.status === "OK" && !check.affiliatable) {
+        await recordFailure({
+          stage: "AFFILIATE_LINK",
+          code: "AFFILIATE_URL_INVALID",
+          message: "Sovrn reports this merchant is not affiliatable for this site (link check)",
+          entityType: REVIEW,
+          entityId: `${reviewId}:${s.ranked.offer.offerId}`,
+          normalizedReviewId: reviewId,
+        });
+        // Not kept: an existing link for this offer is deactivated below.
+        continue;
+      }
     }
     await resolveFailures({ stage: "AFFILIATE_LINK", entityType: REVIEW, entityId: `${reviewId}:${s.ranked.offer.offerId}` });
     const existing = await db.affiliateLink.findUnique({ where: { normalizedReviewId_sovrnOfferId: { normalizedReviewId: reviewId, sovrnOfferId: s.ranked.offer.offerId } } });

@@ -106,6 +106,12 @@ export const config = {
     /** True when SOVRN_SITE_KEY holds the secret key (reported by go-live checks and health). */
     siteKeyIsSecret: () => Boolean(str("SOVRN_SITE_KEY") && str("SOVRN_SITE_KEY") === str("SOVRN_API_KEY")),
     linkWrapperUrl: () => str("SOVRN_LINK_WRAPPER_URL") ?? "https://redirect.viglink.com",
+    /** Campaigns API (account → campaigns, with Sovrn's own approvalStatus). Auth: `secret <SOVRN_API_KEY>`. */
+    campaignsUrl: () => str("SOVRN_CAMPAIGNS_URL") ?? "https://rest.viglink.com/api/account/campaigns",
+    /** Link Check API: is a merchant URL monetisable for this site (public site key, no secret). */
+    linkCheckUrl: () => str("SOVRN_LINK_CHECK_URL") ?? "https://api.viglink.com/api/link/",
+    /** Skip link wrapping for merchants Sovrn reports as not affiliatable (default on). */
+    linkCheckEnabled: () => bool("SOVRN_LINK_CHECK_ENABLED", true),
     /** Product Promo Codes API (needs separate registration with Sovrn Support). */
     couponsUrl: () => str("SOVRN_COUPONS_URL") ?? "https://viglink.io/coupons/product",
     /** Off unless enabled: the coupon API needs its own Sovrn registration. */

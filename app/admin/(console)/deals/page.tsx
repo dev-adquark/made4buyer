@@ -9,6 +9,8 @@ import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import SovrnStatusNotice from "@/components/sovrn-status-notice";
 import CouponSection from "./coupons";
+import { LinkCheckSection } from "./link-check";
+import { SovrnAccountSection } from "./sovrn-account";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Deals" };
@@ -95,6 +97,8 @@ export default async function DealsPage({ searchParams }: { searchParams: Search
       <div className="btnrow">
         <ActionForm action="/api/admin/jobs" fields={{ job: "revalidate-offers" }} label="Refresh stale offers" returnTo="/admin/deals" disabledReason={sovrn === "READY" ? undefined : "Sovrn not configured"} />
       </div>
+      <SovrnAccountSection />
+      <LinkCheckSection />
       <CouponSection />
       <nav aria-label="Deal status filter">
         <ul className="chips">
