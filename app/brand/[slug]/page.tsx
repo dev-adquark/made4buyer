@@ -7,7 +7,15 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { brandPageEligible, cardSelect, LATEST_FIRST } from "@/lib/public/queries";
 
-export const dynamic = "force-dynamic";
+/**
+ * Cached on first request (nothing is prebuilt, so builds never need the database); regenerated
+ * at most every 5 minutes and purged when one of the brand's reviews is published or changes.
+ */
+export const revalidate = 300;
+
+export function generateStaticParams(): Array<{ slug: string }> {
+  return [];
+}
 
 /** Brand hub pages exist only when a brand has enough published reviews (no thin pages). */
 async function load(slug: string) {
