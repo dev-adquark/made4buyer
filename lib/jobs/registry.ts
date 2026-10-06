@@ -11,6 +11,7 @@ import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfill } from "./image-backfill";
 import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
+import { runTitleYearFix } from "./title-years";
 import { runCacheCleanup, runFailedRetry, runLinkVerification, runOfferRefresh, runPublishCycleJob, runCouponRefresh, runProductEnrichment } from "./revalidation";
 
 /**
@@ -58,6 +59,7 @@ export const JOBS = {
   // 08:00 and 19:00 Asia/Kolkata. Idempotent: acts only when a slot is due and not done.
   "daily-article": { lockTtlMs: 6 * 60_000, run: (trigger: string) => runDailyArticle(trigger), locked: true },
   "reclassify-content": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runReclassify(trigger), locked: true },
+  "fix-title-years": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runTitleYearFix(trigger), locked: true },
   "enrich-images": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runImageBackfill(trigger, { limit: 60, pauseMs: 250 }), locked: true },
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
