@@ -82,7 +82,7 @@ export function guideToContentItem(res: KtbResponse, req: GuideRequest, now = ne
     category: req.category,
     tags: req.keywords,
     publishedAt: now.toISOString(),
-    publisher: "Made4Buyers (AI-assisted)",
+    publisher: "Made4Buyers",
     contentKind: "AI_GUIDE",
     generation: {
       provider: AI_GUIDE_SOURCE,

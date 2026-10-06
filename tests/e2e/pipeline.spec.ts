@@ -463,7 +463,7 @@ test("review sources: add, enable, robots-checked crawl, collect job (sample stu
   expect(await collect.json()).toMatchObject({ results: { "collect-scrapes": { collected: 0 } } });
 });
 
-test("AI guide: generate publishes directly, with honest disclosure", async () => {
+test("AI guide: generate publishes directly, without an AI label (owner's rule), never as a review", async () => {
   await page.goto("/admin/guides");
   await page.getByLabel("Product name").fill("Dell XPS 14");
   await page.getByLabel("Brand (optional)").fill("Dell");
@@ -473,9 +473,9 @@ test("AI guide: generate publishes directly, with honest disclosure", async () =
   const link = page.getByRole("link", { name: "View public page" });
   const href = await link.getAttribute("href");
   await page.goto(href!);
-  await expect(page.getByText("AI-assisted buying guide").first()).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "How this guide was written" })).toContainText("not a hands-on review");
-  await expect(page.getByRole("complementary", { name: "How this guide was written" })).toContainText("published automatically as generated");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByText(/AI-assisted/)).toHaveCount(0);
+  await expect(page.getByText("Made4Buyers").first()).toBeVisible();
   const ld = (await page.locator('script[type="application/ld+json"]').allTextContents()).map((t) => JSON.parse(t)["@type"]);
   expect(ld).not.toContain("Review");
   expect(ld).toContain("Article");

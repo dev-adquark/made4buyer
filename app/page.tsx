@@ -68,7 +68,7 @@ export default async function Home() {
   const tickerItems: TickerItem[] = [
     ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
     ...deals.slice(0, 4).map((d) => ({ key: `d-${d.linkId}`, href: `/review/${d.review.slug}#deal`, label: "Verified deal", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
-    ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "AI-assisted guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
+    ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "Guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
     ...ledger.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
   ];
 
@@ -379,13 +379,13 @@ export default async function Home() {
       <section className="section tight" aria-labelledby="guides-title">
         <div className="wrap">
           <SectionHeader id="guides-title" label={`${stats.guides} published`} title="Buying guides" action={guides.length ? <Link className="arrow-link" href="/guides">All guides</Link> : undefined}>
-            Buying guides from named publishers, and AI-assisted guides published automatically as generated. Each is labelled; none carries a rating.
+            Buying guides from named publishers and from Made4Buyers. None carries a rating.
           </SectionHeader>
           {guides.length ? (
             <ReviewGrid reviews={guides} layout="ruled" />
           ) : (
             <EmptyState title="New buying guides are coming." label="Guides" compact>
-              AI-assisted guides are generated with an AI writing tool and published automatically.
+              New guides are published every day.
             </EmptyState>
           )}
         </div>
@@ -439,7 +439,7 @@ export default async function Home() {
             <li>
               <div>
                 <h3>Publish, labelled</h3>
-                <p>Only reviews that pass quality checks go live. AI-assisted guides are published automatically and labelled as such.</p>
+                <p>Only reviews that pass our automatic checks go live, and new guides are published every day.</p>
               </div>
             </li>
           </ol>

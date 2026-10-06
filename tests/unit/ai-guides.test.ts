@@ -25,7 +25,7 @@ describe("Keyword-to-Blog mapping", () => {
 
   it("maps a generated post onto a valid AI_GUIDE content item", () => {
     const item = guideToContentItem(res, { productName: "MacBook Air 13 (M4)", brand: "Apple", keywords: ["macbook air", "student laptop"] }, new Date("2026-09-29T00:00:00Z"));
-    expect(item).toMatchObject({ id: "ktb:req_1", contentKind: "AI_GUIDE", productName: "MacBook Air 13 (M4)", publisher: "Made4Buyers (AI-assisted)" });
+    expect(item).toMatchObject({ id: "ktb:req_1", contentKind: "AI_GUIDE", productName: "MacBook Air 13 (M4)", publisher: "Made4Buyers" });
     expect(item.body).toContain("## Battery");
     expect(item.body).toContain("## Frequently asked questions\n\nIs 8GB enough?\nFor notes and browsing, usually.");
     expect(item.body).not.toMatch(/\*\*|\]\(/);

@@ -235,7 +235,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             </div>
             <div>
               <dt>{isGuide ? "Written by" : "Source"}</dt>
-              <dd>{isGuide ? "Made4Buyers, AI-assisted" : m.source.author ? `${m.source.name}, ${m.source.author}` : m.source.name}</dd>
+              <dd>{isGuide ? "Made4Buyers" : m.source.author ? `${m.source.name}, ${m.source.author}` : m.source.name}</dd>
             </div>
             <div>
               <dt>{isGuide ? "Published" : "Reviewed"}</dt>
@@ -267,14 +267,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <h2 id="review-heading" className="visually-hidden">
               {isGuide ? "Guide" : "Review"}
             </h2>
-            {isGuide ? (
-              <aside className="kind-banner ai" aria-label="How this guide was written">
-                <div>
-                  <strong>AI-assisted buying guide.</strong>
-                  This guide was drafted with an AI writing tool and {m.approval === "AUTOMATED" ? "published automatically as generated: no editor or quality review read it first (we only prevent repeated topics)" : "read and approved by a Made4Buyers editor before publishing"}. It is not a hands-on review: we haven’t tested this product, and any test results, prices or statistics in it are unverified. Offers, when shown, come only from links we’ve verified.
-                </div>
-              </aside>
-            ) : (
+            {isGuide ? null : (
               <aside className="kind-banner review" aria-label="About this review">
                 <div>
                   <strong>

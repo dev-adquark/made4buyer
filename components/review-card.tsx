@@ -13,7 +13,7 @@ export function aiPostType(meta: unknown): "ARTICLE" | "GUIDE" {
 }
 
 export function KindPill({ kind, articleType }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null }) {
-  if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "AI-assisted article" : "AI-assisted guide"}</TrustLabel>;
+  if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "Article" : "Guide"}</TrustLabel>;
   if (kind === "COMPARISON") return <TrustLabel kind="source">Source comparison</TrustLabel>;
   if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Source buying guide</TrustLabel>;
   return <TrustLabel kind="source" />;
@@ -24,9 +24,9 @@ export function kindNoun(kind: string): string {
   return kind === "COMPARISON" ? "comparison" : kind === "BUYING_GUIDE" ? "buying guide" : kind === "AI_GUIDE" ? "guide" : "review";
 }
 
-/** Who wrote it: the publisher for reviews; for guides, that it is AI-assisted. */
+/** Who wrote it: the publisher for reviews; Made4Buyers for our own guides and articles. */
 export function sourceOf(r: Pick<Card, "kind" | "entities" | "author">) {
-  return r.kind === "AI_GUIDE" ? "Made4Buyers (AI-assisted)" : r.entities?.source ?? r.author ?? "Source not reported";
+  return r.kind === "AI_GUIDE" ? "Made4Buyers" : r.entities?.source ?? r.author ?? "Source not reported";
 }
 
 /** The date the source published it (never our ingestion date, so old reviews don't look new). */

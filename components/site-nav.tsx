@@ -113,7 +113,7 @@ function MegaPanel({ category, feed, failed }: { category: NavCategory; feed: Na
             )}
             {feed.guides.length > 0 && (
               <div>
-                <h3>AI-assisted buying guides</h3>
+                <h3>Buying guides</h3>
                 <ul className="mega-links">
                   {feed.guides.map((g) => (
                     <li key={g.slug}>

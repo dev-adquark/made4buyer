@@ -12,7 +12,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const { total } = await publishedGuides(1);
   return {
     title: "Buying guides",
-    description: "Buying guides from named publishers and AI-assisted guides, each labelled with how it was written and checked.",
+    description: "Buying guides and articles from named publishers and from Made4Buyers.",
     alternates: { canonical: "/guides" },
     robots: total === 0 || (page && page !== "1") ? { index: false, follow: true } : undefined,
   };
@@ -33,12 +33,6 @@ export default async function GuidesIndex({ searchParams }: { searchParams: Prom
       </section>
       <section className="section">
         <div className="wrap">
-          <aside className="kind-banner ai" aria-label="How guides are written">
-            <div>
-              <strong>Two kinds of guide, each labelled.</strong>
-              Source buying guides are excerpts of guides from named publishers, linked to the original. AI-assisted guides and articles are generated with an AI writing tool and most are published automatically as generated, without editorial review; each one says whether an editor read it. Neither is a hands-on review, and neither carries a rating. For reviews from named publishers, see <Link href="/reviews">reviews</Link>.
-            </div>
-          </aside>
           {rows.length ? (
             <ReviewGrid reviews={rows} eagerCount={3} headingLevel={2} />
           ) : (

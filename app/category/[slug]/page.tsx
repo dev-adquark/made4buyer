@@ -369,7 +369,7 @@ export default async function CategoryPage({ params, searchParams }: { params: P
         <section className="section" id="guides" aria-labelledby="cg-title">
           <div className="wrap">
             <SectionHeader id="cg-title" label="Latest" title={`${def.name} buying guides`}>
-              Source and AI-assisted guides, each labelled. Not hands-on reviews.
+              Buying guides from named publishers and from Made4Buyers.
             </SectionHeader>
             <ReviewGrid reviews={guides} />
           </div>
