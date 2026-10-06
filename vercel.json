@@ -63,7 +63,7 @@
     },
     {
       "path": "/api/cron/enrich-products",
-      "schedule": "25 7 * * *"
+      "schedule": "50 7 * * *"
     },
     {
       "path": "/api/cron/fix-title-years",

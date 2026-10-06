@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { buildPageRenderModel } from "@/lib/pipeline/render-model";
 import { enrichProduct, type FactSummary } from "@/lib/products/enrich";
+import { runProductEnrichment } from "@/lib/jobs/revalidation";
 import { seedTaxonomy } from "@/lib/taxonomy/persist";
 import { startStubServer } from "../../scripts/support/stub-server";
 import { resetDb } from "../support/db";
@@ -84,5 +85,18 @@ describe("product data enrichment", () => {
     expect(s.priceTier).toBeNull();
     expect(s.fields.mpn?.value).toBe("BES870XL");
     expect((await buildPageRenderModel(review.id)).productData?.fields.price).toBeUndefined();
+  });
+
+  it("records the review's own brand and product name, and re-enriches products from an older enrichment version at once", async () => {
+    stub.pages["express"] = productPage("Breville the Barista Express Espresso Machine", "BES870XL", 699.95);
+    const { entityId } = await reviewedProduct(`${stub.base}/pages/express`);
+    await enrichProduct(entityId);
+    expect(await db.productFact.findFirst({ where: { productEntityId: entityId, field: "brand", source: "REVIEW_SOURCE" } })).toMatchObject({ value: "Breville" });
+    await db.productEntity.update({ where: { id: entityId }, data: { factSummary: { version: 1 }, enrichedAt: new Date() } });
+    const run = await runProductEnrichment({ trigger: "test" });
+    expect(run.checked).toBe(1);
+    const s = (await db.productEntity.findUniqueOrThrow({ where: { id: entityId } })).factSummary as unknown as FactSummary;
+    expect(s.version).toBe(2);
+    expect((await runProductEnrichment({ trigger: "test" })).checked).toBe(0); // current and recent: not repeated
   });
 });

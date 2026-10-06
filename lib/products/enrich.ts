@@ -87,6 +87,8 @@ async function loadEntity(id: string) {
             select: {
               id: true,
               source: true,
+              brand: true,
+              productName: true,
               createdAt: true,
               canonicalUrl: true,
               sourceUrl: true,
@@ -115,7 +117,8 @@ function reviewFacts(e: Awaited<ReturnType<typeof loadEntity>>): Fact[] {
     const src = { source: "REVIEW_SOURCE" as const, sourceName: r.entities?.source ?? r.source, sourceUrl: r.canonicalUrl ?? r.sourceUrl, observedAt: r.createdAt, matchBasis: "review-source" };
     // Pros, cons and the rating belong to the single product a review covers, not to compared items.
     if (link.role === "PRIMARY") {
-      out.push(...[fact("pros", d.pros, src), fact("cons", d.cons, src)].filter((f): f is Fact => Boolean(f)));
+      // The review states which product it covers: its brand and product name are source facts.
+      out.push(...[fact("brand", r.brand, src), fact("productName", r.productName, src), fact("pros", d.pros, src), fact("cons", d.cons, src)].filter((f): f is Fact => Boolean(f)));
       if (r.entities?.rating != null && r.entities.ratingScale) out.push({ field: "rating", value: r.entities.rating, unit: `/${r.entities.ratingScale}`, ...src });
       const ids = d.identifiers ?? {};
       for (const [k, field] of [["gtin", "gtin"], ["mpn", "mpn"], ["sku", "sku"], ["model", "model"]] as const) {
@@ -138,12 +141,15 @@ function reviewFacts(e: Awaited<ReturnType<typeof loadEntity>>): Fact[] {
   return out;
 }
 
+/** Bump to re-enrich every product on the next run (e.g. after adding a source). */
+export const ENRICHMENT_VERSION = 2;
+
 function identityOf(e: { name: string; brand: string | null }, facts: Fact[]): ProductIdentity {
   const id = (field: FactField) => {
     const f = facts.find((x) => x.field === field && typeof x.value === "string");
     return f ? String(f.value) : null;
   };
-  return { name: e.name, brand: e.brand, model: id("model"), mpn: id("mpn"), sku: id("sku"), gtin: id("gtin") };
+  return { name: e.name, brand: e.brand ?? id("brand"), model: id("model"), mpn: id("mpn"), sku: id("sku"), gtin: id("gtin") };
 }
 
 /** Fetches one product page (robots.txt respected) and returns its facts if it is the same product. */
@@ -189,6 +195,7 @@ export type FactSummary = {
   nextRefreshAt?: string | null;
   identityBasis?: string | null;
   wikidataCheckedAt?: string | null;
+  version?: number;
 };
 
 /** Resolves stored facts into the snapshot pages and Admin read. */
@@ -263,7 +270,7 @@ export async function enrichProduct(entityId: string, now = new Date()): Promise
     }
   }
   const all = (await db.productFact.findMany({ where: { productEntityId: e.id } })).map(toFact).filter((f) => ENRICH_FIELDS.includes(f.field));
-  const summary = { ...summarize(all, e.categorySlug, now), attempts: outcomes, wikidataCheckedAt };
+  const summary = { ...summarize(all, e.categorySlug, now), attempts: outcomes, wikidataCheckedAt, version: ENRICHMENT_VERSION };
   await db.productEntity.update({ where: { id: e.id }, data: { factSummary: summary as unknown as Prisma.InputJsonValue, enrichmentStatus: summary.status, enrichedAt: now } });
   return { status: summary.status, outcomes };
 }

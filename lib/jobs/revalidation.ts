@@ -11,7 +11,7 @@ import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { verifyLinkRecord } from "@/lib/pipeline/stages";
 import { config } from "@/lib/config";
 import { canonicalProductUrl, couponsConfigured, fetchSovrnCoupons } from "@/lib/sovrn/coupons";
-import { enrichProduct } from "@/lib/products/enrich";
+import { ENRICHMENT_VERSION, enrichProduct } from "@/lib/products/enrich";
 
 /**
  * Revalidation / maintenance jobs. Each run is recorded in revalidation_runs with checked,
@@ -181,7 +181,7 @@ export async function runProductEnrichment(opts: { trigger: string; ctx?: AuditC
   return trackRun("PRODUCT_ENRICHMENT", opts.trigger, opts.ctx ?? SYSTEM_ACTOR, {}, async (tally) => {
     const due = new Date(Date.now() - interval);
     const entities = await db.productEntity.findMany({
-      where: { content: { some: { review: { status: "PUBLISHED" } } }, OR: [{ enrichedAt: null }, { enrichedAt: { lte: due } }] },
+      where: { content: { some: { review: { status: "PUBLISHED" } } }, OR: [{ enrichedAt: null }, { enrichedAt: { lte: due } }, { NOT: { factSummary: { path: ["version"], equals: ENRICHMENT_VERSION } } }] },
       orderBy: { enrichedAt: { sort: "asc", nulls: "first" } },
       take: opts.limit ?? 25,
       select: { id: true, factSummary: true, content: { where: { review: { status: "PUBLISHED" } }, select: { review: { select: { id: true, slug: true, status: true, categorySlug: true, brandSlug: true } } } } },
