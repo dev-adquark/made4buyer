@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { Wordmark } from "./brand-mark";
 import type { NavCategory } from "./site-nav";
+import { visibleNavCategories } from "@/lib/public/nav-categories";
 
-export default function SiteFooter({ categories }: { categories: NavCategory[] }) {
+/** `taxonomy` is the full category list; only categories with published content are linked. */
+export default async function SiteFooter({ categories: taxonomy }: { categories: NavCategory[] }) {
+  const categories = await visibleNavCategories(taxonomy);
   return (
     <footer className="site-footer on-dark">
       <div className="wrap colophon-statement">
@@ -35,6 +38,7 @@ export default function SiteFooter({ categories }: { categories: NavCategory[] }
             <li><Link href="/search">Search</Link></li>
           </ul>
         </nav>
+        {categories.length > 0 && (
         <nav aria-labelledby="f-cats">
           <h2 id="f-cats">Categories</h2>
           <ul>
@@ -46,6 +50,7 @@ export default function SiteFooter({ categories }: { categories: NavCategory[] }
             ))}
           </ul>
         </nav>
+        )}
         <nav aria-labelledby="f-company">
           <h2 id="f-company">Company</h2>
           <ul>

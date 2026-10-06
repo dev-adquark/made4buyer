@@ -3,8 +3,11 @@ import { Logo } from "./brand-mark";
 import CommandPalette from "./command-palette";
 import MastheadState from "./masthead-state";
 import { MainNav, MobileMenu, type NavCategory } from "./site-nav";
+import { visibleNavCategories } from "@/lib/public/nav-categories";
 
-export default function SiteHeader({ categories }: { categories: NavCategory[] }) {
+/** `taxonomy` is the full category list; only categories with published content are shown. */
+export default async function SiteHeader({ categories: taxonomy }: { categories: NavCategory[] }) {
+  const categories = await visibleNavCategories(taxonomy);
   return (
     <>
       <div className="trust-strip">

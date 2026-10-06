@@ -33,7 +33,11 @@ function saveRecent(q: string) {
   }
 }
 
-function toGroups(g: SearchGroups): Group[] {
+/** Category slug of a `/category/<slug>[?sub=…]` link. */
+const categoryOf = (href: string) => href.match(/^\/category\/([^/?#]+)/)?.[1] ?? null;
+
+/** `shown`: category slugs listed in navigation (those with published content); other category suggestions are dropped. */
+function toGroups(g: SearchGroups, shown: ReadonlySet<string>): Group[] {
   const review = (s: SearchGroups["reviews"][number], badge?: string): Item => ({ key: `r:${s.slug}:${badge ?? ""}`, href: `/review/${s.slug}${badge === "Verified offer" ? "#deal" : ""}`, title: s.productName, sub: [categoryName(s.categorySlug), s.brand].filter(Boolean).join(", "), image: s.image, swatch: s.categorySlug, badge });
   return [
     { id: "reviews", label: "Reviews", items: g.reviews.map((s) => review(s)) },
@@ -41,7 +45,7 @@ function toGroups(g: SearchGroups): Group[] {
     { id: "products", label: "Products", items: (g.products ?? []).map((p) => ({ key: `p:${p.href}`, href: p.href, title: p.name, sub: p.count === 1 ? "1 article" : `${p.count} articles` })) },
     { id: "guides", label: "Buying guides", items: g.guides.map((s) => ({ ...review(s), key: `g:${s.slug}`, title: s.title, badge: s.kind === "AI_GUIDE" ? "AI guide" : "Source guide" })) },
     { id: "deals", label: "Verified deals", items: g.deals.map((s) => review(s, "Verified offer")) },
-    { id: "categories", label: "Categories", items: g.categories.map((c) => ({ key: `c:${c.href}`, href: c.href, title: c.name, sub: c.parent ? `in ${c.parent}` : "Category", swatch: c.slug })) },
+    { id: "categories", label: "Categories", items: g.categories.filter((c) => shown.has(categoryOf(c.href) ?? "")).map((c) => ({ key: `c:${c.href}`, href: c.href, title: c.name, sub: c.parent ? `in ${c.parent}` : "Category", swatch: c.slug })) },
     { id: "brands", label: "Brands", items: g.brands.map((b) => ({ key: `b:${b.name}`, href: b.href, title: b.name, sub: b.count === 1 ? "1 result" : `${b.count} results` })) },
   ].filter((x) => x.items.length > 0);
 }
@@ -90,6 +94,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
   }, [open]);
 
   const term = q.trim();
+  const shown = useMemo(() => new Set(categories.map((c) => c.slug)), [categories]);
   useEffect(() => {
     if (term.length < 2) return;
     const ctrl = new AbortController();
@@ -97,7 +102,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
       fetch(`/api/search/suggest?groups=1&q=${encodeURIComponent(term)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((d: { groups?: SearchGroups }) => {
-          setResult({ term, groups: d.groups ? toGroups(d.groups) : [] });
+          setResult({ term, groups: d.groups ? toGroups(d.groups, shown) : [] });
           setActive(0);
         })
         .catch((e: Error) => e.name !== "AbortError" && setResult({ term, groups: [], error: true }));
@@ -106,13 +111,13 @@ export default function CommandPalette({ categories }: { categories: NavCategory
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [term]);
+  }, [term, shown]);
 
   const groups: Group[] = useMemo(() => {
     if (term.length >= 2) return result?.term === term ? result.groups : [];
     const out: Group[] = [];
     if (recent.length) out.push({ id: "recent", label: "Recent searches", items: recent.map((r) => ({ key: `q:${r}`, href: `/search?q=${encodeURIComponent(r)}`, title: r })) });
-    out.push({ id: "browse", label: "Browse categories", items: categories.slice(0, 6).map((c) => ({ key: `c:${c.slug}`, href: `/category/${c.slug}`, title: c.name, sub: c.blurb, swatch: c.slug })) });
+    if (categories.length) out.push({ id: "browse", label: "Browse categories", items: categories.slice(0, 6).map((c) => ({ key: `c:${c.slug}`, href: `/category/${c.slug}`, title: c.name, sub: c.blurb, swatch: c.slug })) });
     return out;
   }, [term, result, recent, categories]);
   const flat = groups.flatMap((g) => g.items);
