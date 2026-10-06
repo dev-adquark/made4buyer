@@ -9,7 +9,7 @@ import { SYSTEM_ACTOR, type AuditContext } from "@/lib/security/audit";
 import { sha256, stableStringify } from "@/lib/util/text";
 import { contentSourceName, fetchContentBatch } from "./content-source";
 import { recordFailure, resolveFailures } from "./failures";
-import { contentHash, normalizeContent } from "./normalize";
+import { contentHash, normalizeContent, withOriginalTitle } from "./normalize";
 import { processReview } from "./process";
 import { runPublishCycle } from "./publish";
 import { evaluateFreshness, FRESHNESS_CODES, freshnessExempt, freshnessReason, type Freshness } from "./freshness";
@@ -199,7 +199,7 @@ export async function processContentItem(itemId: string, c: IngestCounters, runI
       sourceCurrency: v.value.price !== undefined ? (v.value.currency ?? null) : null,
       sourceAvailability: v.value.availability ?? null,
       sourcePriceObservedAt: v.value.price !== undefined ? item.fetchedAt : null,
-      sourceData: v.value.sourceData ? (v.value.sourceData as Prisma.InputJsonValue) : Prisma.DbNull,
+      sourceData: (withOriginalTitle(v.value.sourceData, cand.originalTitle) as Prisma.InputJsonValue | undefined) ?? Prisma.DbNull,
       freshnessStatus: freshnessExempt(item.source) ? null : evaluateFreshness({ publishedAt: v.value.publishedAt, updatedAt: v.value.updatedAt }).status,
     };
     const review = own

@@ -1,4 +1,5 @@
 import { cleanText, firstSentences, sha256, slugify, stableStringify, truncateWords } from "@/lib/util/text";
+import { honestTitle, newestSourceDate, titleYearsExempt } from "@/lib/content/honest-title";
 import { stripLeadingBrand } from "./brands";
 import type { ValidatedContent } from "./validate";
 
@@ -17,6 +18,8 @@ export type NormalizedCandidate = {
   sourceUrl?: string;
   canonicalUrl?: string;
   canonicalTitle: string;
+  /** The publisher's headline, set only when a misleading year was removed from canonicalTitle. */
+  originalTitle?: string;
   slugBase: string;
   productIdentity: string;
   productIdentityFromTitle: boolean;
@@ -101,7 +104,12 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
   // Keyword-to-Blog posts keep their title and summary exactly as returned, and are de-duplicated
   // on the exact title only (a guide and an article on one subject are different posts).
   const ai = v.contentKind === "AI_GUIDE";
-  const title = ai ? v.title.trim() : canonicalTitle(v, host);
+  const fullTitle = ai ? v.title.trim() : canonicalTitle(v, host);
+  // External titles must not claim a year newer than any date the source gives (SEO-refreshed
+  // "… 2026" headlines on old reviews). Keyword-to-Blog posts are exempt. Slug follows the honest
+  // title for new items; the dedupe key never depends on it (product identity uses v.title).
+  const honest = ai || titleYearsExempt(opts.source, v.contentKind) ? null : honestTitle(fullTitle, newestSourceDate(v.publishedAt, v.updatedAt), { protect: [v.productName] });
+  const title = honest?.changed ? honest.title : fullTitle;
   const summary = ai ? v.summary?.trim() || firstSentences(v.body, 280) : v.summary ? truncateWords(cleanText(v.summary), 320) : firstSentences(v.body, 280);
   return {
     source: opts.source,
@@ -109,6 +117,7 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
     sourceUrl: v.url,
     canonicalUrl: v.canonicalUrl ?? v.url,
     canonicalTitle: title,
+    ...(honest?.changed ? { originalTitle: v.title.trim() } : {}),
     slugBase: slugify(title, 90) || "review",
     productIdentity,
     productIdentityFromTitle: !v.productName,
@@ -121,4 +130,10 @@ export function normalizeContent(v: ValidatedContent, opts: { source: string; fe
     // Exact title (case-insensitive, whole title) + post type: the only AI repeat rule.
     dedupeKey: ai ? `ai|${(v.generation as { articleType?: string } | undefined)?.articleType ?? "GUIDE"}|${sha256(title.toLowerCase())}` : dedupeKey({ productIdentity, brand: v.brand, publisherKey: host ?? v.publisher ?? opts.source, date: v.publishedAt ?? opts.fetchedAt }),
   };
+}
+
+/** Merges the publisher's original title into a review's sourceData without dropping other keys. */
+export function withOriginalTitle(sourceData: Record<string, unknown> | undefined, originalTitle: string | undefined): Record<string, unknown> | undefined {
+  if (!originalTitle) return sourceData;
+  return { ...(sourceData ?? {}), originalTitle };
 }
