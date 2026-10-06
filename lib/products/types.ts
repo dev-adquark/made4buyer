@@ -12,6 +12,7 @@ export type FactSource =
   | "RETAILER" // a retailer's product page (structured data)
   | "REVIEW_SOURCE" // the publication that reviewed the product (its structured data)
   | "SOVRN" // Sovrn commerce data (coupons, affiliate links)
+  | "WIKIDATA" // public, free structured data (stable facts only: never prices or offers)
   | "SECONDARY"; // any other legitimate page
 
 export const SOURCE_AUTHORITY: Record<FactSource, number> = {
@@ -20,6 +21,7 @@ export const SOURCE_AUTHORITY: Record<FactSource, number> = {
   RETAILER: 60,
   REVIEW_SOURCE: 40,
   SOVRN: 40,
+  WIKIDATA: 50,
   SECONDARY: 20,
 };
 
@@ -56,7 +58,12 @@ export type FactField =
   | "warranty"
   | "compatibility"
   | "features"
-  | "platform";
+  | "platform"
+  | "releaseDate"
+  | "operatingSystem"
+  | "productFamily"
+  /** A product photo: value = image URL; `unit` holds the licence (e.g. "CC BY-SA 4.0"); usable publicly only when licensed. */
+  | "image";
 
 /** How a field ages: price-like data goes stale in hours, identity in months. */
 export type Volatility = "HIGH" | "MEDIUM" | "LOW";
