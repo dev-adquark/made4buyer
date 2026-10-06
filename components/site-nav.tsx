@@ -200,6 +200,7 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
           {label}
         </Link>
       ))}
+      {selected && (
       <button
         ref={trigger}
         type="button"
@@ -208,13 +209,14 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
         aria-controls="mega-categories"
         onClick={() => {
           setOpen((o) => !o);
-          if (selected) load(selected.slug);
+          load(selected.slug);
         }}
-        onPointerEnter={() => selected && load(selected.slug)}
+        onPointerEnter={() => load(selected.slug)}
       >
         Categories
         <Chevron />
       </button>
+      )}
       {LINKS.map(([href, label, optional]) => (
         <Link key={href} href={href} className={optional ? "optional" : undefined} aria-current={pathname === href ? "page" : undefined}>
           {label}
