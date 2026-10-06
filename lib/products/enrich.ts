@@ -6,7 +6,9 @@ import { checkRobots } from "@/lib/pipeline/apify";
 import { isTechCategory } from "@/lib/content/calendar";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { canonicalProductUrl } from "@/lib/sovrn/coupons";
-import { completeness, priceTier, refreshDue, resolveFacts } from "./facts";
+import { completeness, maxAgeMs, priceTier, refreshDue, resolveFacts, volatility } from "./facts";
+import { qualityScore, type QualityBand } from "./quality";
+import { wikidataFacts } from "./wikidata";
 import { classifySource, extractProductFromHtml, sameProduct } from "./page-extract";
 import type { ExtractedProduct, Fact, FactField, ProductIdentity, ResolvedFact } from "./types";
 
@@ -17,12 +19,13 @@ import type { ExtractedProduct, Fact, FactField, ProductIdentity, ResolvedFact }
  *   - the review source's own structured data (pros, cons, rating, identifiers, stated price),
  *   - product pages we already know for it: the product/offer URL the source linked and the
  *     retailer page behind a verified Sovrn offer (classified manufacturer / retailer / other),
- *   - Sovrn matched offers (structured feed: price, merchant).
+ *   - Sovrn matched offers (structured feed: price, merchant),
+ *   - Wikidata / Wikimedia Commons (free; stable facts and licensed photos only, never prices).
  * A page is used only after an exact-product check (GTIN / MPN / model, else brand + name with no
  * differing variant tokens). Nothing is guessed: a field no source states stays unknown.
  */
 
-const ENRICH_FIELDS: FactField[] = ["brand", "productName", "model", "mpn", "sku", "gtin", "manufacturer", "description", "category", "color", "material", "weight", "dimensions", "capacity", "warranty", "compatibility", "features", "price", "listPrice", "currency", "availability", "retailer", "retailerUrl", "officialUrl", "rating", "reviewCount", "pros", "cons"];
+const ENRICH_FIELDS: FactField[] = ["brand", "productName", "model", "mpn", "sku", "gtin", "manufacturer", "description", "category", "color", "material", "weight", "dimensions", "capacity", "warranty", "compatibility", "features", "price", "listPrice", "currency", "availability", "retailer", "retailerUrl", "officialUrl", "rating", "reviewCount", "pros", "cons", "releaseDate", "operatingSystem", "productFamily", "image"];
 
 /** Fields a reader expects for a product; platform only for tech categories. */
 export function applicableFields(categorySlug: string | null): FactField[] {
@@ -179,6 +182,13 @@ export type FactSummary = {
   fields: Partial<Record<FactField, { status: ResolvedFact["status"]; value: ResolvedFact["value"]; unit?: string | null; source: string | null; sourceName: string | null; sourceUrl: string | null; observedAt: string | null; note: string }>>;
   priceTier: { tier: string; methodology: string } | null;
   platform: "NOT_APPLICABLE" | null;
+  /** Deterministic health score (lib/products/quality.ts). Admin only. */
+  quality?: { score: number; band: QualityBand; parts: Record<string, number> };
+  /** Last run's per-source outcomes (matched, failed, not the same product, fallback used …). */
+  attempts?: string[];
+  nextRefreshAt?: string | null;
+  identityBasis?: string | null;
+  wikidataCheckedAt?: string | null;
 };
 
 /** Resolves stored facts into the snapshot pages and Admin read. */
@@ -192,8 +202,15 @@ export function summarize(facts: Fact[], categorySlug: string | null, now: Date)
   const platformNA = !cat || !isTechCategory(cat);
   const price = resolved.price;
   const tier = price && price.status !== "STALE" && price.status !== "CONFLICTING" && typeof price.value === "number" ? priceTier({ price: price.value, currency: (price.unit ?? price.chosen?.unit ?? (resolved.currency?.value as string | undefined)) ?? null, categorySlug, observedAt: price.chosen?.observedAt ?? null }, now) : null;
-  const c = completeness(resolved, applicableFields(categorySlug).filter((f) => !(platformNA && f === "platform")));
-  return { resolvedAt: now.toISOString(), ...c, fields, priceTier: tier, platform: platformNA ? "NOT_APPLICABLE" : null };
+  const applicable = applicableFields(categorySlug).filter((f) => !(platformNA && f === "platform"));
+  const c = completeness(resolved, applicable);
+  const licensedImage = facts.some((f) => f.field === "image" && f.unit);
+  const quality = qualityScore(resolved, { applicable, productNameKnown: true, image: licensedImage ? "LICENSED_PRODUCT" : "NEUTRAL_CATEGORY" });
+  // Earliest moment any stored fact reaches half its life (refreshDue).
+  const next = facts.map((f) => f.observedAt.getTime() + maxAgeMs(volatility(f.field)) / 2).sort((a, b) => a - b)[0];
+  const ranks = ["gtin", "mpn", "model", "wikidata:gtin", "brand+name", "wikidata:brand+name", "sovrn-match", "review-source"];
+  const identityBasis = facts.map((f) => f.matchBasis).sort((a, b) => (ranks.indexOf(a) + 99) % 99 - ((ranks.indexOf(b) + 99) % 99))[0] ?? null;
+  return { resolvedAt: now.toISOString(), ...c, fields, priceTier: tier, platform: platformNA ? "NOT_APPLICABLE" : null, quality, nextRefreshAt: next ? new Date(next).toISOString() : null, identityBasis };
 }
 
 /** Enriches one product. Never throws for a single failing source; returns per-source outcomes. */
@@ -229,8 +246,24 @@ export async function enrichProduct(entityId: string, now = new Date()): Promise
       log.warn("product page enrichment failed", { stage: "ENTITY_EXTRACTION", entityId: e.id, error: String(error).slice(0, 200) });
     }
   }
+  // Free fallback for stable facts: Wikidata / Commons, re-checked weekly when nothing matched.
+  const prev = (e.factSummary ?? null) as FactSummary | null;
+  const wd = stored.filter((f) => f.source === "WIKIDATA");
+  const wdDue = wd.length ? wd.some((f) => refreshDue(f, now)) : !prev?.wikidataCheckedAt || now.getTime() - Date.parse(prev.wikidataCheckedAt) > 7 * 86_400_000;
+  let wikidataCheckedAt = prev?.wikidataCheckedAt ?? null;
+  if (wdDue) {
+    try {
+      const r = await wikidataFacts(identity, now);
+      outcomes.push(r.outcome);
+      await saveFacts(e.id, r.facts);
+      wikidataCheckedAt = now.toISOString();
+    } catch (error) {
+      outcomes.push("WIKIDATA_ERROR");
+      log.warn("wikidata enrichment failed", { stage: "ENTITY_EXTRACTION", entityId: e.id, error: String(error).slice(0, 200) });
+    }
+  }
   const all = (await db.productFact.findMany({ where: { productEntityId: e.id } })).map(toFact).filter((f) => ENRICH_FIELDS.includes(f.field));
-  const summary = summarize(all, e.categorySlug, now);
+  const summary = { ...summarize(all, e.categorySlug, now), attempts: outcomes, wikidataCheckedAt };
   await db.productEntity.update({ where: { id: e.id }, data: { factSummary: summary as unknown as Prisma.InputJsonValue, enrichmentStatus: summary.status, enrichedAt: now } });
   return { status: summary.status, outcomes };
 }

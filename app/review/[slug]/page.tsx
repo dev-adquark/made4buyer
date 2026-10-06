@@ -170,7 +170,10 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
         ["Product", fact("Product") ?? m.productName],
         ["Model", pv("model") ?? pv("mpn") ?? fact("Model"), pv("model") ? via("model") : pv("mpn") ? via("mpn") : null],
         ...(typeName && !same(typeName, m.productName) ? [["Type", typeName] as Row] : []),
-        ...(platformApplies ? [["Platform", m.platforms.map((p) => p.name).join(", ") || fact("Platform")] as Row] : []),
+        ...(platformApplies ? [["Platform", m.platforms.map((p) => p.name).join(", ") || pv("operatingSystem") || fact("Platform"), !m.platforms.length && pv("operatingSystem") ? via("operatingSystem") : null] as Row] : []),
+        ...(pv("manufacturer") && !same(pv("manufacturer"), pv("brand") ?? m.brand) ? [["Made by", pv("manufacturer"), via("manufacturer")] as Row] : []),
+        ...(pv("productFamily") ? [["Product family", pv("productFamily"), via("productFamily")] as Row] : []),
+        ...(pv("releaseDate") ? [["Released", pv("releaseDate"), via("releaseDate")] as Row] : []),
         ["Best for", m.intents.map((i) => i.name).join(", ") || fact("Best for")],
         // Only from a current, verified price against the category's published bands (methodology in Admin).
         ["Price tier", pd?.priceTier ? pd.priceTier.tier.charAt(0).toUpperCase() + pd.priceTier.tier.slice(1) : null, pd?.priceTier ? pd.priceTier.methodology : null],

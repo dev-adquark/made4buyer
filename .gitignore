@@ -11,3 +11,4 @@ out/
 /reports/generated/
 lib/reports/release-notes.json
 .vercel
+/.claude/worktrees/

@@ -61,6 +61,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
             {detail.name} <Badge value={detail.enrichmentStatus} tone={TONE[detail.enrichmentStatus ?? ""] ?? "neutral"} />
           </h2>
           <p className="small muted">
+            Quality score {summary.quality ? `${summary.quality.score}/100 (${summary.quality.band.replace(/_/g, " ").toLowerCase()}; ${Object.entries(summary.quality.parts).map(([k, v]) => `${k} ${v}`).join(", ")})` : "not computed yet"}. Identity matched by {summary.identityBasis ?? "—"}. Next refresh {when(summary.nextRefreshAt ?? null)}. Last attempts: {summary.attempts?.join(" · ") || "—"}.
+            <br />
             Resolved {when(summary.resolvedAt)}. Missing: {summary.missing.join(", ") || "none"}. Conflicting: {summary.conflicting.join(", ") || "none"}. Stale: {summary.stale.join(", ") || "none"}. Platform: {summary.platform === "NOT_APPLICABLE" ? "not applicable to this category" : "applies"}. Price tier: {summary.priceTier ? `${summary.priceTier.tier} (${summary.priceTier.methodology})` : "not derived (no current verified price)"}.
           </p>
           <div className="table-wrap">
@@ -125,6 +127,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
             <tr>
               <th scope="col">Product</th>
               <th scope="col">Completeness</th>
+              <th scope="col">Score</th>
               <th scope="col">Missing</th>
               <th scope="col">Conflicting / stale</th>
               <th scope="col">Enriched</th>
@@ -140,6 +143,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
                     <div className="small muted">{r.brand ?? "brand not established"}</div>
                   </td>
                   <td data-label="Completeness"><Badge value={r.enrichmentStatus ?? "NOT ENRICHED"} tone={TONE[r.enrichmentStatus ?? ""] ?? "neutral"} /></td>
+                  <td data-label="Score">{s?.quality ? `${s.quality.score}` : "—"}</td>
                   <td data-label="Missing" className="small">{s?.missing.join(", ") || "—"}</td>
                   <td data-label="Conflicting / stale" className="small">{[...(s?.conflicting ?? []), ...(s?.stale ?? []).map((f) => `${f} (stale)`)].join(", ") || "—"}</td>
                   <td data-label="Enriched">{when(r.enrichedAt)}</td>
@@ -148,7 +152,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
             })}
             {!rows.length && (
               <tr>
-                <td colSpan={5}>No products match.</td>
+                <td colSpan={6}>No products match.</td>
               </tr>
             )}
           </tbody>
