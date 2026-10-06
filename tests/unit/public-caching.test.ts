@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 const revalidatePath = vi.fn();
-vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args) }));
+vi.mock("next/cache", () => ({ revalidatePath: (...args: unknown[]) => revalidatePath(...args), revalidateTag: () => undefined, unstable_cache: <T>(fn: T) => fn }));
 
 const { reviewRevalidationTargets, revalidateReviewPaths } = await import("@/lib/pipeline/revalidate-paths");
 

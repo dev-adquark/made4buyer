@@ -1,4 +1,5 @@
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { NAV_CATEGORIES_TAG } from "@/lib/public/nav-categories";
 import { log } from "@/lib/log";
 
 type ReviewRef = { slug: string; categorySlug?: string | null; brandSlug?: string | null };
@@ -28,6 +29,8 @@ export function reviewRevalidationTargets(review: ReviewRef): RevalidationTarget
 export function revalidateReviewPaths(review: ReviewRef) {
   try {
     for (const t of reviewRevalidationTargets(review)) revalidatePath(t.path, t.type);
+    // A category gains or loses its first published item: refresh the nav's non-empty set now.
+    revalidateTag(NAV_CATEGORIES_TAG, { expire: 0 });
   } catch (error) {
     log.debug("path revalidation skipped (no request context)", { error: String(error) });
   }
