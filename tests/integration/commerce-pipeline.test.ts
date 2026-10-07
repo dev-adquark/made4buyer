@@ -340,3 +340,14 @@ describe("standalone official products (no Made4Buyers review)", () => {
     if (q) expect(await db.commerceOffer.count({ where: { productId: q.id } })).toBe(0);
   });
 });
+
+describe("standalone official products without a stated price", () => {
+  it("store no offer row at all (nothing to list, nothing to redirect to)", async () => {
+    const brand = await addBrand();
+    const ld = { ...(expressJsonLd()[0] as Record<string, unknown>) };
+    const offers = ([] as unknown[]).concat(ld.offers ?? []).map((o) => { const x = { ...(o as Record<string, unknown>) }; delete x.price; delete x.priceSpecification; return x; });
+    await crawl(brand, [item({ jsonLd: [{ ...ld, offers }], meta: { "og:title": "the Barista Express™" } })]);
+    expect(await db.commerceProduct.count()).toBe(1);
+    expect(await db.commerceOffer.count()).toBe(0);
+  });
+});

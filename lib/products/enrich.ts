@@ -6,6 +6,7 @@ import { checkRobots } from "@/lib/pipeline/apify";
 import { isTechCategory } from "@/lib/content/calendar";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { canonicalProductUrl } from "@/lib/net/product-url";
+import { loadSummaryFacts } from "./current-facts";
 import { completeness, maxAgeMs, priceTier, refreshDue, resolveFacts, volatility } from "./facts";
 import { qualityScore, type QualityBand } from "./quality";
 import { wikidataFacts } from "./wikidata";
@@ -258,7 +259,7 @@ export async function enrichProduct(entityId: string, now = new Date()): Promise
       log.warn("wikidata enrichment failed", { stage: "ENTITY_EXTRACTION", entityId: e.id, error: String(error).slice(0, 200) });
     }
   }
-  const all = (await db.productFact.findMany({ where: { productEntityId: e.id } })).map(toFact).filter((f) => ENRICH_FIELDS.includes(f.field));
+  const all = (await loadSummaryFacts(e.id)).map(toFact).filter((f) => ENRICH_FIELDS.includes(f.field));
   const summary = { ...summarize(all, e.categorySlug, now), attempts: outcomes, wikidataCheckedAt, version: ENRICHMENT_VERSION };
   await db.productEntity.update({ where: { id: e.id }, data: { factSummary: summary as unknown as Prisma.InputJsonValue, enrichmentStatus: summary.status, enrichedAt: now } });
   return { status: summary.status, outcomes };

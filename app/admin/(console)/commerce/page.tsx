@@ -3,10 +3,9 @@ import type { Prisma } from "@prisma/client";
 import { ActionForm, Badge, Pager, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
-import { commerceEngineOn, commerceMonthUsage, FAILED_RUN_STATUSES } from "@/lib/commerce/admin-actions";
+import { commerceEngineOn, commerceMetrics, nextMonthStartUtc } from "@/lib/commerce/admin-actions";
 import { db } from "@/lib/db";
 import { isJobName } from "@/lib/jobs/registry";
-import vercelConfig from "../../../../vercel.json";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Commerce engine" };
@@ -21,9 +20,6 @@ const JOBS: Array<[string, string]> = [
   ["commerce-collect", "Run collection now"],
   ["commerce-coupons", "Run coupon check now"],
 ];
-
-/** Commerce crons as deployed (read from vercel.json at build time). */
-const COMMERCE_CRONS = ((vercelConfig as { crons?: Array<{ path: string; schedule: string }> }).crons ?? []).filter((c) => c.path.includes("commerce"));
 
 function duration(start: Date, end: Date | null): string {
   if (!end) return "—";
@@ -43,6 +39,9 @@ function errorSummary(errors: Prisma.JsonValue | null): string {
 }
 
 const usd = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(v < 1 ? 4 : 2)}`);
+const money = (v: number) => `$${v.toFixed(2)}`;
+const percent = (ratio: number) => (Number.isFinite(ratio) ? `${(ratio * 100).toFixed(0)}%` : "—");
+const day = (d: Date) => d.toISOString().slice(0, 10);
 
 /** Admin → Commerce engine: state, controls, health numbers, budget and every Apify run. */
 export default async function CommercePage({ searchParams }: { searchParams: SearchParams }) {
@@ -52,22 +51,13 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
   const purpose = param(sp, "purpose") ?? "";
   const page = Math.max(1, Number(param(sp, "page")) || 1);
   const now = new Date();
-  const dayAgo = new Date(now.getTime() - 86_400_000);
   const where: Prisma.CommerceRunWhereInput = { ...(status ? { status } : {}), ...(purpose ? { purpose } : {}) };
 
-  const [engineOn, usage, brandsTotal, brandsEnabled, productsTotal, matched, rejected, freshOffers, staleOffers, verifiedCoupons, runs24, fails24, failedBrands, failedRuns, nextBrand, statuses, purposes, total, runs] = await Promise.all([
+  const [engineOn, m, brandsTotal, brandsEnabled, failedBrands, failedRuns, nextBrand, statuses, purposes, total, runs] = await Promise.all([
     commerceEngineOn(),
-    commerceMonthUsage(now),
+    commerceMetrics(now),
     db.commerceBrand.count(),
     db.commerceBrand.count({ where: { enabled: true } }),
-    db.commerceProduct.count(),
-    db.commerceProduct.count({ where: { identityStatus: "MATCHED" } }),
-    db.commerceProduct.count({ where: { identityStatus: "MATCH_REJECTED" } }),
-    db.commerceOffer.count({ where: { status: "FRESH" } }),
-    db.commerceOffer.count({ where: { status: "STALE" } }),
-    db.commerceCoupon.count({ where: { status: "VERIFIED", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } }),
-    db.commerceRun.count({ where: { startedAt: { gte: dayAgo } } }),
-    db.commerceRun.count({ where: { startedAt: { gte: dayAgo }, status: { in: FAILED_RUN_STATUSES } } }),
     db.commerceBrand.count({ where: { OR: [{ consecutiveFailures: { gt: 0 } }, { crawlStatus: "FAILED" }] } }),
     db.commerceRun.count({ where: { status: "FAILED" } }),
     db.commerceBrand.findFirst({ where: { enabled: true, nextCrawlAt: { not: null } }, orderBy: { nextCrawlAt: "asc" }, select: { name: true, slug: true, nextCrawlAt: true } }),
@@ -86,6 +76,7 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
   const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(purpose ? { purpose } : {}) }).toString();
   const base = `/admin/commerce${qs ? `?${qs}` : ""}`;
   const returnTo = base;
+  const { budget, runs: runStats, products, offers, coupons } = m;
 
   return (
     <>
@@ -98,8 +89,14 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
       <section aria-labelledby="engine-h">
         <h2 id="engine-h">
           Engine state <Badge value={engineOn ? "RUNNING" : "PAUSED"} tone={engineOn ? "ok" : "warn"} />
+          {budget.exhausted && <> <Badge value="BUDGET REACHED" tone="error" /></>}
         </h2>
         {!engineOn && <p className="notice warn">The commerce engine is paused: scheduled discovery, collection and coupon checks will not act until it is resumed. Manual “Run now” still runs.</p>}
+        {budget.pausedUntil && (
+          <p className="notice error" role="alert">
+            Paused: budget reached until {day(budget.pausedUntil)} (00:00 UTC). {money(budget.usedUsd)} of the {money(budget.budgetUsd)} monthly Apify budget (COMMERCE_MONTHLY_BUDGET_USD) has been used since {day(m.monthStart)}; new Apify runs are refused until the next UTC month.
+          </p>
+        )}
         <div className="btnrow">
           {engineOn ? (
             <ActionForm action="/api/admin/commerce" fields={{ action: "pause" }} label="Pause engine" returnTo={returnTo} className="btn small danger" confirm="Pause all scheduled commerce crawls?" />
@@ -118,16 +115,26 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
           />
         </div>
         <p className="small">
-          Next scheduled run:{" "}
-          {COMMERCE_CRONS.length ? (
-            COMMERCE_CRONS.map((c, i) => (
-              <span key={c.path}>
-                {i > 0 && " · "}
-                <code>{c.path}</code> at <code>{c.schedule}</code> (cron, UTC)
-              </span>
-            ))
+          Next discovery pass:{" "}
+          {runStats.nextDiscovery ? (
+            <>
+              <strong>{when(runStats.nextDiscovery.at)}</strong> (<code>{runStats.nextDiscovery.path}</code>, {runStats.nextDiscovery.origin === "vercel" ? "Vercel cron" : "GitHub Actions"}; {runStats.nextDiscovery.schedules} discovery schedule{runStats.nextDiscovery.schedules === 1 ? "" : "s"})
+            </>
           ) : (
-            <span className="muted">no commerce cron is configured in vercel.json</span>
+            <span className="muted">no commerce-discover schedule is configured</span>
+          )}
+          {runStats.next.some((r) => r.job !== "commerce-discover") && (
+            <>
+              . Other commerce jobs:{" "}
+              {runStats.next
+                .filter((r) => r.job !== "commerce-discover")
+                .map((r, i) => (
+                  <span key={r.job}>
+                    {i > 0 && " · "}
+                    <code>{r.job}</code> {when(r.at)}
+                  </span>
+                ))}
+            </>
           )}
           . Earliest brand due:{" "}
           {nextBrand ? (
@@ -138,23 +145,47 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
           ) : (
             "no enabled brand is scheduled"
           )}
-          .
+          . Per-brand crawl status: <Link href="/admin/commerce/sources">Brands &amp; sources</Link>.
         </p>
       </section>
 
-      <div className="stats">
-        <Stat label="Brands enabled" value={`${brandsEnabled} / ${brandsTotal}`} note={<Link href="/admin/commerce/brands">Manage brands</Link>} />
-        <Stat label="Commerce products" value={productsTotal} note={`${matched} matched · ${rejected} rejected`} />
-        <Stat label="Fresh offers" value={freshOffers} note={`${staleOffers} stale`} />
-        <Stat label="Verified coupons" value={verifiedCoupons} note={<Link href="/admin/commerce/coupons">Coupons</Link>} />
-        <Stat label="Runs (last 24 h)" value={runs24} note={`${fails24} failed`} />
-        <Stat label="Apify usage this month" value={`${usd(usage.used)} / $${usage.budget.toFixed(2)}`} note={`${(usage.ratio * 100).toFixed(0)}% of budget since ${usage.from.toISOString().slice(0, 10)}`} />
+      <h2 id="budget-h">Apify budget (this UTC month)</h2>
+      <div className="stats" aria-labelledby="budget-h">
+        <Stat label="Used this month" value={money(budget.usedUsd)} note={`since ${day(m.monthStart)} · sum of run usage`} />
+        <Stat label="Monthly budget" value={money(budget.budgetUsd)} note="COMMERCE_MONTHLY_BUDGET_USD" />
+        <Stat label="Remaining" value={money(budget.remainingUsd)} note={budget.pausedUntil ? `paused until ${day(budget.pausedUntil)}` : `resets ${day(nextMonthStartUtc(now))}`} />
+        <Stat
+          label="Budget used"
+          value={<Badge value={percent(budget.ratio)} tone={budget.exhausted ? "error" : budget.warn ? "warn" : "ok"} />}
+          note={budget.exhausted ? "Paused: budget reached" : budget.warn ? "Warning: 80% or more used" : "under 80%"}
+        />
       </div>
-      {usage.warn && (
+      {budget.warn && !budget.exhausted && (
         <p className="notice warn" role="alert">
-          Apify usage is at {(usage.ratio * 100).toFixed(0)}% of the monthly budget (${usage.budget.toFixed(2)}, COMMERCE_MONTHLY_BUDGET_USD). Consider pausing the engine or lowering brand crawl frequency.
+          Apify usage is at {percent(budget.ratio)} of the monthly budget ({money(budget.budgetUsd)}, COMMERCE_MONTHLY_BUDGET_USD); {money(budget.remainingUsd)} remains. Consider pausing the engine or lowering brand crawl frequency.
         </p>
       )}
+
+      <h2 id="health-h">Runs and data</h2>
+      <div className="stats" aria-labelledby="health-h">
+        <Stat label="Brands enabled" value={`${brandsEnabled} / ${brandsTotal}`} note={<><Link href="/admin/commerce/brands">Manage brands</Link> · <Link href="/admin/commerce/sources">Crawl status</Link></>} />
+        <Stat label="Runs (last 24 h)" value={`${runStats.last24h.succeeded} ok · ${runStats.last24h.failed} failed`} note={`${runStats.last24h.total} total`} />
+        <Stat label="Runs (this month)" value={`${runStats.month.succeeded} ok · ${runStats.month.failed} failed`} note={`${runStats.month.total} total`} />
+        <Stat label="Last successful run" value={runStats.lastSuccessAt ? when(runStats.lastSuccessAt) : "—"} note={runStats.lastSuccessAt ? "Apify run succeeded" : "no successful run yet"} />
+        <Stat label="Products discovered" value={products.total} note={`${products.matched} matched · ${products.rejected} rejected · ${products.unmatched} unmatched`} />
+        <Stat label="Offers discovered" value={offers.total} note={<Link href="/admin/commerce/products">Products &amp; offers</Link>} />
+        <Stat label="Verified public offers" value={offers.public} note="fresh ≤ price window, link OK, USD, price > 0" />
+        <Stat label="Rejected offers" value={offers.priceRejectedThisMonth + offers.hiddenLink} note={`${offers.priceRejectedThisMonth} prices rejected this month · ${offers.hiddenLink} hidden (bad link)`} />
+        <Stat label="Stale offers" value={offers.stale} note="STALE, or FRESH past the price window" />
+        <Stat label="Duplicate offers" value={offers.duplicateGroups} note={<Link href="/admin/data-audit">duplicate groups (data audit)</Link>} />
+        <Stat label="Conflicting data" value={m.conflicts.total} note={`${m.conflicts.coupons} coupons · ${m.conflicts.factFields} products with conflicting facts`} />
+        <Stat label="Coupons discovered" value={coupons.total} note={<>{coupons.verifiedActive} verified &amp; active · {coupons.publicCodes} on /deals · <Link href="/admin/commerce/coupons">Coupons</Link></>} />
+        <Stat label="Price-drop deals live" value={m.deals.priceDrops} note={m.deals.checkedAt ? `on /deals · newest ${when(m.deals.checkedAt)}` : "on /deals"} />
+      </div>
+      <p className="small muted">
+        Duplicates and conflicts: {m.integrity.source === "live" ? "computed live with the data-audit checks" : "from the stored data-audit result (live check failed)"}
+        {m.integrity.at ? ` at ${when(m.integrity.at)}` : ""}. Last stored data audit: {m.integrity.lastAuditAt ? when(m.integrity.lastAuditAt) : "never run"} (<Link href="/admin/data-audit">Data audit</Link>). Public offers and price drops use the same rules as the public site.
+      </p>
 
       <h2 id="runs-h">Apify runs</h2>
       <form className="toolbar" action="/admin/commerce">

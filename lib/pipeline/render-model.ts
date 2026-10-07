@@ -6,6 +6,8 @@ import { freshOffersForReview, offerDomain, type PublicOffer } from "@/lib/publi
 import { loadRetailerLinks, type RetailerLink } from "@/lib/public/retailer-links";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
+import { maxAgeMs, volatility } from "@/lib/products/facts";
+import type { FactField } from "@/lib/products/types";
 import { AI_GUIDE_SOURCE } from "./ai-guides";
 import { contentSourceName } from "./content-source";
 import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
@@ -27,13 +29,35 @@ export type ProductData = {
   platform: "NOT_APPLICABLE" | null;
 };
 
+/**
+ * Volatile facts (price, availability, sellers …) older than their freshness window are never shown
+ * as current — applied when the model is built AND when it is rendered, because stored models persist.
+ */
+export function currentProductData(pd: ProductData | null | undefined, now = new Date()): ProductData | null {
+  if (!pd) return null;
+  const fields: ProductData["fields"] = {};
+  let priceDropped = false;
+  for (const [k, f] of Object.entries(pd.fields)) {
+    if (volatility(k as FactField) === "HIGH") {
+      const at = f.observedAt ? Date.parse(f.observedAt) : NaN;
+      if (!Number.isFinite(at) || now.getTime() - at > maxAgeMs("HIGH")) {
+        if (k === "price") priceDropped = true;
+        continue;
+      }
+    }
+    fields[k] = f;
+  }
+  // The price tier is derived from the observed price: it goes with it.
+  return { ...pd, fields, priceTier: priceDropped ? null : pd.priceTier };
+}
+
 function productDataOf(summary: unknown): ProductData | null {
   const s = summary as { fields?: Record<string, { value: unknown; unit?: string | null; status: string; sourceName: string | null; source: string | null; observedAt: string | null }>; priceTier?: ProductData["priceTier"]; platform?: ProductData["platform"] } | null;
   if (!s?.fields) return null;
   const fields: ProductData["fields"] = {};
   // Only values a source stated and that are current and undisputed reach the page.
   for (const [k, f] of Object.entries(s.fields)) if ((f.status === "VERIFIED" || f.status === "SUPPORTED") && f.value != null) fields[k] = { value: f.value as ProductData["fields"][string]["value"], unit: f.unit ?? null, status: f.status, sourceName: f.sourceName, source: f.source, observedAt: f.observedAt };
-  return { fields, priceTier: s.priceTier ?? null, platform: s.platform ?? null };
+  return currentProductData({ fields, priceTier: s.priceTier ?? null, platform: s.platform ?? null });
 }
 
 export type PageRenderModel = {

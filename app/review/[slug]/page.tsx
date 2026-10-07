@@ -13,7 +13,7 @@ import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import VerifiedCoupons from "@/components/verified-coupons";
-import { buildPageRenderModel, dedupeRetailerLinks, RENDER_MODEL_VERSION, type PageRenderModel } from "@/lib/pipeline/render-model";
+import { buildPageRenderModel, currentProductData, dedupeRetailerLinks, RENDER_MODEL_VERSION, type PageRenderModel } from "@/lib/pipeline/render-model";
 import { displayDate, displayNumber, displayText, displayUrl, NO_VERIFIED_PRICE } from "@/lib/public/display";
 import { commerceBrandIdForReview, freshOffersForReview, offerIsFresh, type PublicOffer } from "@/lib/public/offers";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
@@ -174,7 +174,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const fact = (label: string) => displayText(m.keyEntities.find((e) => e.label === label)?.value);
   // Key facts: values a source stated (with provenance), never guessed. Rows that cannot apply
   // (a platform for a kettle, a model for a category guide) are left out instead of "Not available".
-  const pd = m.productData ?? null;
+  const pd = currentProductData(m.productData);
   const pv = (k: string) => {
     const f = pd?.fields[k];
     if (!f || f.value == null) return null;

@@ -15,6 +15,7 @@ import { commerceAudit, commerceAuditOnce } from "./audit";
 import { dueBrands, ensureBrandsSeeded } from "./brands";
 import { discoverProductUrls } from "./discovery";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
+import { loadSummaryFacts } from "@/lib/products/current-facts";
 import { verifyOfficial } from "./official";
 import { PRODUCT_PAGE_FUNCTION } from "./page-functions/product";
 import { revalidateCommerce } from "./revalidate";
@@ -308,10 +309,10 @@ async function saveCommerceFacts(entityId: string, facts: Fact[], meta: { confid
 }
 
 /** Re-resolves the entity's snapshot so the resolver (not this pipeline) decides which value is shown. */
-async function refreshSummary(entityId: string, now: Date) {
+export async function refreshSummary(entityId: string, now: Date) {
   const e = await db.productEntity.findUnique({ where: { id: entityId }, select: { categorySlug: true, factSummary: true } });
   if (!e) return;
-  const facts = (await db.productFact.findMany({ where: { productEntityId: entityId } })).map(toFact);
+  const facts = (await loadSummaryFacts(entityId)).map(toFact);
   const prev = (e.factSummary ?? {}) as Partial<FactSummary>;
   const summary = { ...summarize(facts, e.categorySlug, now), attempts: prev.attempts, wikidataCheckedAt: prev.wikidataCheckedAt ?? null, version: prev.version };
   await db.productEntity.update({ where: { id: entityId }, data: { factSummary: summary as unknown as Prisma.InputJsonValue, enrichmentStatus: summary.status } });
@@ -329,10 +330,12 @@ async function refreshSummary(entityId: string, now: Date) {
   }
 }
 
-async function writeOffers(productId: string, brand: CommerceBrand, n: NormalizedCommerceRecord & { ok: true }, source: FactSource, raw: CommerceRawRecord, now: Date): Promise<number> {
+async function writeOffers(productId: string, brand: CommerceBrand, n: NormalizedCommerceRecord & { ok: true }, source: FactSource, raw: CommerceRawRecord, now: Date, opts: { requirePrice?: boolean } = {}): Promise<number> {
   const seen = new Set<string>();
   let written = 0;
   for (const o of n.offers) {
+    // A product we have not reviewed is listed only for its price: no stated price, no offer.
+    if (opts.requirePrice && !(typeof o.price === "number" && o.price > 0)) continue;
     // A US-market brand shows US-dollar prices only; an offer in another currency belongs to another storefront.
     const nonUsd = brand.market === "US" && o.currency && o.currency.toUpperCase() !== "USD";
     const invalid = o.price != null && !(Number.isFinite(o.price) && o.price > 0);
@@ -406,7 +409,7 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
     // with a stated identity (name + SKU/GTIN/MPN/model), its price is the official price of that
     // exact product (the page IS the product). Store the offer so it can appear as a verified deal;
     // facts are never attached to a Made4Buyers product without an exact match.
-    if (standaloneIdentity(n, brand)) await writeOffers(product.id, brand, n, source, raw, now);
+    if (standaloneIdentity(n, brand)) await writeOffers(product.id, brand, n, source, raw, now, { requirePrice: true });
     return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds };
   }
 

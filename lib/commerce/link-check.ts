@@ -317,7 +317,13 @@ export async function runLinkValidation(trigger: string, now = new Date()) {
   await Promise.all(Array.from({ length: Math.min(HOST_CONCURRENCY, byHost.size) }, worker));
 
   const changed = results.filter((r) => r.changed);
-  if (changed.length) await revalidateCommerce(touchedEntities);
+  if (changed.length) {
+    // A page that went (or came back) dead changes which facts are current: rebuild the summaries
+    // before the review pages are rebuilt and revalidated.
+    const { refreshSummary } = await import("./pipeline");
+    for (const id of touchedEntities) await refreshSummary(id, new Date()).catch((error) => log.warn("summary refresh after link check failed", { stage: "COMMERCE", entityId: id, error: String(error).slice(0, 200) }));
+    await revalidateCommerce(touchedEntities);
+  }
   const count = (s: LinkStatus) => results.filter((r) => r.to === s).length;
   log.info("commerce link validation", { stage: "COMMERCE", trigger, due: offers.length, checked: results.length, changed: changed.length });
   return {

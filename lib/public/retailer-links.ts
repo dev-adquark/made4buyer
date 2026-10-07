@@ -1,6 +1,7 @@
 import net from "node:net";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
+import { DEAD_LINK_STATUSES } from "@/lib/products/current-facts";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { canonicalProductUrl, isAffiliateRedirectUrl } from "@/lib/net/product-url";
@@ -170,8 +171,14 @@ export async function loadRetailerLinks(reviewId: string): Promise<RetailerLink[
         select: { field: true, value: true, source: true, sourceName: true, observedAt: true },
       })
     : [];
-  return retailerLinksFor(
+  const links = retailerLinksFor(
     { status: review.status, kind: review.kind, brand: review.brand, sourceUrl: review.sourceUrl, canonicalUrl: review.canonicalUrl, sourceName: review.entities?.source ?? null, sourceProductUrl: review.sourceProductUrl, facts },
     { siteUrl: config.siteUrl() },
   );
+  if (!primary || !links.length) return links;
+  // A page the offer link check found gone (404, moved off-site, unreachable) is never linked.
+  const dead = await db.commerceOffer.findMany({ where: { linkStatus: { in: [...DEAD_LINK_STATUSES] }, product: { productEntityId: primary.productEntityId } }, select: { destinationUrl: true } });
+  if (!dead.length) return links;
+  const gone = new Set(dead.map((d) => canonicalDestination(d.destinationUrl)));
+  return links.filter((l) => !gone.has(canonicalDestination(l.url)));
 }
