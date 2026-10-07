@@ -6,9 +6,11 @@ import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { db } from "@/lib/db";
 import { categoryCardImage, type DealCardImage } from "@/lib/images/deal-card-image";
 import { loadDealCardImages } from "@/lib/images/deal-card-images";
+import { ILLUSTRATIVE_DEAL_CAPTION } from "@/lib/images/provenance";
 import { log } from "@/lib/log";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
+import { categoryPhotos, type CategoryPhoto } from "./category-images";
 import { displayDate, displayPrice, displayText, displayUrl } from "./display";
 import { freshOfferWhere, offerDomain, offerLinkKey, offerUrl, priceMaxAgeMs } from "./offers";
 
@@ -295,7 +297,7 @@ export async function loadPriceDrops(now = Date.now()): Promise<PriceDrop[]> {
   const items = await loadClassifiedOffers({ where: dropCandidateWhere(now), take: 2000, now });
   const active = items.filter((x) => x.verdict.status === "ACTIVE");
   const [reviews, images] = await Promise.all([reviewsFor([...new Set(active.map((x) => x.product.productEntityId).filter((x): x is string => Boolean(x)))]), cardImagesFor(active)]);
-  return toPriceDrops(active, reviews, images);
+  return withCategoryPhotos(toPriceDrops(active, reviews, images));
 }
 
 /** Card images for the offers' products (stored data only; on any error every card keeps its category image). */
@@ -409,7 +411,7 @@ export async function loadCurrentPrices(now = Date.now()): Promise<CurrentPrice[
   const shownIds = new Set(prices.map((p) => p.id));
   const images = await cardImagesFor(shown.filter((x) => shownIds.has(x.offer.id)));
   const productOf = new Map(shown.map((x) => [x.offer.id, x.offer.productId]));
-  return prices.map((p) => ({ ...p, image: images.get(productOf.get(p.id) ?? "") ?? p.image }));
+  return withCategoryPhotos(prices.map((p) => ({ ...p, image: images.get(productOf.get(p.id) ?? "") ?? p.image })));
 }
 
 const cachedCurrentPrices = unstable_cache(() => loadCurrentPrices(), ["current-prices-v2"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
@@ -457,4 +459,23 @@ export async function officialDeals(now = Date.now()): Promise<OfficialDeals> {
     drops: deals.drops.filter((d) => now - Date.parse(d.observedAt) <= maxAge && (!d.validUntil || validUntilMs(d.validUntil) >= now)),
     codes: deals.codes.filter((c) => (!c.expiresAt || Date.parse(c.expiresAt) > now) && c.lastVerifiedAt !== null && now - Date.parse(c.lastVerifiedAt) <= couponWindow),
   };
+}
+
+/**
+ * Last resort of the card-image chain: the category's licensed Pexels photo (cached daily; no extra
+ * requests per card), labelled illustrative — instead of the bare category placeholder graphic.
+ * Cards keep the placeholder only when no category photo is available.
+ */
+async function withCategoryPhotos<T extends { image: DealCardImage; categories?: string[] }>(rows: T[]): Promise<T[]> {
+  const need = rows.filter((r) => r.image.kind === "category");
+  if (!need.length) return rows;
+  const slugs = [...new Set(need.map((r) => r.categories?.[0]).filter((x): x is string => Boolean(x)))];
+  if (!slugs.length) return rows;
+  const photos = (await categoryPhotos(slugs).catch(() => ({}))) as Record<string, CategoryPhoto | null>;
+  return rows.map((r) => {
+    if (r.image.kind !== "category") return r;
+    const photo = r.categories?.[0] ? photos[r.categories[0]] : null;
+    if (!photo) return r;
+    return { ...r, image: { ...r.image, src: photo.url, alt: "", source: "pexels-category", caption: ILLUSTRATIVE_DEAL_CAPTION, attribution: `Photo: ${photo.photographer} / Pexels`, attributionUrl: photo.photographerUrl, sourceUrl: photo.pexelsUrl, width: 800, height: 1200 } };
+  });
 }
