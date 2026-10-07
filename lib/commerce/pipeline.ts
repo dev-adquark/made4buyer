@@ -42,7 +42,9 @@ function envNum(name: string, fallback: number, min: number, max: number): numbe
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-export const monthlyBudgetUsd = () => envNum("COMMERCE_MONTHLY_BUDGET_USD", 4, 0, 10_000);
+/** Monthly Apify budget for the commerce engine (COMMERCE_MONTHLY_BUDGET_USD, default $30). The one source of truth. */
+export const DEFAULT_COMMERCE_BUDGET_USD = 30;
+export const monthlyBudgetUsd = () => envNum("COMMERCE_MONTHLY_BUDGET_USD", DEFAULT_COMMERCE_BUDGET_USD, 0, 10_000);
 export const brandsPerRun = () => Math.floor(envNum("COMMERCE_BRANDS_PER_RUN", 6, 1, 200));
 
 const ACTIVE = ["READY", "RUNNING"];

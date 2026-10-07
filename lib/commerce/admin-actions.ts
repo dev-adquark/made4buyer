@@ -1,3 +1,4 @@
+import { monthlyBudgetUsd } from "./pipeline";
 import { db } from "@/lib/db";
 import { getSwitches, setSwitch, SWITCHES, type SwitchKey } from "@/lib/automation/settings";
 import { audit, type AuditContext } from "@/lib/security/audit";
@@ -55,10 +56,9 @@ export async function retryFailed(ctx: AuditContext, now = new Date()) {
   return { brands: brands.length, runs: runs.length };
 }
 
-/** Monthly Apify budget in USD (COMMERCE_MONTHLY_BUDGET_USD, default 4). */
+/** Monthly Apify budget in USD — the same value the jobs enforce (lib/commerce/pipeline.ts). */
 export function commerceMonthlyBudget(): number {
-  const v = Number(process.env.COMMERCE_MONTHLY_BUDGET_USD);
-  return Number.isFinite(v) && v > 0 ? v : 4;
+  return monthlyBudgetUsd();
 }
 
 /** This calendar month's (UTC) recorded Apify usage across commerce runs. */

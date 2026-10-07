@@ -12,6 +12,7 @@ import { commerceAudit } from "./audit";
 import { COUPON_PAGE_FUNCTION } from "./page-functions/coupon";
 import { revalidateCommerce } from "./revalidate";
 import { ensureBrandsSeeded } from "./brands";
+import { monthlyBudgetUsd } from "./pipeline";
 import { sourceRunnable } from "./sources";
 
 /**
@@ -23,7 +24,7 @@ import { sourceRunnable } from "./sources";
  * admin approved their terms AND enabled them (normally none); their codes are never VERIFIED.
  * One small web-scraper run per brand (depth 0, one page per promo URL, concurrency 1). No login,
  * CAPTCHA or anti-bot workaround is ever used. The "commerce_engine" switch and the monthly
- * budget (COMMERCE_MONTHLY_BUDGET_USD, default 4) are honoured before anything starts.
+ * budget (COMMERCE_MONTHLY_BUDGET_USD, default 30) are honoured before anything starts.
  */
 
 export const COUPON_PURPOSE = "COUPON";
@@ -32,9 +33,9 @@ const FAILED = ["FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT", "ABORTING"];
 
 export const commerceActorId = () => (process.env.COMMERCE_APIFY_ACTOR_ID ?? "").trim() || "moJRLRc85AitArpNN";
 
+/** The same budget the product pipeline enforces (one source of truth). */
 export function commerceMonthlyBudgetUsd(): number {
-  const n = Number(process.env.COMMERCE_MONTHLY_BUDGET_USD);
-  return Number.isFinite(n) && n >= 0 && (process.env.COMMERCE_MONTHLY_BUDGET_USD ?? "").trim() !== "" ? n : 4;
+  return monthlyBudgetUsd();
 }
 
 /** Apify spend recorded on commerce runs since the start of this UTC month. */

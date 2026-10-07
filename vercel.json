@@ -82,48 +82,96 @@
       "schedule": "5 0 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=01",
+      "schedule": "5 1 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover?pass=02",
       "schedule": "5 2 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=03",
+      "schedule": "5 3 * * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=04",
       "schedule": "5 4 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=05",
+      "schedule": "5 5 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover?pass=06",
       "schedule": "5 6 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=07",
+      "schedule": "5 7 * * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=08",
       "schedule": "5 8 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=09",
+      "schedule": "5 9 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover",
       "schedule": "5 10 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=11",
+      "schedule": "5 11 * * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=12",
       "schedule": "5 12 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=13",
+      "schedule": "5 13 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover?pass=14",
       "schedule": "5 14 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=15",
+      "schedule": "5 15 * * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=16",
       "schedule": "5 16 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=17",
+      "schedule": "5 17 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover?pass=18",
       "schedule": "5 18 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=19",
+      "schedule": "5 19 * * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=20",
       "schedule": "5 20 * * *"
     },
     {
+      "path": "/api/cron/commerce-discover?pass=21",
+      "schedule": "5 21 * * *"
+    },
+    {
       "path": "/api/cron/commerce-discover?pass=22",
       "schedule": "5 22 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-discover?pass=23",
+      "schedule": "5 23 * * *"
     }
   ]
 }
