@@ -58,6 +58,7 @@ export const DEAL_REASON_STATUS = {
   NO_OFFICIAL_CONFIRMATION: "UNVERIFIED",
   NO_LIST_PRICE: "VERIFIED",
   OUT_OF_STOCK: "VERIFIED",
+  NOT_NEW_CONDITION: "VERIFIED",
   AVAILABILITY_UNCLEAR: "VERIFIED",
   DUPLICATE: "VERIFIED",
   // coupons
@@ -93,6 +94,7 @@ export const DEAL_REASON_LABEL: Record<DealReasonCode, string> = {
   NO_OFFICIAL_CONFIRMATION: "retailer, not confirmed on official site",
   NO_LIST_PRICE: "no stated list price (not a drop)",
   OUT_OF_STOCK: "out of stock / sold out / discontinued",
+  NOT_NEW_CONDITION: "refurbished / renewed / open-box / pre-owned: its price is not a drop on the new product",
   AVAILABILITY_UNCLEAR: "availability not purchasable",
   DUPLICATE: "duplicate of a listed deal",
   NO_CODE: "no code",
@@ -170,6 +172,9 @@ export type OfferDealVerdict = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+/** Words (in the product name or URL) that mark an item that is not new. */
+const NOT_NEW = /(^|[^a-z])(refurb(ished)?|renewed|reconditioned|re-?certified|open[\s_-]?box|pre[\s_-]?owned|seconds|outlet[\s_-]?refurb)([^a-z]|$)/i;
 
 /** How each source states its comparison price (the label shown is the source's own wording). */
 const LIST_PRICE_LABELS: Record<string, string> = {
@@ -369,6 +374,8 @@ export function offerDealStatus(offer: DealOfferInput, product: DealProductInput
   const av = availabilityKey(offer.availability);
   if (av && UNAVAILABLE[av]) add("OUT_OF_STOCK", `the page states it is ${UNAVAILABLE[av]}`);
   else if (av && !AVAILABLE[av]) add("AVAILABILITY_UNCLEAR", `stated availability "${String(offer.availability).slice(0, 60)}" is not a purchasable state`);
+  // A refurbished/open-box item compared with the new product's regular price is not a price drop.
+  if (NOT_NEW.test(`${product.name ?? ""} ${offer.destinationUrl}`)) add("NOT_NEW_CONDITION", "the item is refurbished, renewed, open-box or pre-owned");
 
   const type = stated?.listPriceType;
   return {

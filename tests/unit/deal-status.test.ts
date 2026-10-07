@@ -265,3 +265,19 @@ describe("page extraction feeds the deal labels (stated values only)", () => {
     expect(b.listPriceType).toBeUndefined();
   });
 });
+
+describe("not-new items (found live: Logitech outlet refurbs listed against the new price)", () => {
+  it("a refurbished / renewed / open-box item is never an ACTIVE price drop", () => {
+    for (const name of ["Refurbished PRO X 60", "REFURBISHED YETI GX", "Open-Box Laptop 13", "Pre-owned Camera", "Renewed Phone"]) {
+      const v = status(offer(), product({ name }));
+      expect(v.status).not.toBe("ACTIVE");
+      expect(codes(v)).toContain("NOT_NEW_CONDITION");
+    }
+    const byUrl = status(offer({ destinationUrl: "https://www.example-brand.com/shop/p/pro-x-superlight-wireless-mouse-refurb" }), product({ name: "PRO X SUPERLIGHT" }));
+    expect(codes(byUrl)).toContain("NOT_NEW_CONDITION");
+  });
+  it("words that merely contain the letters are not flagged", () => {
+    expect(codes(status(offer(), product({ name: "Boxed Open-Ear Headphones" })))).not.toContain("NOT_NEW_CONDITION");
+    expect(codes(status(offer(), product({ name: "Furbish Lamp" })))).not.toContain("NOT_NEW_CONDITION");
+  });
+});

@@ -50,7 +50,8 @@ export function followGlobs(brand: Pick<CommerceBrand, "officialDomain" | "produ
 
 /** Heuristic mode only: links that are never a new product for sale (same idea as discovery's NOT_A_NEW_PRODUCT). */
 export function followExcludes(brand: Pick<CommerceBrand, "productUrlPatterns">): string[] {
-  if (brand.productUrlPatterns.length) return [];
+  // Not-new items are never deals: never spend crawl budget on them, patterns or not.
+  if (brand.productUrlPatterns.length) return ["**/*refurb*", "**/*renewed*", "**/*reconditioned*", "**/*open-box*", "**/*pre-owned*"];
   return ["**/*refurb*", "**/*renewed*", "**/*reconditioned*", "**/*open-box*", "**/*pre-owned*", "**/*gift-card*", "**/*giftcard*", "**/*e-gift*", "**/*recall*"];
 }
 

@@ -401,12 +401,19 @@ test("mega menu shows real category data", async () => {
 });
 
 test("find my match walks the real taxonomy", async () => {
+  // Each step is a navigation and the same "No preference" link exists on consecutive steps:
+  // wait for the URL to change after every click so a click never lands on the previous step.
+  const step = async (click: () => Promise<void>) => {
+    const before = page.url();
+    await click();
+    await page.waitForURL((u) => u.toString() !== before);
+  };
   await page.goto("/match");
-  await page.locator(".option-grid").getByRole("link", { name: /^Laptops/ }).click();
+  await step(() => page.locator(".option-grid").getByRole("link", { name: /^Laptops/ }).click());
   await expect(page.getByRole("heading", { name: "What matters most?" })).toBeVisible();
-  await page.getByRole("link", { name: /No preference/ }).click();
-  await page.locator(".option-grid").getByRole("link", { name: /^Windows/ }).click();
-  await page.getByRole("link", { name: /No preference/ }).click();
+  await step(() => page.getByRole("link", { name: /No preference/ }).click());
+  await step(() => page.locator(".option-grid").getByRole("link", { name: /^Windows/ }).click());
+  await step(() => page.getByRole("link", { name: /No preference/ }).click());
   await expect(page.getByRole("heading", { name: /Your matches in laptops/ })).toBeVisible();
   expect(await page.locator(".review-card").count()).toBeGreaterThanOrEqual(1);
 });

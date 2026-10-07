@@ -153,7 +153,8 @@ describe("deal-page crawl input", () => {
     try {
       const input = buildDealActorInput({ slug: "s", officialDomain: DOMAIN, productUrlPatterns: [`${SITE}/products/*`], maxProductsPerRun: 20, market: "US" }, [DEAL, DEAL], []);
       expect(input.globs).toEqual([{ glob: `${SITE}/products/*` }]);
-      expect(input.excludes).toEqual([]);
+      // With patterns, only not-new items (refurbished, renewed …) are excluded.
+      expect(input.excludes.map((e: { glob: string }) => e.glob)).toEqual(["**/*refurb*", "**/*renewed*", "**/*reconditioned*", "**/*open-box*", "**/*pre-owned*"]);
       expect(input.startUrls).toHaveLength(1);
       expect(input.maxPagesPerCrawl).toBe(1 + 5);
       expect(input.customData.robotsRules).toBeNull();
