@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
+import { usePresence } from "./presence";
 
 type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
 
@@ -16,7 +16,6 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
   const id = useId();
   const listId = `${id}-list`;
   const router = useRouter();
-  const reduce = useReducedMotion();
   const [q, setQ] = useState(defaultValue);
   const [items, setItems] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -54,6 +53,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
   }, []);
 
   const showList = open && q.trim().length >= 2;
+  const list = usePresence(showList, 180);
   // Suggestions for a previous (longer) query are hidden once the term is too short.
   const visibleItems = q.trim().length >= 2 ? items : [];
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -114,28 +114,16 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
           </button>
         )}
       </form>
-      <AnimatePresence>
-        {showList && (
-          <motion.ul
-            id={listId}
-            role="listbox"
-            aria-label="Suggestions"
-            className="suggestions"
-            initial={reduce ? false : { opacity: 0, y: -6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -6 }}
-            transition={{ duration: 0.18 }}
-          >
+      {list.mounted && (
+          <ul id={listId} role="listbox" aria-label="Suggestions" className="suggestions" data-motion="list" data-state={list.state}>
             {visibleItems.map((s, i) => (
-              <motion.li
+              <li
                 key={s.slug}
                 id={`${listId}-${i}`}
                 role="option"
                 aria-selected={i === active}
-                style={themeStyle(s.categorySlug)}
-                initial={reduce ? false : { opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: reduce ? 0 : i * 0.03 }}
+                className="m-stagger"
+                style={{ ...themeStyle(s.categorySlug), "--i": i } as React.CSSProperties}
               >
                 <a href={`/review/${s.slug}`} tabIndex={-1} onMouseEnter={() => setActive(i)}>
                   <img src={s.image} alt="" width={56} height={40} loading="lazy" />
@@ -148,7 +136,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
                     </span>
                   </span>
                 </a>
-              </motion.li>
+              </li>
             ))}
             {!visibleItems.length && !loading && (
               <li className="s-empty" role="option" aria-selected={false} aria-disabled="true">
@@ -167,9 +155,8 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
                 </a>
               </li>
             )}
-          </motion.ul>
-        )}
-      </AnimatePresence>
+          </ul>
+      )}
     </div>
   );
 }

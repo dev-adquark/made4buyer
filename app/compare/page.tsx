@@ -5,7 +5,7 @@ import CompareTable, { type CompareColumn, type CompareSection } from "@/compone
 import TrackOnce from "@/components/track-once";
 import { db } from "@/lib/db";
 import { LATEST_FIRST } from "@/lib/public/queries";
-import { placeholderPath, publicImageUrl } from "@/lib/pipeline/images";
+import { placeholderPath, publicImageUrl, relevantImage } from "@/lib/pipeline/images";
 import { freshOffersForReview } from "@/lib/public/offers";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { displayText, displayUrl } from "@/lib/public/display";
@@ -45,7 +45,8 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
       id: r.id,
       slug: r.slug,
       name: r.productName,
-      image: publicImageUrl(r.images[0], r.categorySlug).url,
+      // Same display guard as the review page and cards: only a relevant, working image.
+      image: publicImageUrl(relevantImage(r.images[0], { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct: (r.kind ?? "REVIEW") === "REVIEW" }), r.categorySlug).url,
       fallback: placeholderPath(r.categorySlug),
       categoryName: categoryName(r.categorySlug) ?? "",
       facts: {

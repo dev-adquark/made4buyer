@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
 import { commerceAudit } from "./audit";
 import { recordVerification, type VerificationEventInput } from "./verification-events";
+import { couponVerifiedSince, publicCoupons } from "./deal-status";
 import { CODE_SHAPE, findCodesInText } from "./page-functions/coupon";
 
 /**
@@ -458,38 +459,47 @@ export async function markExpiredCoupons(now = new Date()): Promise<number> {
   return count;
 }
 
-/** Days a VERIFIED code stays displayable without being re-seen on the official page (COMMERCE_COUPON_MAX_AGE_DAYS, default 7). */
-export function couponMaxAgeDays(): number {
-  const n = Number(process.env.COMMERCE_COUPON_MAX_AGE_DAYS);
-  return Number.isFinite(n) && n >= 1 && n <= 90 ? Math.floor(n) : 7;
-}
+// ── Public coupons ───────────────────────────────────────────────────────
 
-/** VERIFIED, started, unexpired and recently re-verified coupons for one brand (what the public component shows). */
-/** Public coupons: VERIFIED, re-seen within the max age, started and not expired. */
-function publicCouponWhere(now: Date) {
-  const since = new Date(now.getTime() - couponMaxAgeDays() * 86_400_000);
+/** The coupon window lives with the eligibility rule (lib/commerce/deal-status.ts); re-exported for existing callers. */
+export { couponMaxAgeDays, DEFAULT_COUPON_MAX_AGE_DAYS } from "./deal-status";
+
+/** What a public coupon card needs of its brand (also what the eligibility rule checks the source against). */
+const PUBLIC_BRAND_SELECT = { id: true, name: true, slug: true, categories: true, officialDomain: true, officialStoreUrl: true } as const;
+
+/**
+ * Database prefilter for public coupons (a superset; publicCoupons() decides): VERIFIED rows verified
+ * within the window, started and unexpired, plus recently observed CONFLICTING rows so a code that
+ * another official page contradicts is withheld.
+ */
+function publicCouponWhere(now: Date): Prisma.CommerceCouponWhereInput {
+  const since = couponVerifiedSince(now);
   return {
-    status: "VERIFIED",
-    lastVerifiedAt: { gte: since },
-    AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }],
+    OR: [
+      { status: "VERIFIED", lastVerifiedAt: { gte: since }, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }] },
+      { status: "CONFLICTING", observedAt: { gte: since } },
+    ],
   };
 }
 
-export async function verifiedCouponsFor(brand: { brandId?: string | null; merchant?: string | null }, now = new Date(), take = 6) {
+const loadCandidates = (where: Prisma.CommerceCouponWhereInput, now: Date, take: number) =>
+  db.commerceCoupon.findMany({ where: { AND: [publicCouponWhere(now), where] }, include: { brand: { select: PUBLIC_BRAND_SELECT } }, orderBy: [{ lastVerifiedAt: { sort: "desc", nulls: "last" } }, { id: "asc" }], take });
+
+export type PublicCouponRow = Awaited<ReturnType<typeof loadCandidates>>[number];
+
+/** Public coupons for one brand (by CommerceBrand id, else by merchant name), newest verification first. */
+export async function verifiedCouponsFor(brand: { brandId?: string | null; merchant?: string | null }, now = new Date(), take = 6): Promise<PublicCouponRow[]> {
   if (!brand.brandId && !brand.merchant) return [];
-  return db.commerceCoupon.findMany({
-    where: { ...publicCouponWhere(now), ...(brand.brandId ? { brandId: brand.brandId } : { merchant: brand.merchant! }) },
-    orderBy: [{ lastVerifiedAt: "desc" }],
-    take,
-  });
+  const rows = await loadCandidates(brand.brandId ? { brandId: brand.brandId } : { merchant: brand.merchant! }, now, 200);
+  return publicCoupons(rows, now).slice(0, take);
 }
 
-/** Public coupons for many brands in ONE query (at most `perBrand` each, newest first). */
-export async function verifiedCouponsForBrands(brandIds: string[], now = new Date(), perBrand = 6) {
-  if (!brandIds.length) return new Map<string, Awaited<ReturnType<typeof verifiedCouponsFor>>>();
-  const rows = await db.commerceCoupon.findMany({ where: { ...publicCouponWhere(now), brandId: { in: brandIds } }, orderBy: [{ lastVerifiedAt: "desc" }], take: 500 });
-  const out = new Map<string, typeof rows>();
-  for (const r of rows) {
+/** Public coupons for many brands in ONE query (at most `perBrand` each, newest verification first). */
+export async function verifiedCouponsForBrands(brandIds: string[], now = new Date(), perBrand = 6): Promise<Map<string, PublicCouponRow[]>> {
+  const out = new Map<string, PublicCouponRow[]>();
+  if (!brandIds.length) return out;
+  const rows = await loadCandidates({ brandId: { in: brandIds } }, now, 1000);
+  for (const r of publicCoupons(rows, now)) {
     if (!r.brandId) continue;
     const list = out.get(r.brandId) ?? [];
     if (list.length < perBrand) list.push(r);

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
  * browsers, insecure contexts) it selects the code's text (`targetId`) so the reader can copy it,
  * and tries the legacy copy command. A polite live region announces "Copied".
  */
-export default function CopyCodeButton({ code, targetId }: { code: string; targetId: string }) {
+export default function CopyCodeButton({ code, targetId, className = "btn small dc-copy" }: { code: string; targetId: string; className?: string }) {
   const [state, setState] = useState<"idle" | "copied" | "selected">("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
@@ -47,9 +47,8 @@ export default function CopyCodeButton({ code, targetId }: { code: string; targe
 
   return (
     <>
-      <button type="button" className="btn small dc-copy" onClick={copy} aria-describedby={targetId}>
-        {state === "copied" ? "Copied" : "Copy"}
-        <span className="visually-hidden"> code</span>
+      <button type="button" className={className} onClick={copy} aria-describedby={targetId} data-state={state}>
+        {state === "copied" ? "Copied" : "Copy code"}
       </button>
       <span className="visually-hidden" role="status" aria-live="polite">
         {state === "copied" ? "Copied" : state === "selected" ? "Code selected: press Ctrl+C or Command+C to copy" : ""}

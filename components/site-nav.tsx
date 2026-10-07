@@ -1,12 +1,12 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Wordmark } from "./brand-mark";
 import CategoryIcon from "./category-icon";
+import { usePresence } from "./presence";
 import SearchCombobox from "./search-combobox";
 import { displayPrice } from "@/lib/public/display";
 import type { NavFeed } from "@/lib/public/queries";
@@ -152,7 +152,7 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
   const pathname = usePathname();
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  const reduce = useReducedMotion();
+  const mega = usePresence(open, 200);
 
   const load = useCallback((slug: string) => {
     if (requested.current.has(slug)) return;
@@ -218,16 +218,8 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
           {label}
         </Link>
       ))}
-      <AnimatePresence>
-        {open && selected && (
-          <motion.div
-            id="mega-categories"
-            className="mega on-ink"
-            initial={reduce ? false : { opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: reduce ? 0 : -6 }}
-            transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-          >
+      {mega.mounted && selected && (
+          <div id="mega-categories" className="mega on-ink" data-motion="drop" data-state={mega.state}>
             <div className="container mega-inner">
               <div className="mega-cats">
                 {byDepartment(categories).map((g) => (
@@ -252,9 +244,8 @@ export function MainNav({ categories }: { categories: NavCategory[] }) {
               </div>
               <MegaPanel category={selected} feed={feeds[selected.slug]} failed={Boolean(failed[selected.slug])} />
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+      )}
     </nav>
   );
 }
@@ -298,29 +289,25 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
-  const reduce = useReducedMotion();
   const close = useCallback(() => setOpen(false), []);
   useFocusTrap(open, panel, close, trigger);
   const mounted = useClientReady();
+  const presence = usePresence(open, 260);
   useEffect(() => {
     if (open) panel.current?.querySelector<HTMLElement>("button")?.focus();
   }, [open]);
 
-  const sheet = (
-    <AnimatePresence>
-      {open && (
-        <motion.div
+  const sheet = presence.mounted && (
+        <div
           ref={panel}
           id="mobile-menu"
           className="sheet on-ink"
           role="dialog"
           aria-modal="true"
           aria-label="Menu"
+          data-motion="sheet"
+          data-state={presence.state}
           onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}
-          initial={reduce ? { opacity: 0 } : { opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={reduce ? { opacity: 0 } : { opacity: 0, y: -12 }}
-          transition={{ duration: 0.26, ease: [0.2, 0.8, 0.2, 1] }}
         >
           <div className="sheet-head">
             <span className="brand">
@@ -380,9 +367,7 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
               <Link href="/about" style={{ color: "#fff" }}>How we review</Link> and <Link href="/disclosure" style={{ color: "#fff" }}>how we make money</Link>
             </p>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        </div>
   );
 
   return (
@@ -392,7 +377,7 @@ export function MobileMenu({ categories }: { categories: NavCategory[] }) {
           <path d="M4 7h16M4 12h10M4 17h16" />
         </svg>
       </button>
-      {mounted && createPortal(sheet, document.body)}
+      {mounted && sheet && createPortal(sheet, document.body)}
     </>
   );
 }

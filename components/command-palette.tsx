@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CategoryIcon from "./category-icon";
+import { usePresence } from "./presence";
 import { useClientReady, useFocusTrap, type NavCategory } from "./site-nav";
 import type { SearchGroups } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
@@ -58,9 +58,9 @@ export default function CommandPalette({ categories }: { categories: NavCategory
   const id = useId();
   const listId = `${id}-list`;
   const router = useRouter();
-  const reduce = useReducedMotion();
   const ready = useClientReady();
   const [open, setOpen] = useState(false);
+  const presence = usePresence(open, 200);
   const [q, setQ] = useState("");
   const [result, setResult] = useState<{ term: string; groups: Group[]; error?: boolean } | null>(null);
   const [active, setActive] = useState(0);
@@ -146,21 +146,9 @@ export default function CommandPalette({ categories }: { categories: NavCategory
   };
 
   let index = -1;
-  const dialog = (
-    <AnimatePresence>
-      {open && (
-        <motion.div className="palette-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.16 }} onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <motion.div
-            ref={panel}
-            className="palette"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Search"
-            initial={reduce ? false : { opacity: 0, y: -14, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.99 }}
-            transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-          >
+  const dialog = presence.mounted && (
+        <div className="palette-backdrop" data-motion="fade" data-state={presence.state} onMouseDown={(e) => e.target === e.currentTarget && setOpen(false)}>
+          <div ref={panel} className="palette" role="dialog" aria-modal="true" aria-label="Search" data-motion="pop" data-state={presence.state}>
             <form
               className="palette-input"
               action="/search"
@@ -270,10 +258,8 @@ export default function CommandPalette({ categories }: { categories: NavCategory
                 </a>
               )}
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </div>
+        </div>
   );
 
   return (
@@ -286,7 +272,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
         <span className="label">Search products and guides</span>
         <kbd aria-hidden="true">⌘K</kbd>
       </button>
-      {ready && createPortal(dialog, document.body)}
+      {ready && dialog && createPortal(dialog, document.body)}
     </>
   );
 }

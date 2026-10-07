@@ -281,7 +281,7 @@ const confidenceOf = (basis: string) => (basis === "gtin" || basis === "mpn" || 
 
 const hostOf = (url: string) => new URL(url).hostname.toLowerCase().replace(/^www\./, "");
 
-type StoredData = { product?: Record<string, unknown>; specs?: unknown[]; images?: unknown[]; [k: string]: unknown };
+type StoredData = { product?: Record<string, unknown>; specs?: unknown[]; images?: unknown[]; productImages?: unknown[]; [k: string]: unknown };
 
 /** Upserts the normalized product by canonical URL. A field the page no longer states keeps its previous value. */
 async function upsertProduct(brand: CommerceBrand, n: NormalizedCommerceRecord & { ok: true }, raw: CommerceRawRecord, now: Date) {
@@ -300,6 +300,8 @@ async function upsertProduct(brand: CommerceBrand, n: NormalizedCommerceRecord &
     product: merged,
     specs: keepSpecs ? prev.specs : n.specs,
     images: keepImages ? prev.images : n.images,
+    // The official photo of this exact product/variant (deal cards); kept when the page stops stating one.
+    productImages: n.productImages?.length ? n.productImages : Array.isArray(prev.productImages) ? prev.productImages : [],
     offers: n.offers,
     breadcrumbs: n.breadcrumbs,
     lang: n.lang ?? (prev.lang as string | undefined) ?? null,

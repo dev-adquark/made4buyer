@@ -2,11 +2,12 @@ import { Fragment } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import Collage from "@/components/collage";
-import DealLedger from "@/components/deal-ledger";
 import EmptyState from "@/components/empty-state";
+import HomeCouponCard from "@/components/home-coupon-card";
+import HomeDealCard from "@/components/home-deal-card";
+import HomeRail from "@/components/home-rail";
 import JsonLd from "@/components/json-ld";
-import { PriceDropGrid, PromoCodeGrid } from "@/components/official-deals";
-import ReviewCard, { FeatureStory, ReviewGrid } from "@/components/review-card";
+import ReviewCard, { FeatureStory } from "@/components/review-card";
 import SafeImg from "@/components/safe-img";
 import SearchCombobox from "@/components/search-combobox";
 import SectionHeader from "@/components/section-header";
@@ -14,6 +15,8 @@ import SponsoredSlot from "@/components/sponsored-slot";
 import Ticker, { type TickerItem } from "@/components/ticker";
 import TrustLabel from "@/components/trust-label";
 import { config } from "@/lib/config";
+import { db } from "@/lib/db";
+import { dealImage, type DealImage } from "@/lib/images/deal-image";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryPhotos } from "@/lib/public/category-images";
 import { officialDeals } from "@/lib/public/deals";
@@ -22,6 +25,7 @@ import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, 
 import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, money } from "@/lib/util/format";
+import "./home.css";
 
 /** Cached home page: regenerated at most every 5 minutes and purged whenever content is published or changes. */
 export const revalidate = 300;
@@ -48,6 +52,24 @@ function SpecRows({ rows }: { rows: Array<[string, string | null | undefined]> }
   );
 }
 
+/** How many cards each homepage rail holds (the rest are one click away on /deals). */
+const RAIL_SIZE = 12;
+
+/**
+ * Each offer's product photo from the brand's own product page (lib/images/deal-image.ts decides what
+ * qualifies). None: the card shows a neutral brand monogram, never another product's photo.
+ */
+async function dealImagesFor(offerIds: string[]): Promise<Map<string, DealImage>> {
+  const out = new Map<string, DealImage>();
+  if (!offerIds.length) return out;
+  const rows = await db.commerceOffer.findMany({ where: { id: { in: offerIds } }, select: { id: true, product: { select: { canonicalUrl: true, data: true, brand: { select: { officialDomain: true } } } } } });
+  for (const r of rows) {
+    const img = dealImage(r.product);
+    if (img) out.set(r.id, img);
+  }
+  return out;
+}
+
 export default async function Home() {
   await prerenderNeedsDatabase();
   // Photos depend only on the static taxonomy, so they load alongside the database queries.
@@ -57,20 +79,29 @@ export default async function Home() {
     latestByKind("COMPARISON", 3),
     categoryLedger(),
     freshDealRows({ take: 6 }),
-    trendingReviews(7, 4),
+    trendingReviews(7, 6),
     comparePair(),
     trustStats(),
     categoryPhotos(CATEGORIES.map((c) => c.slug)).catch(() => ({}) as Record<string, null>),
     officialDeals().catch(() => ({ drops: [], codes: [], checkedAt: null })),
   ]);
-  // "Verified deals" rail: up to 6 ACTIVE deals (lib/commerce/deal-status.ts via officialDeals), price drops first, then promo codes; nothing when none.
-  const railDrops = verified.drops.slice(0, 6);
-  const railCodes = verified.codes.slice(0, 6 - railDrops.length);
+  // Verified deals and coupons: ACTIVE drops and VERIFIED codes from officialDeals(), the same list /deals shows; nothing when none.
+  const railDrops = verified.drops.slice(0, RAIL_SIZE);
+  const railCodes = verified.codes.slice(0, RAIL_SIZE);
+  const dealImages = await dealImagesFor(railDrops.map((d) => d.id)).catch(() => new Map<string, DealImage>());
   const site = config.siteUrl();
   const lead = reviews[0];
   const heroDeal = deals[0];
   const specSource = pair?.[0];
   const activeCats = ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0);
+  // Editorial lists; a review already shown in "Worth buying now" is not repeated under "Most read".
+  const shownIds = new Set(reviews.slice(0, 5).map((r) => r.id));
+  const mostRead = trending.map((t) => t.review).filter((r) => !shownIds.has(r.id)).slice(0, 3);
+  const readCols = [
+    { key: "read", title: "Most read this week", items: mostRead, href: null, more: "" },
+    { key: "guides", title: "Buying guides", items: guides, href: "/guides", more: "All guides" },
+    { key: "cmp", title: "Comparisons", items: comparisons, href: "/reviews?type=comparison", more: "All comparisons" },
+  ].filter((c) => c.items.length > 0);
   const tickerItems: TickerItem[] = [
     ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
     ...deals.slice(0, 4).map((d) => ({ key: `d-${d.offerId}`, href: `/review/${d.review.slug}#deal`, label: "Current price", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
@@ -79,7 +110,7 @@ export default async function Home() {
   ];
 
   return (
-    <main>
+    <main className="home">
       <JsonLd data={{ "@context": "https://schema.org", "@type": "WebSite", name: "Made4Buyers", url: site, potentialAction: { "@type": "SearchAction", target: `${site}/search?q={search_term_string}`, "query-input": "required name=search_term_string" } }} />
 
       {/* ── The statement ── */}
@@ -98,7 +129,7 @@ export default async function Home() {
           </h1>
           <div className="hero-body">
             <div className="hero-copy">
-              <p className="lede">A buying guide for everything you buy: reviews filed by what you need, comparisons built only from facts we hold, and prices shown only while recently checked. We’re starting with technology.</p>
+              <p className="lede">A buying guide for everything you buy: reviews filed by what you need, comparisons built only from facts we hold, and prices shown only while recently checked.</p>
               <SearchCombobox variant="hero" label="Search products, brands and guides" />
               <div className="btnrow">
                 <Link className="btn primary large" href="/match" data-cursor="Start">
@@ -203,292 +234,139 @@ export default async function Home() {
 
       <Ticker items={tickerItems} label="Running now" />
 
-      {/* ── Worth buying now ── */}
+      {/* ── Worth buying now: the newest reviews ── */}
       <section className="section" aria-labelledby="now-title">
         <div className="wrap">
           <SectionHeader id="now-title" label={`${stats.published} published`} title="Worth buying now" action={reviews.length ? <Link className="arrow-link" href="/reviews">All reviews</Link> : undefined}>
-            The newest reviews from named publishers, newest by the source’s own date.
+            The newest reviews from named publishers, by the source’s own date.
           </SectionHeader>
           {lead ? (
             <div className="lead-grid">
               <FeatureStory review={lead} />
               <ul className="story-list" aria-label="More reviews">
-                {reviews.slice(1, 6).map((r) => (
-                  <li key={r.id} className="reveal">
+                {reviews.slice(1, 5).map((r) => (
+                  <li key={r.id}>
                     <ReviewCard review={r} variant="row" />
                   </li>
                 ))}
-                {reviews.length === 1 && (
-                  <li>
-                    <p className="muted" style={{ padding: "16px 0" }}>
-                      More reviews appear here as they pass QA.
-                    </p>
-                  </li>
-                )}
               </ul>
             </div>
           ) : (
-            <EmptyState title="The first reviews are on their way." label="Reviews" action={<Link className="btn" href="/about">How reviews get here</Link>}>
+            <EmptyState title="The first reviews are on their way." label="Reviews" compact action={<Link className="btn" href="/about">How reviews get here</Link>}>
               Every review comes from a named publisher and passes our checks before it’s published. Nothing here is a placeholder.
             </EmptyState>
           )}
         </div>
       </section>
 
-      {/* ── Category issues ── */}
-      <section className="section tight" aria-labelledby="cats-title">
-        <div className="wrap">
-          <SectionHeader id="cats-title" label={`${ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0).length} categories`} title="The categories">
-            Swipe or scroll sideways. Each category is an issue with its own colour.
-          </SectionHeader>
-        </div>
-        <ul className="issue-rail" aria-label="Categories">
-          {/* Only categories with published content (same rule as the global nav); issue numbers run in order. */}
-          {ledger
-            .filter((c) => c.reviews + c.comparisons + c.guides > 0)
-            .map((c, i) => ({ ...c, issue: i + 1 }))
-            .map((c) => {
-            const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
-            return (
-              <li key={c.slug} style={style(c.slug)}>
-                <Link className="issue-panel" href={`/category/${c.slug}`} data-cursor="Open">
-                  <span className="ip-num">
-                    <span aria-hidden="true">{String(c.issue).padStart(2, "0")}</span>
-                    <span className="cat-tag">Issue</span>
-                  </span>
-                  <h3>{c.name}</h3>
-                  <span className="ip-media">
-                    {photo ? (
-                      <>
-                        <SafeImg src={photo.url} fallback={placeholderPath(c.slug)} alt="" width={400} height={500} loading="lazy" decoding="async" />
-                        <span className="credit">Photo: {photo.photographer} / Pexels</span>
-                      </>
-                    ) : (
-                      <span className="fallback" aria-hidden="true">
-                        {c.name.slice(0, 1)}
-                      </span>
-                    )}
-                  </span>
-                  <span>
-                    <p>{c.description}</p>
-                    <dl>
-                      <div>
-                        <dt>Reviews</dt>
-                        <dd>{c.reviews}</dd>
-                      </div>
-                      <div>
-                        <dt>Comparisons</dt>
-                        <dd>{c.comparisons}</dd>
-                      </div>
-                      <div>
-                        <dt>Guides</dt>
-                        <dd>{c.guides}</dd>
-                      </div>
-                      <div>
-                        <dt>Prices</dt>
-                        <dd>{c.deals}</dd>
-                      </div>
-                    </dl>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {/* ── Verified deals (renders nothing without any) ── */}
+      {/* ── Verified deals + latest coupons: the same data and rules as /deals; absent without any ── */}
       {railDrops.length + railCodes.length > 0 && (
-        <section className="section tight" aria-labelledby="verified-deals-title">
+        <section className="section home-deals" aria-labelledby="verified-deals-title">
           <div className="wrap">
             <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} verified`} title="Verified deals" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
-              Active price drops and promo codes only: verified against the brand’s official site, in stock, unexpired and checked within the last 48 hours.
+              Checked on the brand’s official site within the last 48 hours: in stock, unexpired, with the saving worked out from the page’s own prices.
             </SectionHeader>
-            <PriceDropGrid drops={railDrops} />
-            {railCodes.length > 0 && <div style={{ marginTop: railDrops.length ? "var(--gutter)" : 0 }}><PromoCodeGrid codes={railCodes} /></div>}
-          </div>
-        </section>
-      )}
-
-      {/* ── Current prices ── */}
-      <section className="section" aria-labelledby="deals-title">
-        <div className="wrap">
-          <SectionHeader id="deals-title" label={`${stats.pricedProducts} current`} title="Current prices, recently checked" action={deals.length ? <Link className="arrow-link" href="/deals">All current prices</Link> : undefined}>
-            Prices as stated on the maker’s own store or a retailer’s product page, with the time we checked. An older price is never shown.
-          </SectionHeader>
-          {deals.length ? (
-            <DealLedger rows={deals.slice(0, 6)} />
-          ) : (
-            <EmptyState title="No current prices yet." label="Prices">
-              We list a price only while we have checked it recently at the maker or a retailer. Prices appear here automatically once checked.
-            </EmptyState>
-          )}
-        </div>
-      </section>
-
-      {/* ── Trending (only when the data supports it) ── */}
-      {trending.length > 0 && (
-        <section className="section tight" aria-labelledby="trend-title">
-          <div className="wrap">
-            <SectionHeader id="trend-title" label="Last 7 days" title="Most read this week">
-              Ranked by real page views over the last 7 days.
-            </SectionHeader>
-            <ReviewGrid reviews={trending.map((t) => t.review)} layout="ruled" />
-          </div>
-        </section>
-      )}
-
-      {/* ── Compare ── */}
-      <section className="section" aria-labelledby="cmp-title">
-        <div className="wrap">
-          <SectionHeader id="cmp-title" label="Up to 3 products" title="Side by side" action={<Link className="arrow-link" href="/compare">Open the compare workspace</Link>}>
-            Only facts we hold. Where we don’t know something, the comparison says so.
-          </SectionHeader>
-          {pair && pair.length === 2 ? (
-            <>
-              <div className="duel" style={style(pair[0].categorySlug)}>
-                {pair.map((p, i) => (
-                  <div key={p.id} style={{ display: "contents" }}>
-                    {i === 1 && (
-                      <div className="duel-vs" aria-hidden="true">
-                        versus
-                      </div>
-                    )}
-                    <div className="duel-side">
-                      <SafeImg src={cardImage(p).url} fallback={placeholderPath(p.categorySlug)} alt="" width={640} height={360} loading="lazy" />
-                      <h3>
-                        <Link href={`/review/${p.slug}`} data-cursor="Read">
-                          {p.productName}
-                        </Link>
-                      </h3>
-                      <dl className="facts">
-                        <SpecRows rows={[["Brand", p.brand], ["Type", subcategoryName(p.categorySlug, p.subcategorySlug) ?? p.entities?.deviceType], ["Platform", p.entities?.platform]]} />
-                      </dl>
-                    </div>
-                  </div>
+            {railDrops.length > 0 && (
+              <HomeRail id="home-price-drops" label="Price drops" title={`Price drops (${verified.drops.length})`}>
+                {railDrops.map((d) => (
+                  <li key={d.id}>
+                    <HomeDealCard d={d} image={dealImages.get(d.id)} />
+                  </li>
                 ))}
-              </div>
-              <div className="btnrow">
-                <Link className="btn primary" href={`/compare?ids=${pair.map((p) => p.id).join(",")}`} data-cursor="Compare">
-                  See the full comparison
-                </Link>
-              </div>
-            </>
-          ) : (
-            <EmptyState title="Comparisons start with two reviews." label="Compare" compact action={<Link className="btn" href="/compare">Open the compare workspace</Link>}>
-              As soon as two products in the same category are reviewed, a head-to-head appears here.
-            </EmptyState>
-          )}
-        </div>
-      </section>
-
-      {/* ── Comparisons (only when real ones exist) ── */}
-      {comparisons.length > 0 && (
-        <section className="section tight" aria-labelledby="cmp-title">
-          <div className="wrap">
-            <SectionHeader id="cmp-title" label={`${stats.comparisons} published`} title="Head-to-head comparisons" action={<Link className="arrow-link" href="/reviews?type=comparison">All comparisons</Link>}>
-              Publishers’ side-by-side comparisons, filed under every product they cover.
-            </SectionHeader>
-            <ReviewGrid reviews={comparisons} layout="ruled" />
+              </HomeRail>
+            )}
+            {railCodes.length > 0 && (
+              <HomeRail id="home-coupons" label="Latest coupons" title={`Latest coupons (${verified.codes.length})`}>
+                {railCodes.map((c) => (
+                  <li key={c.id}>
+                    <HomeCouponCard c={c} />
+                  </li>
+                ))}
+              </HomeRail>
+            )}
           </div>
         </section>
       )}
 
-      {/* ── Guides ── */}
-      <section className="section tight" aria-labelledby="guides-title">
-        <div className="wrap">
-          <SectionHeader id="guides-title" label={`${stats.guides} published`} title="Buying guides" action={guides.length ? <Link className="arrow-link" href="/guides">All guides</Link> : undefined}>
-            Buying guides from named publishers and from Made4Buyers. None carries a rating.
-          </SectionHeader>
-          {guides.length ? (
-            <ReviewGrid reviews={guides} layout="ruled" />
-          ) : (
-            <EmptyState title="New buying guides are coming." label="Guides" compact>
-              New guides are published every day.
-            </EmptyState>
-          )}
-        </div>
-      </section>
+      {/* ── Categories: compact tiles, only categories with published content ── */}
+      {activeCats.length > 0 && (
+        <section className="section home-cats" aria-labelledby="cats-title">
+          <div className="wrap">
+            <SectionHeader id="cats-title" label={`${activeCats.length} categories`} title="Browse by category" />
+            <HomeRail id="home-categories" label="Categories">
+              {activeCats.map((c) => {
+                const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
+                const counts = [c.reviews && `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}`, c.guides && `${c.guides} ${c.guides === 1 ? "guide" : "guides"}`, c.comparisons && `${c.comparisons} ${c.comparisons === 1 ? "comparison" : "comparisons"}`].filter(Boolean).join(" · ");
+                return (
+                  <li key={c.slug} style={style(c.slug)}>
+                    <Link className="hcat" href={`/category/${c.slug}`} draggable={false} data-cursor="Open">
+                      <span className="hcat-media">
+                        {photo ? (
+                          <>
+                            <SafeImg src={photo.url} fallback={placeholderPath(c.slug)} alt="" width={320} height={200} sizes="(max-width: 600px) 60vw, 240px" loading="lazy" decoding="async" draggable={false} />
+                            <span className="credit">Photo: {photo.photographer} / Pexels</span>
+                          </>
+                        ) : (
+                          <span className="fallback" aria-hidden="true">
+                            {c.name.slice(0, 1)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="hcat-name">{c.name}</span>
+                      {counts && <span className="hcat-count">{counts}</span>}
+                    </Link>
+                  </li>
+                );
+              })}
+            </HomeRail>
+          </div>
+        </section>
+      )}
 
-      {/* ── Method ── */}
-      <section className="section ink-section on-dark" aria-labelledby="how-title">
-        <div className="wrap method">
-          <div className="method-sticky">
-            <span className="label muted">5 steps</span>
-            <h2 id="how-title" style={{ color: "#fff", fontSize: "var(--s-1)", textTransform: "uppercase", margin: "10px 0 18px" }}>
-              How a product gets here
-            </h2>
-            <p className="muted" style={{ fontFamily: "var(--f-read)", fontSize: 19 }}>
-              Every step is automated, logged and checked. When a step can’t be completed, the page shows what’s missing instead of guessing.
-            </p>
+      {/* ── Editorial: most read, buying guides and comparisons as compact lists ── */}
+      {readCols.length > 0 && (
+        <section className="section" aria-labelledby="read-title">
+          <div className="wrap">
+            <SectionHeader id="read-title" label="Guides and comparisons" title="Before you buy" />
+            <div className="home-cols">
+              {readCols.map((col) => (
+                <div key={col.key} className="home-col">
+                  <div className="home-col-head">
+                    <h3>{col.title}</h3>
+                    {col.href && (
+                      <Link className="arrow-link" href={col.href}>
+                        {col.more}
+                      </Link>
+                    )}
+                  </div>
+                  <ul className="story-list" aria-label={col.title}>
+                    {col.items.map((r) => (
+                      <li key={r.id}>
+                        <ReviewCard review={r} variant="row" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── How we work: the three rules, in one band (the full method is on /about) ── */}
+      <section className="section home-rules" aria-labelledby="trust-title">
+        <div className="wrap">
+          <div className="home-rules-head">
+            <h2 id="trust-title">What you can rely on</h2>
             <div className="btnrow">
-              <Link className="btn" href="/about">
+              <Link className="btn small" href="/about">
                 Read our method
               </Link>
-              <Link className="btn primary" href="/match" data-cursor="Start">
+              <Link className="btn small primary" href="/match" data-cursor="Start">
                 Find my match
               </Link>
             </div>
           </div>
-          <ol className="steps">
-            <li>
-              <div>
-                <h3>A review arrives</h3>
-                <p>From our content feed, with its publisher and date. Duplicates and incomplete items are set aside.</p>
-              </div>
-            </li>
-            <li>
-              <div>
-                <h3>We identify the product</h3>
-                <p>Brand, model, platform and use case are extracted. Low-confidence matches are flagged on the record, never guessed.</p>
-              </div>
-            </li>
-            <li>
-              <div>
-                <h3>We file it for buyers</h3>
-                <p>A category, type and price tier, so you can filter by what matters to you.</p>
-              </div>
-            </li>
-            <li>
-              <div>
-                <h3>We check the price</h3>
-                <p>Prices are read from the maker’s or a retailer’s product page and shown only while recently checked.</p>
-              </div>
-            </li>
-            <li>
-              <div>
-                <h3>Publish, labelled</h3>
-                <p>Only reviews that pass our automatic checks go live, and new guides are published every day.</p>
-              </div>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      {/* ── What you can rely on ── */}
-      <section className="section" aria-labelledby="trust-title">
-        <div className="wrap">
-          <SectionHeader id="trust-title" label={dateline(new Date()) ?? ""} title="What you can rely on">
-            Counted from our database at {dateline(new Date())}.
-          </SectionHeader>
-          <ul className="ledger-stats">
-            <li>
-              <span className="n">{stats.published}</span>
-              <span className="l">Published {stats.published === 1 ? "review" : "reviews"}</span>
-            </li>
-            <li>
-              <span className="n">{stats.guides}</span>
-              <span className="l">Published {stats.guides === 1 ? "guide" : "guides"}</span>
-            </li>
-            <li>
-              <span className="n">{stats.pricedProducts}</span>
-              <span className="l">{stats.pricedProducts === 1 ? "Product" : "Products"} with a current price</span>
-            </li>
-            <li>
-              <span className="n">{stats.categoriesCovered}</span>
-              <span className="l">Categories with reviews</span>
-            </li>
-          </ul>
           <ul className="principles">
             <li>
               <h3>Nothing invented</h3>
@@ -496,7 +374,7 @@ export default async function Home() {
             </li>
             <li>
               <h3>Ratings only when they exist</h3>
-              <p>We show a rating only when the original reviewer gave one. AI guides never carry a rating.</p>
+              <p>We show a rating only when the original reviewer gave one. Our own guides never carry a rating.</p>
             </li>
             <li>
               <h3>Commission never picks the seller</h3>

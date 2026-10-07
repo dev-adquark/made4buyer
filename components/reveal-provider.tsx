@@ -4,14 +4,15 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 
 /**
- * Progressive scroll reveal. Content is fully visible without JS; once this runs it marks
- * <html> as reveal-ready and fades `.reveal` elements in as they enter the viewport.
- * Disabled entirely for prefers-reduced-motion.
+ * Progressive scroll reveal. The server-rendered HTML is always fully visible (no SSR CSS hides
+ * anything), so the first paint and the LCP never wait for JavaScript. After hydration this marks
+ * only the `.reveal` / `.mask-reveal` elements that are still BELOW the fold as `.rv-pending`
+ * (hidden while offscreen) and fades each one in (`.in`) as it scrolls into view. Elements already
+ * in (or above) the viewport are never touched. Disabled entirely for prefers-reduced-motion.
  */
 export default function RevealProvider() {
   const pathname = usePathname();
   useEffect(() => {
-    const root = document.documentElement;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       (entries) => {
@@ -24,16 +25,15 @@ export default function RevealProvider() {
       },
       { rootMargin: "0px 0px -8% 0px", threshold: 0.08 },
     );
-    const scan = () => {
-      document.querySelectorAll(".reveal:not(.in), .mask-reveal:not(.in)").forEach((el) => {
-        const r = el.getBoundingClientRect();
-        // Anything already on screen is shown immediately, so nothing flashes on load.
-        if (r.top < window.innerHeight && r.bottom > 0) el.classList.add("in");
-        else io.observe(el);
-      });
-    };
-    scan();
-    root.classList.add("reveal-ready");
+    // Read every position first, then write classes: one layout pass, no read/write thrashing.
+    const els = [...document.querySelectorAll<HTMLElement>(".reveal:not(.in):not(.rv-pending), .mask-reveal:not(.in):not(.rv-pending)")];
+    const vh = window.innerHeight;
+    const below = els.filter((el) => el.getBoundingClientRect().top >= vh);
+    for (const el of below) {
+      el.classList.add("rv-pending");
+      io.observe(el);
+    }
+    document.documentElement.classList.add("reveal-ready");
     return () => io.disconnect();
   }, [pathname]);
   return null;

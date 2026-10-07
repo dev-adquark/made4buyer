@@ -198,9 +198,10 @@ describe("/deals: only official, verified, fresh offers", () => {
     const markup = await html(DealsPage());
     const text = visibleText(markup);
     expect(text).toContain("Verified price drops");
-    expect(text).toContain("Verified promo codes");
+    expect(text).toContain("Latest verified coupons");
+    expect(text).toContain("Recently verified");
     expect(text).toContain("Official Framework store price");
-    expect(text).toContain("Official promo code from Framework");
+    expect(text).toContain("Framework promo code");
     // Current price, previous price labelled as the page labels it, the floored saving.
     expect(text).toContain("Current price $799.00");
     expect(text).toContain("Regular price $999.00");
@@ -217,14 +218,18 @@ describe("/deals: only official, verified, fresh offers", () => {
     expect(markup.match(/href="https:\/\/frame\.work\/products\/laptop13"/g) ?? []).toHaveLength(1);
     expect(markup).toMatch(/<a class="btn primary small" href="https:\/\/frame\.work\/products\/laptop13" rel="nofollow noopener" target="_blank"[^>]*>View deal/);
     expect(markup).not.toContain("sponsored nofollow");
-    // Promo codes: the code, an accessible copy button, the offer as stated, expiry only when stated, Use code → official page.
-    expect(text).toContain("Offer 10% off laptops");
-    expect(text).toContain("Offer $25 off orders over $500");
+    // Coupons: the code, an accessible copy button, the offer as stated, when it was verified, expiry only when stated, View offer → official page.
+    expect(text).toContain("10% off laptops Code SAVE10");
+    expect(text).toContain("$25 off orders over $500 Code FALL25");
+    expect(text).toMatch(/✓ Verified 1 hour ago on official brand site · frame\.work/);
     expect(text).toContain(`Expires ${ends.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} (as stated)`);
     expect(text.match(/Expires /g) ?? []).toHaveLength(1);
-    expect(markup.match(/<button type="button" class="btn small dc-copy" aria-describedby="code-[^"]+">Copy<span class="visually-hidden"> code<\/span><\/button>/g) ?? []).toHaveLength(2);
+    expect(markup.match(/<button type="button" class="btn small cc-copy" aria-describedby="code-[^"]+" data-state="idle">Copy code<\/button>/g) ?? []).toHaveLength(2);
     expect(markup).toContain('role="status" aria-live="polite"');
-    expect(markup).toMatch(/<a class="btn primary small" href="https:\/\/frame\.work\/promotions" rel="nofollow noopener" target="_blank">Use code/);
+    expect(markup).toMatch(/<a class="btn primary small" href="https:\/\/frame\.work\/promotions" rel="nofollow noopener" target="_blank">View offer/);
+    // Laptop 16's $1,399 states no previous price, but its page has no product identity: not even a current price.
+    expect(text).toContain("No other recently checked price right now.");
+    expect(text).not.toContain("1,399");
     expect(text).not.toMatch(/FAKE20|OLD15|GONE5|LATE30|1,099|1,199|1,149|1,249|1,299|1,019|1,029|1,279|\$879/);
     expect(text).not.toMatch(FORBIDDEN_PUBLIC_TOKENS);
     const ld = jsonLd(markup).find((x) => (x as { "@type": string })["@type"] === "ItemList") as { itemListElement: Array<{ item: { offers: Record<string, unknown> } }> };

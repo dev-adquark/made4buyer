@@ -1,0 +1,125 @@
+/* Homepage only (app/page.tsx). Every rule is scoped under .home so no other page changes. */
+
+.home {
+  --home-sec: clamp(28px, 4vw, 56px);
+  --home-gap: 14px;
+  /* Rail column width: ~1.35 cards on phones (the next one peeks), ~4.5 on wide desktop. */
+  --rail-col: calc((100% - var(--home-gap)) / 1.35);
+}
+@media (min-width: 600px) { .home { --rail-col: calc((100% - 2 * var(--home-gap)) / 2.4); } }
+@media (min-width: 900px) { .home { --rail-col: calc((100% - 3 * var(--home-gap)) / 3.4); } }
+@media (min-width: 1200px) { .home { --rail-col: calc((100% - 4 * var(--home-gap)) / 4.5); } }
+
+/* ── Rhythm ── */
+.home .section, .home .section.tight { padding-block: var(--home-sec); }
+.home .section + .section { padding-top: calc(var(--home-sec) * 0.6); }
+.home .sec-head { gap: 6px 20px; padding-bottom: 10px; margin-bottom: clamp(14px, 1.8vw, 22px); }
+.home .sec-head h2 { font-size: clamp(30px, 3.4vw, 52px); }
+.home .sec-head p { font-size: 16px; line-height: 1.45; }
+
+/* ── Hero: same content, less air ── */
+.home .tear-hero { padding-top: clamp(10px, 1.6vw, 24px); }
+.home .hero-dateline { padding-bottom: 10px; }
+.home .hero-body { padding: clamp(14px, 2vw, 28px) 0 clamp(18px, 2.6vw, 36px); }
+.home .hero-copy .lede { margin-bottom: 16px; }
+.home .hero-copy .btnrow { margin: 12px 0; }
+.home .hero-annotations { margin-top: 14px; }
+.home .hero-annotations .n { font-size: 36px; }
+.home .collage { min-height: clamp(380px, 34vw, 500px); }
+
+/* ── Latest reviews ── */
+.home .feature-story h3 { font-size: clamp(26px, 3vw, 46px); margin: 12px 0 8px; }
+.home .feature-story .summary { font-size: 17px; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.home .story-list .review-card.row > a { padding: 12px 0; gap: 12px; }
+.home .story-list .review-card.row h3 { font-size: 16.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── Rails (components/home-rail.tsx) ── */
+.home .hr + .hr { margin-top: clamp(16px, 2.2vw, 26px); }
+.home .hr-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 8px; }
+.home .hr-title { margin: 0; font: 500 12px/1.3 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink); }
+.home .hr-nav { display: flex; gap: 6px; flex: none; }
+.home .hr-nav:not([data-ready]) { visibility: hidden; }
+.home .hr-btn { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--ink); border-radius: var(--r-pill); background: transparent; color: var(--ink); cursor: pointer; transition: background var(--t-fast), color var(--t-fast); }
+.home .hr-btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+.home .hr-btn:disabled { opacity: 0.35; cursor: default; }
+.home .hr-track { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: thin; scrollbar-color: var(--rule-strong) transparent; -webkit-overflow-scrolling: touch; padding-bottom: 8px; }
+.home .hr-track:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; box-shadow: none; }
+.home .hr-track.is-dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+.home .hr-track.is-dragging a { pointer-events: none; }
+.home .hr-list { display: grid; grid-auto-flow: column; grid-auto-columns: var(--rail-col); gap: var(--home-gap); list-style: none; margin: 0; padding: 4px; }
+.home .hr-list > li { min-width: 0; scroll-snap-align: start; scroll-margin-inline: 4px; }
+
+/* ── Compact deal card (components/home-deal-card.tsx) ── */
+.home .hd-card { display: grid; grid-template-rows: auto 1fr; height: 100%; background: var(--sheet); border: 1px solid var(--ink); }
+.home .hd-media { position: relative; aspect-ratio: 3 / 2; overflow: hidden; background: #fff; border-bottom: 1px solid var(--rule); }
+.home .hd-media img { display: block; width: 100%; height: 100%; padding: 10px; box-sizing: border-box; object-fit: contain; color: transparent; }
+.home .hd-mono { display: grid; place-items: center; width: 100%; height: 100%; background: var(--cat-soft); color: var(--ink); font: 900 64px/1 var(--f-display); font-variation-settings: "wdth" 60; text-transform: uppercase; }
+.home .hd-save { position: absolute; left: 8px; top: 8px; padding: 5px 7px 4px; background: var(--ok); color: #fff; font: 700 12.5px/1 var(--f-ui); }
+.home .hd-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px 12px 12px; }
+.home .hd-brand { font: 500 11px/1.3 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); overflow-wrap: anywhere; }
+.home .hd-name { margin: 0; min-height: calc(2 * 1.3em); font: 600 15px/1.3 var(--f-ui); letter-spacing: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.home .hd-name a { color: var(--ink); text-decoration: none; }
+.home .hd-name a:hover { text-decoration: underline; }
+.home .hd-price { margin: 2px 0 0; font: 900 28px/1 var(--f-display); font-variation-settings: "wdth" 72; }
+.home .hd-price strong { font-weight: inherit; }
+.home .hd-was { margin: 0; font: 13px/1.35 var(--f-ui); color: var(--muted); }
+.home .hd-amt { color: var(--ok); font-weight: 600; }
+.home .hd-verify { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 0; font: 12px/1.3 var(--f-mono); color: var(--muted); }
+.home .hd-verify .trust { padding: 3px 6px 2px; font-size: 10.5px; }
+.home .hd-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: auto; padding-top: 8px; }
+.home .hd-cta .btn { min-height: 36px; }
+.home .hd-aff { font: 11px/1.2 var(--f-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ── Compact coupon card (components/home-coupon-card.tsx) ── */
+.home .hc-card { display: flex; flex-direction: column; gap: 6px; height: 100%; min-width: 0; padding: 12px; background: var(--sheet); border: 1px dashed var(--ink); }
+.home .hc-offer { margin: 0; font: 700 17px/1.25 var(--f-ui); color: var(--ok); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.home .hc-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.home .hc-code code { max-width: 100%; padding: 5px 8px; border: 1px dashed var(--ink); font: 800 16px/1.1 var(--f-mono); letter-spacing: 0.06em; overflow-wrap: anywhere; user-select: all; }
+.home .hc-code .dc-copy { min-height: 34px; }
+.home .hc-exp { font: 12px/1.3 var(--f-mono); color: var(--muted); }
+
+/* ── Category tiles ── */
+.home-cats { --rail-col: calc((100% - var(--home-gap)) / 2.3); }
+@media (min-width: 600px) { .home-cats { --rail-col: calc((100% - 3 * var(--home-gap)) / 4.3); } }
+@media (min-width: 1200px) { .home-cats { --rail-col: calc((100% - 5 * var(--home-gap)) / 6.4); } }
+.home .hcat { display: grid; gap: 6px; height: 100%; color: var(--ink); text-decoration: none; }
+.home .hcat-media { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: var(--cat); }
+.home .hcat-media img { display: block; width: 100%; height: 100%; object-fit: cover; color: transparent; transition: transform var(--t-slow) var(--ease); }
+.home .hcat:hover .hcat-media img { transform: scale(1.03); }
+.home .hcat-media .credit { position: absolute; left: 4px; bottom: 4px; max-width: calc(100% - 8px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; background: rgba(12, 12, 14, 0.75); color: #fff; font: 9.5px var(--f-mono); }
+.home .hcat-media .fallback { display: grid; place-items: center; width: 100%; height: 100%; background: var(--cat-soft); color: var(--ink); font: 900 56px/1 var(--f-display); }
+.home .hcat-name { font: 800 19px/1 var(--f-display); font-variation-settings: "wdth" 70; text-transform: uppercase; }
+.home .hcat:hover .hcat-name { text-decoration: underline; text-underline-offset: 3px; }
+.home .hcat-count { font: 11.5px/1.3 var(--f-mono); color: var(--muted); }
+
+/* ── Editorial columns ── */
+.home-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 18px var(--gutter); }
+.home-col-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 10px; border-top: 1px solid var(--ink); }
+.home-col-head h3 { margin: 0; font: 500 12px/1.3 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; }
+.home-col-head .arrow-link { font-size: 14px; }
+
+/* ── What you can rely on ── */
+.home-rules { border-top: 1px solid var(--ink); }
+.home-rules-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 20px; }
+.home-rules-head h2 { margin: 0; font-size: clamp(26px, 2.8vw, 40px); }
+.home-rules-head .btnrow { margin: 0; }
+.home .home-rules .principles { margin-top: 14px; }
+.home .home-rules .principles li { padding: 12px 0; }
+.home .home-rules .principles h3 { font-size: 17px; margin-bottom: 4px; }
+.home .home-rules .principles p { font-size: 15.5px; line-height: 1.45; }
+
+/* ── Phones: the first screen shows the promise, search, and the start of the content ── */
+@media (max-width: 720px) {
+  .home .hero-dateline > .label.muted { display: none; }
+  .home .statement { font-size: clamp(46px, 16vw, 84px); }
+  .home .hero-copy .lede { font-size: 17px; line-height: 1.4; margin-bottom: 12px; }
+  .home .hero-copy .btnrow { gap: 8px; }
+  .home .hero-copy .btn.large { min-height: 44px; padding: 10px 16px; font-size: 15px; }
+  .home .hero-annotations { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
+  .home .hero-annotations li { padding: 8px 8px 0 0; }
+  .home .hero-annotations .n { font-size: 26px; }
+  .home .hero-annotations .label { font-size: 10.5px; }
+  /* The collage repeats the latest review and price shown right below; on phones it is left out. */
+  .home .collage { display: none; }
+  .home .feature-story { padding-bottom: 14px; }
+}

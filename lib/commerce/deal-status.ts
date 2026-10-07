@@ -2,7 +2,6 @@ import { config } from "@/lib/config";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { classifySource, registrableDomain } from "@/lib/products/page-extract";
 import { canonicalDestination, displayAmount, displayText } from "@/lib/public/display";
-import { couponMaxAgeDays } from "./coupons";
 import { HIDDEN_LINK_STATUSES } from "./link-check";
 
 /**
@@ -70,6 +69,7 @@ export const DEAL_REASON_STATUS = {
   COUPON_UNVERIFIED: "UNVERIFIED",
   COUPON_NOT_FIRST_PARTY: "UNVERIFIED",
   COUPON_NOT_STARTED: "VERIFIED",
+  COUPON_DUPLICATE: "VERIFIED",
 } as const satisfies Record<string, DealStatus>;
 export type DealReasonCode = keyof typeof DEAL_REASON_STATUS;
 export type DealReason = { code: DealReasonCode; message: string };
@@ -105,6 +105,7 @@ export const DEAL_REASON_LABEL: Record<DealReasonCode, string> = {
   COUPON_UNVERIFIED: "unverified / unknown",
   COUPON_NOT_FIRST_PARTY: "source not on the official domain",
   COUPON_NOT_STARTED: "not started yet",
+  COUPON_DUPLICATE: "duplicate of a listed code",
 };
 
 // ── Inputs ────────────────────────────────────────────────────────────────
@@ -425,29 +426,90 @@ export function classifyOffers<O extends DealOfferInput>(items: Array<DealCandid
 
 // ── Coupons ───────────────────────────────────────────────────────────────
 
+/** Default public window for a promo code: verified within the most recent 7 days. */
+export const DEFAULT_COUPON_MAX_AGE_DAYS = 7;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Days a VERIFIED code stays public after it was last seen on its official page
+ * (COMMERCE_COUPON_MAX_AGE_DAYS, default 7, 1–90). The ONE setting for the coupon window: the
+ * eligibility rule below, the database prefilter (lib/commerce/coupons.ts), the cached /deals data,
+ * the coupon re-crawl cadence and the data audit all read it.
+ */
+export function couponMaxAgeDays(): number {
+  const n = Number(process.env.COMMERCE_COUPON_MAX_AGE_DAYS);
+  return Number.isFinite(n) && n >= 1 && n <= 90 ? Math.floor(n) : DEFAULT_COUPON_MAX_AGE_DAYS;
+}
+
+/** The oldest lastVerifiedAt still inside the public window at `now`. */
+export function couponVerifiedSince(now: number | Date = Date.now(), maxAgeDays = couponMaxAgeDays()): Date {
+  return new Date((now instanceof Date ? now.getTime() : now) - maxAgeDays * DAY_MS);
+}
+
+/**
+ * Where a code was read, by trust:
+ *   1 the brand's own official site (its officialDomain)
+ *   2 the brand's official merchant store, when it runs on another domain (officialStoreUrl)
+ *   3 an APPROVED third-party retailer source (CommerceSource kind RETAILER)
+ *   4 an APPROVED third-party coupon site (CommerceSource kind COUPON_SITE)
+ * null: anywhere else. Tiers 3–4 are known but never make a code public on their own: a code is
+ * VERIFIED only from the brand's own pages, and a third-party listing is not that evidence.
+ */
+export type CouponSourceTier = 1 | 2 | 3 | 4;
+export type ApprovedCouponSource = { domain: string; kind: string };
+export const COUPON_TIER_LABEL: Record<CouponSourceTier, string> = { 1: "Official brand site", 2: "Official brand store", 3: "Approved retailer", 4: "Approved coupon site" };
+
+export function couponSourceTier(sourceUrl: string | null | undefined, brand: DealBrandInput, approved: readonly ApprovedCouponSource[] = []): CouponSourceTier | null {
+  const host = sourceUrl ? hostOf(sourceUrl) : null;
+  if (!host) return null;
+  const reg = registrableDomain(host.replace(/^www\./, ""));
+  if (brand) {
+    if (bareDomain(brand.officialDomain) === reg) return 1;
+    if (officialDomainsOf(brand).has(reg)) return 2;
+  }
+  const src = approved.find((a) => bareDomain(a.domain) === reg);
+  if (src) return src.kind === "RETAILER" ? 3 : 4;
+  return null;
+}
+
 export type DealCouponInput = {
+  id?: string;
+  /** Grouping key for duplicates / conflicts (with merchant as a fallback). */
+  brandId?: string | null;
+  merchant?: string | null;
   code: string | null;
   status: string;
+  /** The offer exactly as stated; two official pages stating different offers for one code conflict. */
+  discount?: string | null;
   startsAt: Date | string | null;
   expiresAt: Date | string | null;
   lastVerifiedAt: Date | string | null;
+  observedAt?: Date | string | null;
   sourceUrl: string | null;
-  /** When given, the source page must be on the brand's official domain. */
+  /** The brand the code belongs to: its source page must be on the brand's official site or store. Without it the source cannot be checked and the code is not public. */
   brand?: DealBrandInput;
 };
 
 export type CouponDealVerdict = { status: DealStatus; reasons: DealReason[] };
+export type CouponStatusOptions = { maxAgeDays?: number; approvedSources?: readonly ApprovedCouponSource[] };
 
 /**
- * ACTIVE only for a VERIFIED code that has started, has not expired, and was re-seen on the brand's
- * official page within COMMERCE_COUPON_MAX_AGE_DAYS (7 days). Otherwise:
+ * The status of ONE stored code. ACTIVE (public) only when ALL hold:
+ *   - a code, stored VERIFIED (first-party evidence in the latest crawl of its page)
+ *   - started (no stated start, or the stated start has passed) and not expired (no stated
+ *     expiry, or it is still ahead; a stored EXPIRED is final)
+ *   - lastVerifiedAt within the last COMMERCE_COUPON_MAX_AGE_DAYS (7) days, inclusive
+ *   - its source page on the brand's official site (tier 1) or official store (tier 2)
+ * Otherwise:
  *   INVALID      no code, or stored INVALID (withdrawn from the official page / marked invalid)
- *   EXPIRED      stored EXPIRED, its stated expiry has passed, or not re-seen within the max age
+ *   EXPIRED      stored EXPIRED, its stated expiry has passed, or not re-verified within the window
  *   CONFLICTING  stored CONFLICTING (first-party observations disagree)
- *   UNVERIFIED   stored UNVERIFIED / UNKNOWN, or its source page is not on the brand's official domain
+ *   UNVERIFIED   stored UNVERIFIED / UNKNOWN, no brand to check against, or a source that is not
+ *                the brand's own (an approved third-party source included)
  *   VERIFIED     verified, but its stated start date is still ahead
+ * Duplicates and conflicts ACROSS rows are decided by classifyCoupons; public surfaces use it.
  */
-export function couponDealStatus(coupon: DealCouponInput, now: number | Date = Date.now(), opts: { maxAgeDays?: number } = {}): CouponDealVerdict {
+export function couponDealStatus(coupon: DealCouponInput, now: number | Date = Date.now(), opts: CouponStatusOptions = {}): CouponDealVerdict {
   const nowMs = now instanceof Date ? now.getTime() : now;
   const reasons: DealReason[] = [];
   const add = (code: DealReasonCode, message: string) => reasons.push({ code, message });
@@ -458,15 +520,62 @@ export function couponDealStatus(coupon: DealCouponInput, now: number | Date = D
   else if (Number.isFinite(expires) && expires <= nowMs) add("COUPON_EXPIRED", `stated expiry ${new Date(expires).toISOString()} has passed`);
   if (coupon.status === "CONFLICTING") add("COUPON_CONFLICTING", "first-party observations disagree");
   if (!["VERIFIED", "INVALID", "EXPIRED", "CONFLICTING"].includes(coupon.status)) add("COUPON_UNVERIFIED", `status ${coupon.status}`);
-  if (coupon.brand && !onOfficialDomain(coupon.sourceUrl, coupon.brand)) add("COUPON_NOT_FIRST_PARTY", "the source page is not on the brand's official domain");
+  const tier = couponSourceTier(coupon.sourceUrl, coupon.brand, opts.approvedSources);
+  if (!coupon.brand) add("COUPON_NOT_FIRST_PARTY", "no brand to check the source page against");
+  else if (tier === null) add("COUPON_NOT_FIRST_PARTY", "the source page is not on the brand's official domain");
+  else if (tier >= 3) add("COUPON_NOT_FIRST_PARTY", `${COUPON_TIER_LABEL[tier].toLowerCase()}: a third-party listing never verifies a code on its own`);
   if (coupon.status === "VERIFIED") {
-    const maxAge = (opts.maxAgeDays ?? couponMaxAgeDays()) * 24 * HOUR_MS;
+    const maxAge = (opts.maxAgeDays ?? couponMaxAgeDays()) * DAY_MS;
     const seen = time(coupon.lastVerifiedAt);
-    if (!Number.isFinite(seen) || nowMs - seen > maxAge) add("COUPON_NOT_RESEEN", Number.isFinite(seen) ? `last seen on the official page ${Math.floor((nowMs - seen) / (24 * HOUR_MS))} days ago` : "never re-verified");
+    if (!Number.isFinite(seen) || nowMs - seen > maxAge) add("COUPON_NOT_RESEEN", Number.isFinite(seen) ? `last verified on the official page ${Math.floor((nowMs - seen) / DAY_MS)} days ago` : "never verified");
     const starts = time(coupon.startsAt);
     if (Number.isFinite(starts) && starts > nowMs) add("COUPON_NOT_STARTED", `starts ${new Date(starts).toISOString()}`);
   }
   return { status: statusOf(reasons), reasons };
+}
+
+const couponKey = (c: DealCouponInput) => `${c.brandId ?? bareDomain(c.brand?.officialDomain) ?? (c.merchant ?? "").toLowerCase()}|${(displayText(c.code) ?? "").toUpperCase()}`;
+
+/**
+ * Statuses for a set of stored codes, with conflicts and duplicates across rows resolved. Among the
+ * codes that are otherwise ACTIVE, grouped by (brand, code):
+ *   - CONFLICTING when another row of the same code is stored CONFLICTING and was observed within the
+ *     window, or the ACTIVE rows state a different offer or a different expiry;
+ *   - otherwise one row is kept (lower tier first, then the most recently verified) and the others
+ *     become VERIFIED with reason COUPON_DUPLICATE.
+ */
+export function classifyCoupons<C extends DealCouponInput>(rows: readonly C[], now: number | Date = Date.now(), opts: CouponStatusOptions = {}): Array<{ coupon: C; verdict: CouponDealVerdict }> {
+  const nowMs = now instanceof Date ? now.getTime() : now;
+  const maxAge = (opts.maxAgeDays ?? couponMaxAgeDays()) * DAY_MS;
+  const out = rows.map((coupon) => ({ coupon, verdict: couponDealStatus(coupon, nowMs, opts) }));
+  const groups = new Map<string, typeof out>();
+  for (const x of out) groups.set(couponKey(x.coupon), [...(groups.get(couponKey(x.coupon)) ?? []), x]);
+  for (const group of groups.values()) {
+    const active = group.filter((x) => x.verdict.status === "ACTIVE");
+    if (!active.length) continue;
+    const storedConflict = group.some((x) => x.coupon.status === "CONFLICTING" && nowMs - time(x.coupon.observedAt ?? x.coupon.lastVerifiedAt) <= maxAge);
+    const offers = new Set(active.map((x) => displayText(x.coupon.discount)?.toLowerCase()).filter(Boolean));
+    const ends = new Set(active.map((x) => time(x.coupon.expiresAt)).filter(Number.isFinite));
+    if (storedConflict || offers.size > 1 || ends.size > 1) {
+      const message = storedConflict ? "another official page's observation of this code conflicts" : "official pages state different terms for this code";
+      for (const x of active) x.verdict = { status: "CONFLICTING", reasons: [{ code: "COUPON_CONFLICTING", message }] };
+      continue;
+    }
+    const tierOf = (x: (typeof out)[number]) => couponSourceTier(x.coupon.sourceUrl, x.coupon.brand, opts.approvedSources) ?? 9;
+    active.sort((a, b) => tierOf(a) - tierOf(b) || time(b.coupon.lastVerifiedAt) - time(a.coupon.lastVerifiedAt));
+    for (const x of active.slice(1)) x.verdict = { status: "VERIFIED", reasons: [{ code: "COUPON_DUPLICATE", message: `same code already listed (${active[0].coupon.id ?? active[0].coupon.sourceUrl})` }] };
+  }
+  return out;
+}
+
+/**
+ * THE public coupon rule: the rows that may be shown anywhere public (/deals, the homepage rail,
+ * review pages, /api/commerce/deals, search), in input order. Everything else is kept for history.
+ */
+export function publicCoupons<C extends DealCouponInput>(rows: readonly C[], now: number | Date = Date.now(), opts: CouponStatusOptions = {}): C[] {
+  return classifyCoupons(rows, now, opts)
+    .filter((x) => x.verdict.status === "ACTIVE")
+    .map((x) => x.coupon);
 }
 
 /** Counts by status plus the most common reason codes per status (Admin). */

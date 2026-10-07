@@ -3,34 +3,75 @@ import Link from "next/link";
 import Breadcrumbs from "@/components/breadcrumbs";
 import CategoryIcon from "@/components/category-icon";
 import EmptyState from "@/components/empty-state";
+import { PriceDropGrid, PromoCodeGrid } from "@/components/official-deals";
 import { ReviewGrid } from "@/components/review-card";
 import SearchCombobox from "@/components/search-combobox";
 import TrackOnce from "@/components/track-once";
+import { couponMaxAgeDays } from "@/lib/commerce/deal-status";
 import { categoryCounts, didYouMean, searchGroups, searchReviews, type SearchKind } from "@/lib/public/queries";
+import { searchCommerce, type CommerceSearch } from "@/lib/public/search";
 import { themeStyle } from "@/lib/taxonomy/themes";
+import "../deals/deals.css";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Search reviews", description: "Search Made4Buyers reviews and guides by product, brand or category.", robots: { index: false, follow: true }, alternates: { canonical: "/search" } };
+export const metadata: Metadata = { title: "Search", description: "Search Made4Buyers reviews, guides, products, brands, verified deals and coupons.", robots: { index: false, follow: true }, alternates: { canonical: "/search" } };
 
-const TYPES: Array<{ value: SearchKind | null; label: string }> = [
+type TypeValue = SearchKind | "DEALS" | null;
+const TYPES: Array<{ value: TypeValue; label: string }> = [
   { value: null, label: "Everything" },
   { value: "REVIEW", label: "Reviews" },
   { value: "COMPARISON", label: "Comparisons" },
   { value: "GUIDE", label: "Guides" },
+  { value: "DEALS", label: "Deals & coupons" },
 ];
 
+const NO_COMMERCE: CommerceSearch = { drops: [], dropCount: 0, coupons: [], couponCount: 0, brands: [] };
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Search: real published content (reviews, comparisons, guides), the products, categories and brands
+ * they cover, and the verified commerce data /deals shows (current price drops and the latest
+ * verified coupons, matched by product or brand). Grouped, each group with its count; nothing is
+ * listed that the database does not hold.
+ */
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; type?: string }> }) {
   const { q: raw, type: rawType } = await searchParams;
   const q = (raw ?? "").trim().slice(0, 100);
   const type = TYPES.find((t) => t.value && t.value.toLowerCase() === (rawType ?? "").toLowerCase())?.value ?? null;
-  const [results, groups, categories] = await Promise.all([q ? searchReviews(q, 30, { type }) : Promise.resolve([]), q.length >= 2 ? searchGroups(q) : Promise.resolve(null), categoryCounts()]);
-  const suggestion = q && !results.length && !(groups?.products.length ?? 0) ? await didYouMean(q) : null;
+  const contentType = type === "DEALS" ? null : type;
+  const [results, groups, categories, commerce] = await Promise.all([
+    q && type !== "DEALS" ? searchReviews(q, 30, { type: contentType }) : Promise.resolve([]),
+    q.length >= 2 ? searchGroups(q) : Promise.resolve(null),
+    categoryCounts(),
+    q.length >= 2 && (type === null || type === "DEALS") ? searchCommerce(q).catch(() => NO_COMMERCE) : Promise.resolve(NO_COMMERCE),
+  ]);
   const reviews = results.filter((r) => r.kind === "REVIEW");
   const comparisons = results.filter((r) => r.kind === "COMPARISON");
   const guides = results.filter((r) => r.kind === "AI_GUIDE" || r.kind === "BUYING_GUIDE");
-  const typeHref = (t: SearchKind | null) => `/search?${new URLSearchParams({ q, ...(t ? { type: t.toLowerCase() } : {}) })}`;
+  const products = type === "DEALS" ? [] : (groups?.products ?? []);
+  const categoryHits = type === "DEALS" ? [] : (groups?.categories ?? []);
+  // Brands: review brands (brand page or a brand search) and commerce brands with verified offers (their deals), one entry per name.
+  const brandHits: Array<{ key: string; name: string; href: string; detail: string }> = [];
+  for (const b of type === "DEALS" ? [] : (groups?.brands ?? [])) brandHits.push({ key: `r:${b.href}`, name: b.name, href: b.href, detail: plural(b.count, "article", "articles") });
+  for (const b of commerce.brands) {
+    if (brandHits.some((x) => x.name.toLowerCase() === b.name.toLowerCase() && x.href.startsWith("/deals"))) continue;
+    const parts = [b.drops ? plural(b.drops, "price drop", "price drops") : null, b.coupons ? plural(b.coupons, "coupon", "coupons") : null, b.prices ? plural(b.prices, "current price", "current prices") : null].filter(Boolean);
+    brandHits.push({ key: `c:${b.slug}`, name: `${b.name} deals`, href: b.href, detail: parts.join(", ") });
+  }
+  const nothing = !results.length && !products.length && !commerce.dropCount && !commerce.couponCount && !brandHits.length && !categoryHits.length;
+  const suggestion = q && !results.length && !products.length && !commerce.dropCount && !commerce.couponCount ? await didYouMean(q) : null;
+  const typeHref = (t: TypeValue) => `/search?${new URLSearchParams({ q, ...(t ? { type: t.toLowerCase() } : {}) })}`;
   const withReviews = categories.filter((c) => c.count > 0);
-  const shortcuts = [...(groups?.products ?? []).map((p) => ({ key: p.href, href: p.href, label: `${p.name} (${p.count})`, slug: null as string | null })), ...(groups?.categories ?? []).map((c) => ({ key: c.href, href: c.href, label: c.parent ? `${c.name} in ${c.parent}` : c.name, slug: c.slug })), ...(groups?.brands ?? []).map((b) => ({ key: b.href, href: b.href, label: b.name, slug: null as string | null }))];
+  const jump = [
+    { id: "products-title", label: "Products", count: products.length },
+    { id: "r-title", label: "Reviews", count: reviews.length },
+    { id: "c-title", label: "Comparisons", count: comparisons.length },
+    { id: "g-title", label: "Guides", count: guides.length },
+    { id: "d-title", label: "Deals", count: commerce.dropCount },
+    { id: "k-title", label: "Coupons", count: commerce.couponCount },
+    { id: "brands-title", label: "Brands", count: brandHits.length },
+    { id: "cats-title", label: "Categories", count: categoryHits.length },
+  ].filter((g) => g.count > 0);
   return (
     <main>
       <section className="page-hero">
@@ -52,18 +93,14 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       </section>
       <section className="section">
         <div className="wrap">
-          {shortcuts.length > 0 && (
-            <nav aria-labelledby="shortcut-title" style={{ marginBottom: 28 }}>
-              <h2 id="shortcut-title" style={{ fontSize: 18 }}>
-                Products, categories and brands
-              </h2>
+          {q && jump.length > 0 && (
+            <nav aria-label="Result groups" className="search-groups" style={{ marginBottom: 24 }}>
               <ul className="chips">
-                {shortcuts.map((s) => (
-                  <li key={s.key} style={s.slug ? (themeStyle(s.slug) as React.CSSProperties) : undefined}>
-                    <Link className="chip" href={s.href}>
-                      {s.slug && <CategoryIcon slug={s.slug} size={16} />}
-                      {s.label}
-                    </Link>
+                {jump.map((g) => (
+                  <li key={g.id}>
+                    <a className="chip" href={`#${g.id}`}>
+                      {g.label} ({g.count})
+                    </a>
                   </li>
                 ))}
               </ul>
@@ -82,30 +119,112 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               </ul>
             </nav>
           )}
-          {q && !results.length && (
+          {q && nothing && (
             <EmptyState
               title={suggestion ? `Did you mean “${suggestion}”?` : "Try another product, brand or category."}
               action={suggestion ? <Link className="btn primary" href={`/search?q=${encodeURIComponent(suggestion)}`}>Search for {suggestion}</Link> : <Link className="btn" href="/match">Find my match instead</Link>}
             >
-              Nothing published matches “{q}”{type ? ` in ${TYPES.find((t) => t.value === type)?.label.toLowerCase()}` : ""}.
+              Nothing published or verified matches “{q}”{type ? ` in ${TYPES.find((t) => t.value === type)?.label.toLowerCase()}` : ""}.
             </EmptyState>
+          )}
+          {q && !nothing && !results.length && suggestion && (
+            <p className="small muted" style={{ marginBottom: 24 }}>
+              No articles match “{q}”. <Link href={`/search?q=${encodeURIComponent(suggestion)}`}>Search for {suggestion}</Link> instead?
+            </p>
+          )}
+          {products.length > 0 && (
+            <section aria-labelledby="products-title" style={{ marginBottom: 32 }}>
+              <h2 id="products-title" style={{ fontSize: 20 }}>
+                Products <span className="muted">({products.length})</span>
+              </h2>
+              <ul className="chips">
+                {products.map((p) => (
+                  <li key={p.href}>
+                    <Link className="chip" href={p.href}>
+                      {p.name} ({p.count})
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {reviews.length > 0 && (
             <section aria-labelledby="r-title" style={{ marginBottom: 36 }}>
-              <h2 id="r-title">Reviews</h2>
+              <h2 id="r-title">
+                Reviews <span className="muted">({reviews.length})</span>
+              </h2>
               <ReviewGrid reviews={reviews} eagerCount={3} />
             </section>
           )}
           {comparisons.length > 0 && (
             <section aria-labelledby="c-title" style={{ marginBottom: 36 }}>
-              <h2 id="c-title">Comparisons</h2>
+              <h2 id="c-title">
+                Comparisons <span className="muted">({comparisons.length})</span>
+              </h2>
               <ReviewGrid reviews={comparisons} />
             </section>
           )}
           {guides.length > 0 && (
-            <section aria-labelledby="g-title">
-              <h2 id="g-title">Buying guides</h2>
+            <section aria-labelledby="g-title" style={{ marginBottom: 36 }}>
+              <h2 id="g-title">
+                Buying guides <span className="muted">({guides.length})</span>
+              </h2>
               <ReviewGrid reviews={guides} />
+            </section>
+          )}
+          {commerce.dropCount > 0 && (
+            <section aria-labelledby="d-title" style={{ marginBottom: 36 }}>
+              <h2 id="d-title">
+                Verified price drops <span className="muted">({commerce.dropCount})</span>
+              </h2>
+              <PriceDropGrid drops={commerce.drops} />
+              {commerce.dropCount > commerce.drops.length && (
+                <p className="small" style={{ marginTop: 12 }}>
+                  <Link href="/deals">All verified deals</Link>
+                </p>
+              )}
+            </section>
+          )}
+          {commerce.couponCount > 0 && (
+            <section aria-labelledby="k-title" style={{ marginBottom: 36 }}>
+              <h2 id="k-title">
+                Latest verified coupons <span className="muted">({commerce.couponCount})</span>
+              </h2>
+              <p className="small muted">Published on the brand’s own site and verified there within the last {couponMaxAgeDays()} days.</p>
+              <PromoCodeGrid codes={commerce.coupons} />
+            </section>
+          )}
+          {brandHits.length > 0 && (
+            <section aria-labelledby="brands-title" style={{ marginBottom: 32 }}>
+              <h2 id="brands-title" style={{ fontSize: 20 }}>
+                Brands <span className="muted">({brandHits.length})</span>
+              </h2>
+              <ul className="chips">
+                {brandHits.map((b) => (
+                  <li key={b.key}>
+                    <Link className="chip" href={b.href}>
+                      {b.name} ({b.detail})
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {categoryHits.length > 0 && (
+            <section aria-labelledby="cats-title" style={{ marginBottom: 32 }}>
+              <h2 id="cats-title" style={{ fontSize: 20 }}>
+                Categories <span className="muted">({categoryHits.length})</span>
+              </h2>
+              <ul className="chips">
+                {categoryHits.map((c) => (
+                  <li key={c.href} style={themeStyle(c.slug) as React.CSSProperties}>
+                    <Link className="chip" href={c.href}>
+                      <CategoryIcon slug={c.slug} size={16} />
+                      {c.parent ? `${c.name} in ${c.parent}` : c.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
           {(!q || !results.length) && withReviews.length > 0 && (

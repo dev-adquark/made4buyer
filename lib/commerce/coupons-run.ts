@@ -14,6 +14,7 @@ import { revalidateCommerce } from "./revalidate";
 import { ensureBrandsSeeded } from "./brands";
 import { monthlyBudgetUsd } from "./pipeline";
 import { sourceRunnable } from "./sources";
+import { couponMaxAgeDays } from "./deal-status";
 
 /**
  * Coupon crawl for the commerce engine (job "commerce-coupons") and its collection step
@@ -85,6 +86,17 @@ export function buildCouponActorInput(urls: string[], label: string) {
     pageFunction: COUPON_PAGE_FUNCTION,
     customData: { purpose: COUPON_PURPOSE, label },
   };
+}
+
+/**
+ * Re-verification cadence: a brand's promo pages are crawled at least this often (hours), whatever its
+ * crawlFrequencyHours, so a code that is still published is re-seen (lastVerifiedAt refreshed by
+ * upsertCoupons) well inside the public window: the window minus two days for a missed crawl and the
+ * collect lag, and never less than daily. With the default 7-day window: every 120 h at most; the
+ * 09:20 UTC commerce-coupons cron starts due runs and the daily commerce-collect stores them.
+ */
+export function couponRecheckHours(): number {
+  return Math.max(24, (couponMaxAgeDays() - 2) * 24);
 }
 
 // ── Start ────────────────────────────────────────────────────────────────
@@ -172,7 +184,7 @@ export async function runCouponCrawl(trigger: string, opts: CouponCrawlOptions =
       remaining++;
       continue;
     }
-    const wait = await due({ brandId: b.id }, b.crawlFrequencyHours, now, opts.since);
+    const wait = await due({ brandId: b.id }, Math.min(b.crawlFrequencyHours, couponRecheckHours()), now, opts.since);
     if (wait) {
       results.push({ target: b.slug, status: "NOT_DUE", reason: wait });
       continue;

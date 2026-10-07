@@ -390,9 +390,10 @@ legend { font-weight: 700; padding: 0 6px; }
 .sec-head h2 { margin: 0; }
 .sec-head p { grid-column: 2; margin: 0; color: var(--muted); font-family: var(--f-read); font-size: 18px; }
 .sec-head > .btn, .sec-head > .arrow-link { grid-column: 3; grid-row: 1; }
-.mask-reveal { clip-path: inset(0 0 0 0); }
-.reveal-ready .mask-reveal { clip-path: inset(0 0 100% 0); transform: translateY(0.25em); transition: clip-path var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); }
-.reveal-ready .mask-reveal.in { clip-path: inset(-0.2em -0.2em -0.2em -0.2em); transform: none; }
+/* Only elements the reveal script found BELOW the fold get .rv-pending (after hydration), so
+   nothing in the first viewport is ever hidden: SSR HTML paints fully visible, with or without JS. */
+.mask-reveal.rv-pending { clip-path: inset(0 0 100% 0); transform: translateY(0.25em); transition: clip-path var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); }
+.mask-reveal.rv-pending.in { clip-path: inset(-0.2em -0.2em -0.2em -0.2em); transform: none; }
 
 /* ── story layouts ────────────────────────────────────────────────────── */
 .lead-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 0 var(--gutter); }
@@ -777,10 +778,32 @@ details summary { cursor: pointer; font-weight: 600; }
 .cursor[data-label] .tag { opacity: 1; transform: none; }
 
 /* ── reveal + page transition ─────────────────────────────────────────── */
-.reveal-ready .reveal { opacity: 0; transform: translateY(18px); transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); transition-delay: var(--delay, 0ms); }
-.reveal-ready .reveal.in { opacity: 1; transform: none; }
+/* .rv-pending is added by RevealProvider only to below-the-fold elements, after hydration. */
+.reveal.rv-pending { opacity: 0; transform: translateY(18px); transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); transition-delay: var(--delay, 0ms); }
+.reveal.rv-pending.in { opacity: 1; transform: none; }
+/* Client-side navigations only (app/template.tsx never sets it on the server-rendered first load). */
 .page-enter { animation: page-in 420ms var(--ease) both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(10px); } }
+
+/* ── overlay motion (components/presence.ts): transform/opacity only ──── */
+[data-motion][data-state="open"] { animation: var(--m-in) var(--m-dur, 200ms) var(--ease) both; }
+[data-motion][data-state="closed"] { animation: var(--m-out) var(--m-dur, 200ms) var(--ease) both; pointer-events: none; }
+[data-motion="fade"] { --m-in: m-fade-in; --m-out: m-fade-out; --m-dur: 160ms; }
+[data-motion="drop"] { --m-in: m-drop-in; --m-out: m-drop-out; }
+[data-motion="sheet"] { --m-in: m-sheet-in; --m-out: m-sheet-out; --m-dur: 260ms; }
+[data-motion="pop"] { --m-in: m-pop-in; --m-out: m-pop-out; }
+[data-motion="list"] { --m-in: m-list-in; --m-out: m-drop-out; --m-dur: 180ms; }
+.m-stagger { animation: m-slide-in 200ms var(--ease) both; animation-delay: calc(var(--i, 0) * 30ms); }
+@keyframes m-fade-in { from { opacity: 0; } }
+@keyframes m-fade-out { to { opacity: 0; } }
+@keyframes m-drop-in { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes m-drop-out { to { opacity: 0; transform: translateY(-6px); } }
+@keyframes m-sheet-in { from { opacity: 0; transform: translateY(-16px); } }
+@keyframes m-sheet-out { to { opacity: 0; transform: translateY(-12px); } }
+@keyframes m-pop-in { from { opacity: 0; transform: translateY(-14px) scale(0.98); } }
+@keyframes m-pop-out { to { opacity: 0; transform: translateY(-8px) scale(0.99); } }
+@keyframes m-list-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } }
+@keyframes m-slide-in { from { opacity: 0; transform: translateX(-6px); } }
 
 /* ── responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
@@ -865,8 +888,8 @@ details summary { cursor: pointer; font-weight: 600; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
-  .reveal-ready .reveal { opacity: 1; transform: none; }
-  .reveal-ready .mask-reveal { clip-path: none; transform: none; }
+  .reveal.rv-pending { opacity: 1; transform: none; }
+  .mask-reveal.rv-pending { clip-path: none; transform: none; }
   .clip { transform: rotate(var(--rot, 0deg)); }
   .doc-figure .frame img { transform: none; }
   .cursor { display: none; }
@@ -876,7 +899,8 @@ details summary { cursor: pointer; font-weight: 600; }
 }
 @media print {
   body::before, .masthead, .trust-strip, .ticker, .cursor, .sticky-offer, .palette-backdrop, .progress-bar { display: none !important; }
-  .reveal-ready .reveal { opacity: 1; transform: none; }
+  .reveal.rv-pending { opacity: 1; transform: none; }
+  .mask-reveal.rv-pending { clip-path: none; transform: none; }
 }
 
 /* static pages: big editorial title, reading-width body */

@@ -297,7 +297,7 @@ function section(markup: string, headingId: string): string {
   const end = markup.indexOf("</section>", at);
   return markup.slice(at, end < 0 ? undefined : end);
 }
-const cards = (markup: string) => (markup.match(/class="deal-card[ "]/g) ?? []).length;
+const cards = (markup: string) => (markup.match(/class="(?:deal|coupon)-card[ "]/g) ?? []).length;
 /** Row labels of the review page's "Key facts" table. */
 function keyFactsRows(markup: string): string[] {
   const at = markup.indexOf('id="facts"');
@@ -432,7 +432,8 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
 
     const d = await deals();
     expect(cards(section(d.markup, "drops-title"))).toBe(1);
-    expect(cards(section(d.markup, "prices-title"))).toBe(1);
+    // "Recently verified" lists only prices with no stated previous price: the drop is not repeated there.
+    expect(cards(section(d.markup, "prices-title"))).toBe(0);
     expect(d.markup).not.toMatch(/utm_|gclid/);
     const r = await reviewPage(review.slug);
     expect(r.markup.match(/class="offer-alt"/g) ?? []).toHaveLength(1);
@@ -670,14 +671,16 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
 
     const d = await deals();
     const codes = section(d.markup, "codes-title");
-    expect(d.text).toContain("Verified promo codes");
+    expect(d.text).toContain("Latest verified coupons");
     expect(cards(codes)).toBe(1);
     expect(visibleText(codes)).toContain("SAVE10");
-    expect(visibleText(codes)).toContain("Official promo code from Framework");
+    expect(visibleText(codes)).toContain("Framework promo code");
     expect(visibleText(codes)).toContain("10% off");
+    expect(visibleText(codes)).toMatch(/Verified just now on official brand site/);
     const r = await reviewPage(review.slug);
     expect(r.text).toContain("SAVE10");
-    expect(r.text).toContain("Published by Framework on its official site");
+    // The review page shows the same coupon card (same rule, same markup).
+    expect(r.text).toMatch(/Verified just now on official brand site/);
   });
 
   it("11. no verified deals: the empty state and no cards", async () => {

@@ -3,6 +3,7 @@ import { extractOffersFromJsonLd, extractProductFromJsonLd, registrableDomain, t
 import type { ExtractedProduct } from "@/lib/products/types";
 import { evaluatePriceBlocks, type HtmlListPriceType } from "./html-price";
 import { readShopifyProduct, variantParam } from "./shopify";
+import { extractOfficialProductImages, type StoredDealImage } from "@/lib/images/deal-image";
 
 /**
  * Turns one raw commerce record (what PRODUCT_PAGE_FUNCTION returned, stored unchanged in
@@ -49,6 +50,8 @@ export type NormalizedCommerceRecord =
       product: ExtractedProduct;
       specs: CommerceSpec[];
       images: CommerceImage[];
+      /** The page's own photo(s) of this exact product/variant, on its own domain (lib/images/deal-image.ts). */
+      productImages: StoredDealImage[];
       offers: CommerceOfferInput[];
       breadcrumbs: string[];
       lang?: string;
@@ -289,6 +292,7 @@ export function normalizeCommerceRecord(raw: unknown, ctx: NormalizeContext = {}
     product,
     specs,
     images,
+    productImages: extractOfficialProductImages(raw, canonicalUrl, { sku: product.sku }),
     offers,
     breadcrumbs,
     ...(lang ? { lang } : {}),

@@ -1,4 +1,4 @@
-import type { ImageSourceType, LicenseState, Prisma } from "@prisma/client";
+import type { EnrichmentStatus, ImageSourceType, LicenseState, Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { canonicalDestination, displayText, displayUrl } from "@/lib/public/display";
@@ -128,7 +128,7 @@ export type RenderInputs = {
   };
   entities: { brand: string | null; productName: string; modelNumber: string | null; deviceType: string | null; platform: string | null; useCase: string | null; rating: number | null; ratingScale: number | null; source: string } | null;
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
-  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null } | null | undefined;
+  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null; enrichmentStatus?: EnrichmentStatus | null } | null | undefined;
   offers: PublicOffer[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";

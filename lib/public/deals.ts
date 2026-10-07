@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
-import { classifyOffers, computeSaving, couponDealStatus, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
+import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
 import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
@@ -23,8 +23,13 @@ import { freshOfferWhere, offerDomain, offerLinkKey, offerUrl, priceMaxAgeMs } f
  * those two stated values (amount floored to the cent, percent floored to a whole number).
  * "Official <Brand> store price" only when the seller is the MANUFACTURER on the brand's own domain.
  *
- * A PROMO CODE is an ACTIVE code: VERIFIED on the brand's own official page, started, unexpired and
- * re-seen within COMMERCE_COUPON_MAX_AGE_DAYS, with the discount text exactly as stated.
+ * A PROMO CODE is a public code (publicCoupons() in deal-status.ts, via verifiedCouponsForBrands):
+ * VERIFIED on the brand's own official site or store, started, unexpired, verified within the last
+ * COMMERCE_COUPON_MAX_AGE_DAYS (7) days, not a duplicate and not contradicted by another official
+ * page, with the offer text exactly as stated.
+ *
+ * A CURRENT PRICE ("Recently verified") is an offer that passes every price-drop rule except that its
+ * page states no previous price: a real, recently checked price, never presented as a discount.
  *
  * Each offer appears once (classifyOffers' dedup); each code once per brand. Products need not be
  * reviewed on Made4Buyers; when one is, the deal links to its published review.
@@ -37,6 +42,7 @@ export const DEALS_REVALIDATE_SECONDS = 300;
 export const DEAL_CURRENCY = "USD";
 export const MAX_PRICE_DROPS = 120;
 export const MAX_PROMO_CODES = 60;
+export const MAX_CURRENT_PRICES = 60;
 
 export type PriceDrop = {
   id: string;
@@ -66,6 +72,10 @@ export type PriceDrop = {
   linkCheckedAt: string | null;
   /** What was verified, e.g. "Official site (acme.com)" or "Retailer page (bestbuy.com) · product confirmed on the official site". */
   verified: string;
+  /** "official": read on the brand's own site; "retailer": a retailer page for a product confirmed on the official site. */
+  verifiedKind: "official" | "retailer";
+  /** Registrable domain of the seller's page (the seller filter). */
+  sellerDomain: string | null;
   /** "In stock", "Pre-order" … when the page stated it; null when unstated. */
   availability: string | null;
   /** The page's stated end of this price (ISO), only when it stated one. */
@@ -89,10 +99,17 @@ export type PromoCode = {
   expiresAt: string | null;
   lastVerifiedAt: string | null;
   sourceUrl: string | null;
-  /** "Use code" destination: the brand's official promotions page where the code is published. */
+  /** "View offer" destination: the brand's official promotions page where the code is published. */
   useUrl: string | null;
   source: string;
+  /** "Official brand site" (tier 1) or "Official brand store" (tier 2). */
+  verifiedVia: string;
+  /** Registrable domain of the page that publishes the code (the seller filter). */
+  sellerDomain: string | null;
 };
+
+/** A recently verified current price with no stated previous price: a price, not a deal. */
+export type CurrentPrice = Omit<PriceDrop, "listPrice" | "listPriceLabel" | "listPriceText" | "saving" | "savingText" | "savingPercent" | "validUntil">;
 
 export type OfficialDeals = { drops: PriceDrop[]; codes: PromoCode[]; checkedAt: string | null };
 
@@ -235,6 +252,8 @@ export function toPriceDrops(items: ClassifiedOffer[], reviews: Map<string, { sl
       observedAt: r.observedAt.toISOString(),
       linkCheckedAt: r.linkCheckedAt?.toISOString() ?? null,
       verified: v.officialSite ? `Official site (${where})` : `Retailer page (${where}) · product confirmed on the official site`,
+      verifiedKind: v.officialSite ? "official" : "retailer",
+      sellerDomain: destDomain,
       availability: v.availabilityLabel,
       validUntil: v.validUntil,
       url,
@@ -273,39 +292,117 @@ export async function loadPriceDrops(now = Date.now()): Promise<PriceDrop[]> {
 
 export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, select: { id: true, name: true, slug: true, categories: true, officialDomain: true, officialStoreUrl: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
-  // One query for every brand (a query per brand exhausted the connection pool with 100 brands).
+  // One query for every brand (a query per brand exhausted the connection pool with 100 brands); the rows are already public (publicCoupons).
   const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, 6);
-  const seen = new Set<string>();
   const out: PromoCode[] = [];
-  for (const b of brands) {
-    const brandName = displayText(b.name);
-    if (!brandName) continue;
-    for (const c of byBrand.get(b.id) ?? []) {
-      const code = displayText(c.code);
-      if (!code || couponDealStatus({ ...c, brand: b }, now).status !== "ACTIVE") continue;
-      const key = `${b.id}|${code.toUpperCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const sourceUrl = displayUrl(c.sourceUrl);
-      const useUrl = sourceUrl && validateOutboundUrl(sourceUrl, { standardPortsOnly: true }).url && onOfficialDomain(sourceUrl, b) ? sourceUrl : null;
-      out.push({
-        id: c.id,
-        brandName,
-        brandSlug: b.slug,
-        categories: b.categories,
-        code,
-        discount: displayText(c.discount),
-        eligibility: displayText(c.eligibility),
-        restrictions: displayText(c.restrictions),
-        expiresAt: displayDate(c.expiresAt)?.toISOString() ?? null,
-        lastVerifiedAt: displayDate(c.lastVerifiedAt)?.toISOString() ?? null,
-        sourceUrl,
-        useUrl,
-        source: `${domainOf(sourceUrl) ?? b.officialDomain} (official site)`,
-      });
-    }
+  for (const b of brands) for (const c of byBrand.get(b.id) ?? []) {
+    const code = toPromoCode(c, b);
+    if (code) out.push(code);
   }
   return out.sort((a, b) => Date.parse(b.lastVerifiedAt ?? "0") - Date.parse(a.lastVerifiedAt ?? "0")).slice(0, MAX_PROMO_CODES);
+}
+
+type PromoBrand = { name: string; slug: string; categories: string[]; officialDomain: string; officialStoreUrl: string | null };
+type PromoRow = { id: string; code: string; discount: string | null; eligibility: string | null; restrictions: string | null; expiresAt: Date | null; lastVerifiedAt: Date | null; sourceUrl: string };
+
+/** Pure: a public coupon row (already passed publicCoupons) → the display shape. Null when a required field is unusable. */
+export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
+  const brandName = displayText(b.name);
+  const code = displayText(c.code);
+  const tier = couponSourceTier(c.sourceUrl, b);
+  if (!brandName || !code || (tier !== 1 && tier !== 2)) return null;
+  const sourceUrl = displayUrl(c.sourceUrl);
+  const useUrl = sourceUrl && validateOutboundUrl(sourceUrl, { standardPortsOnly: true }).url && onOfficialDomain(sourceUrl, b) ? sourceUrl : null;
+  return {
+    id: c.id,
+    brandName,
+    brandSlug: b.slug,
+    categories: b.categories,
+    code,
+    discount: displayText(c.discount),
+    eligibility: displayText(c.eligibility),
+    restrictions: displayText(c.restrictions),
+    expiresAt: displayDate(c.expiresAt)?.toISOString() ?? null,
+    lastVerifiedAt: displayDate(c.lastVerifiedAt)?.toISOString() ?? null,
+    sourceUrl,
+    useUrl,
+    source: `${domainOf(sourceUrl) ?? b.officialDomain} (official site)`,
+    verifiedVia: COUPON_TIER_LABEL[tier],
+    sellerDomain: domainOf(sourceUrl),
+  };
+}
+
+/** Pure: classified offers → current prices (every price-drop rule passed except a stated previous price), one per product and seller, newest first. */
+export function toCurrentPrices(items: ClassifiedOffer[], reviews: Map<string, { slug: string; title: string }>): CurrentPrice[] {
+  const out: CurrentPrice[] = [];
+  const seen = new Set<string>();
+  const sorted = [...items].sort((a, b) => b.offer.observedAt.getTime() - a.offer.observedAt.getTime());
+  for (const { offer: r, verdict: v } of sorted) {
+    // VERIFIED solely because the page states no list price: anything else (duplicate, out of stock, refurbished …) is not shown.
+    if (v.status !== "VERIFIED" || !v.reasons.length || v.reasons.some((x) => x.code !== "NO_LIST_PRICE")) continue;
+    const priceText = displayPrice(r.price, r.currency);
+    const productName = displayText(r.product.name);
+    const seller = displayText(r.seller);
+    const link = offerUrl(r);
+    const target = validateOutboundUrl(link.url, { standardPortsOnly: true });
+    const url = target.url ? displayUrl(target.url.toString()) : null;
+    if (!priceText || !productName || !seller || !url || !r.currency) continue;
+    const destDomain = domainOf(r.destinationUrl);
+    const key = `${r.product.productEntityId ?? r.product.id}|${destDomain ?? seller.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const brand = r.product.brand;
+    const brandName = displayText(brand?.name);
+    const official = v.officialStore && Boolean(brandName);
+    const where = destDomain ?? offerDomain(url) ?? seller;
+    out.push({
+      id: r.id,
+      productName,
+      brandName,
+      brandSlug: brand?.slug ?? null,
+      categories: brand?.categories ?? [],
+      seller,
+      official,
+      label: official ? `Official ${brandName} store price` : seller,
+      price: r.price!,
+      currency: r.currency,
+      priceText,
+      observedAt: r.observedAt.toISOString(),
+      linkCheckedAt: r.linkCheckedAt?.toISOString() ?? null,
+      verified: v.officialSite ? `Official site (${where})` : `Retailer page (${where}) · product confirmed on the official site`,
+      verifiedKind: v.officialSite ? "official" : "retailer",
+      sellerDomain: destDomain,
+      availability: v.availabilityLabel,
+      url,
+      affiliated: link.affiliated,
+      source: v.officialSite ? `${where} (official site)` : `${where} (retailer page)`,
+      review: r.product.productEntityId ? (reviews.get(r.product.productEntityId) ?? null) : null,
+    });
+    if (out.length >= MAX_CURRENT_PRICES) break;
+  }
+  return out;
+}
+
+export async function loadCurrentPrices(now = Date.now()): Promise<CurrentPrice[]> {
+  const items = await loadClassifiedOffers({ where: { ...freshOfferWhere(now), currency: DEAL_CURRENCY, price: { gt: 0 }, listPrice: null }, take: 1000, now });
+  const shown = items.filter((x) => x.verdict.status === "VERIFIED");
+  const reviews = await reviewsFor([...new Set(shown.map((x) => x.product.productEntityId).filter((x): x is string => Boolean(x)))]);
+  return toCurrentPrices(shown, reviews);
+}
+
+const cachedCurrentPrices = unstable_cache(() => loadCurrentPrices(), ["current-prices-v1"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
+
+/** Cached "Recently verified" prices for /deals (same tag and lifetime as the deals; the price window re-applied on read). */
+export async function recentlyVerifiedPrices(now = Date.now()): Promise<CurrentPrice[]> {
+  let rows: CurrentPrice[];
+  try {
+    rows = await cachedCurrentPrices();
+  } catch (error) {
+    log.debug("current prices cache unavailable; loading directly", { error: String(error) });
+    rows = await loadCurrentPrices(now);
+  }
+  const maxAge = priceMaxAgeMs();
+  return rows.filter((p) => now - Date.parse(p.observedAt) <= maxAge);
 }
 
 /** Price drops and promo codes, uncached (tests, admin). */
@@ -315,12 +412,13 @@ export async function loadOfficialDeals(now = Date.now()): Promise<OfficialDeals
   return { drops, codes, checkedAt: times.length ? new Date(Math.max(...times)).toISOString() : null };
 }
 
-const cachedDeals = unstable_cache(() => loadOfficialDeals(), ["official-deals-v2"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
+const cachedDeals = unstable_cache(() => loadOfficialDeals(), ["official-deals-v3"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
 
 /**
  * Cached for pages (data cache, tag "deals", 5 minutes). The cache stores JSON, so time-based rules
  * are re-applied on read: a drop that aged past the price window or whose stated end passed, and a
- * code whose stated expiry passed, since it was cached are dropped.
+ * code whose stated expiry passed or whose last verification left the coupon window, since it was
+ * cached are dropped.
  */
 export async function officialDeals(now = Date.now()): Promise<OfficialDeals> {
   let deals: OfficialDeals;
@@ -331,9 +429,10 @@ export async function officialDeals(now = Date.now()): Promise<OfficialDeals> {
     deals = await loadOfficialDeals(now);
   }
   const maxAge = priceMaxAgeMs();
+  const couponWindow = couponMaxAgeDays() * 86_400_000;
   return {
     ...deals,
     drops: deals.drops.filter((d) => now - Date.parse(d.observedAt) <= maxAge && (!d.validUntil || validUntilMs(d.validUntil) >= now)),
-    codes: deals.codes.filter((c) => !c.expiresAt || Date.parse(c.expiresAt) > now),
+    codes: deals.codes.filter((c) => (!c.expiresAt || Date.parse(c.expiresAt) > now) && c.lastVerifiedAt !== null && now - Date.parse(c.lastVerifiedAt) <= couponWindow),
   };
 }

@@ -50,11 +50,13 @@ const publicCode = (c: PromoCode) => ({
   sourceUrl: c.sourceUrl,
   useUrl: c.useUrl,
   source: c.source,
+  verifiedVia: c.verifiedVia,
 });
 
 /**
- * GET /api/commerce/deals — public, read-only: the ACTIVE price drops and promo codes /deals shows
- * (officialDeals(), the same cached data and the same time rules). Rate-limited per IP.
+ * GET /api/commerce/deals — public, read-only: the ACTIVE price drops and the public promo codes /deals
+ * shows (officialDeals(): the same cached data, the same 48 h price window and the same coupon rule,
+ * publicCoupons() with its 7-day verification window). Rate-limited per IP.
  */
 export async function GET(req: Request) {
   if (!memoryRateLimit(`commerce-deals:${clientIp(req) ?? "unknown"}`, LIMIT_PER_MINUTE, 60_000)) {

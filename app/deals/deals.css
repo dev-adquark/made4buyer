@@ -1,0 +1,55 @@
+/* Deals page, coupon cards and filters. Imported by app/deals/page.tsx and components/official-deals.tsx
+   (the cards also render on the homepage rail and review pages). Uses the global design tokens only. */
+
+.deals-page .deals-sub { display: block; font-size: 0.4em; line-height: 0.95; margin-top: 0.14em; font-variation-settings: "wdth" 88; letter-spacing: 0.005em; }
+.deals-page .deals-section { scroll-margin-top: 96px; }
+.deals-page .deals-empty { margin: 0; padding: 14px 16px; border: 1px dashed var(--rule-strong); color: var(--muted); font-size: 15px; max-width: 70ch; }
+.deals-page .deals-empty[hidden] { display: none; }
+.deal-grid > li[hidden] { display: none; }
+
+/* Jump links */
+.deals-jump { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 16px; font: 500 13px/1.4 var(--f-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+.deals-jump a { color: var(--ink); text-underline-offset: 3px; }
+.deals-jump a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+/* Filters */
+.deals-filter { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(168px, 100%), 1fr)); gap: 10px 12px; align-items: end; margin-top: 20px; padding: 14px; border: 1px solid var(--rule-strong); background: var(--sheet); max-width: 100%; box-sizing: border-box; }
+.deals-filter .df-field { display: grid; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.deals-filter label, .deals-filter legend { font: 500 11.5px/1.2 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 0; margin: 0 0 4px; }
+.deals-filter select, .deals-filter input { width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box; }
+.deals-filter select:focus-visible, .deals-filter input:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.deals-filter .df-range-inputs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.deals-filter .df-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 0; }
+.deals-filter .df-status { margin: 0; }
+.deals-filter .df-status:empty { display: none; }
+
+/* Coupon card */
+.coupon-grid { grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); }
+.coupon-grid.compact { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; list-style: none; margin: 0; padding: 0; }
+.coupon-card { position: relative; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--sheet); border: 1px solid var(--ink); min-width: 0; }
+.coupon-card::after { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 4px; background: var(--cat, var(--ok)); }
+.coupon-card .cc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.coupon-card .cc-brand { margin: 0; font: 600 12.5px/1.2 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); overflow-wrap: anywhere; }
+.coupon-card .cc-offer { margin: 0; font: 800 22px/1.15 var(--f-ui); text-transform: uppercase; letter-spacing: 0.01em; color: var(--ink); overflow-wrap: anywhere; }
+.coupon-card .cc-code { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 8px 12px; border: 1px dashed var(--ink); background: var(--paper); }
+.coupon-card .cc-code-label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); flex: none; }
+.coupon-card .cc-code code { min-width: 0; font: 800 20px/1.1 var(--f-mono); letter-spacing: 0.08em; overflow-wrap: anywhere; user-select: all; }
+.coupon-card .cc-meta { margin: 0; font: 12.5px/1.45 var(--f-mono); color: var(--muted); overflow-wrap: anywhere; }
+.coupon-card .cc-check { color: var(--ok); font: 800 13px var(--f-ui); }
+.coupon-card .cc-meta time { color: var(--ok); font-weight: 600; }
+.coupon-card .cc-terms { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; }
+.coupon-card .cc-label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.coupon-card .cc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 4px; }
+.coupon-card .cc-actions .btn { flex: 1 1 auto; min-height: 40px; }
+.coupon-card .cc-copy[data-state="copied"] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.coupon-card .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; box-shadow: var(--focus); }
+
+/* Current price card: same frame as a drop, quieter price. */
+.price-card .dc-price { font-size: 36px; }
+
+@media (max-width: 480px) {
+  .deals-filter { padding: 12px; }
+  .coupon-card { padding: 14px; }
+  .coupon-card .cc-offer { font-size: 19px; }
+  .coupon-card .cc-code code { font-size: 18px; }
+}

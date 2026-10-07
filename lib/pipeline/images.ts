@@ -383,9 +383,14 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   return neutralCategoryDecision(input.categorySlug, issues, service.reason ?? "no image source available", service.providerStatus);
 }
 
-/** Which image may be shown publicly. Unverified-license images are withheld when IMAGE_REQUIRE_LICENSE is on. */
-export function publicImageUrl(asset: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState } | null | undefined, categorySlug?: string | null): { url: string; isFallback: boolean } {
+/**
+ * Which image may be shown publicly. Unverified-license images are withheld when IMAGE_REQUIRE_LICENSE
+ * is on, and an image whose URL the image-integrity job found broken (enrichmentStatus FAILED) falls
+ * back to the category placeholder straight away (the row is kept; a later check can restore it).
+ */
+export function publicImageUrl(asset: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; enrichmentStatus?: EnrichmentStatus | null } | null | undefined, categorySlug?: string | null): { url: string; isFallback: boolean } {
   if (!asset || asset.sourceType === "PLACEHOLDER" || !asset.sourceUrl) return { url: placeholderPath(categorySlug), isFallback: true };
+  if (asset.enrichmentStatus === "FAILED") return { url: placeholderPath(categorySlug), isFallback: true };
   if (config.images.requireLicense() && asset.licenseState === "UNVERIFIED") return { url: placeholderPath(categorySlug), isFallback: true };
   return { url: asset.cdnUrl ?? asset.sourceUrl, isFallback: false };
 }
