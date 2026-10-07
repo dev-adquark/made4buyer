@@ -7,14 +7,19 @@ import RevealProvider from "@/components/reveal-provider";
 import SiteFooter from "@/components/site-footer";
 import SiteHeader from "@/components/site-header";
 import EditorialCursor from "@/components/editorial-cursor";
+import { CategoryNamesProvider } from "@/components/category-names";
 import { config } from "@/lib/config";
 import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 
-const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"] });
+// Every face uses a hand-measured local fallback (app/globals.css, "M4B … Fallback", Arial/Times
+// on desktop and iOS, Roboto/Noto Serif on Android) instead of next/font's automatic Arial/Times
+// one, which assumes the default width and weight: with the condensed Anybody, bold Schibsted and
+// Plex Mono that reflowed the page on swap (review page CLS 0.28).
+const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"], adjustFontFallback: false, fallback: ["M4B Display Fallback", "M4B Display Fallback Roboto", "Arial", "sans-serif"] });
 // Only the display and UI faces are preloaded: they paint the masthead and hero (LCP).
-const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"], preload: false });
-const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"], preload: false });
+const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"], preload: false, adjustFontFallback: false, fallback: ["M4B Read Fallback", "M4B Read Fallback Noto", "Georgia", "serif"] });
+const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap", adjustFontFallback: false, fallback: ["M4B UI Fallback", "M4B UI Fallback Roboto", "Arial", "sans-serif"] });
+const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"], preload: false, adjustFontFallback: false, fallback: ["M4B Mono Fallback", "ui-monospace", "monospace"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(config.siteUrl()),
@@ -38,20 +43,25 @@ const categories = CATEGORIES.map((c, i) => ({
   subs: c.subcategories.filter((s) => !s.legacy).map((s) => ({ slug: s.slug, name: s.name })),
 }));
 
+// Slug → name for client search UIs (keeps lib/taxonomy/definitions out of the client bundle).
+const categoryNames: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.slug, c.name]));
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${reading.variable} ${ui.variable} ${mono.variable}`}>
       <body>
-        <a className="skip-link" href="#main">
-          Skip to content
-        </a>
-        <SiteHeader categories={categories} />
-        <PageViewTracker />
-        <RevealProvider />
-        <ExternalAnalytics />
-        <EditorialCursor />
-        <div id="main">{children}</div>
-        <SiteFooter categories={categories} />
+        <CategoryNamesProvider names={categoryNames}>
+          <a className="skip-link" href="#main">
+            Skip to content
+          </a>
+          <SiteHeader categories={categories} />
+          <PageViewTracker />
+          <RevealProvider />
+          <ExternalAnalytics />
+          <EditorialCursor />
+          <div id="main">{children}</div>
+          <SiteFooter categories={categories} />
+        </CategoryNamesProvider>
       </body>
     </html>
   );

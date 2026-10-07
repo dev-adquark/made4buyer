@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { IMAGES_CONFIG } from "./lib/images/remote-patterns";
 
 const isProd = process.env.NODE_ENV === "production";
 const analyticsHost = process.env.NEXT_PUBLIC_ANALYTICS_HOST; // optional external analytics origin
@@ -31,6 +32,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Editorial images (Commons, Pexels) are resized and re-encoded (AVIF/WebP) by the Next.js optimizer:
+  // right-sized for each screen and served from our origin (no third-party cookies).
+  images: IMAGES_CONFIG,
+  env: { IMAGE_OPTIMIZER: "on" },
   poweredByHeader: false,
   reactStrictMode: true,
   serverExternalPackages: ["@prisma/client", "embedded-postgres"],

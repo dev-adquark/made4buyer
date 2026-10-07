@@ -40,13 +40,10 @@ export const OFFICIAL_IMAGE_DOMAINS: readonly string[] = [
   "weber.com", "westerndigital.com", "wix.com", "wyze.com", "xbox.com", "zoom.com",
 ];
 
-export const IMAGE_REMOTE_PATTERNS: ImageRemotePattern[] = [
-  ...EDITORIAL_IMAGE_PATTERNS,
-  ...OFFICIAL_IMAGE_DOMAINS.flatMap((d): ImageRemotePattern[] => [
-    { protocol: "https", hostname: d },
-    { protocol: "https", hostname: `**.${d}` },
-  ]),
-];
+// Next.js allows at most 50 remote patterns. Only the editorial hosts (Commons, Pexels) go through the
+// optimizer — they are the large, third-party images. Official brand product images (validated to be on
+// the brand's own domain by lib/images/deal-image.ts) load directly from that domain.
+export const IMAGE_REMOTE_PATTERNS: ImageRemotePattern[] = [...EDITORIAL_IMAGE_PATTERNS];
 
 /** Rendered widths: device sizes for full-bleed/hero slots, image sizes for cards and thumbnails. */
 export const IMAGE_DEVICE_SIZES = [480, 640, 750, 828, 1080, 1200, 1600, 1920];

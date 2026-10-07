@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CategoryIcon from "./category-icon";
+import { useCategoryName } from "./category-names";
 import { usePresence } from "./presence";
 import { useClientReady, useFocusTrap, type NavCategory } from "./site-nav";
 import type { SearchGroups } from "@/lib/public/queries";
-import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 
 type Item = { key: string; href: string; title: string; sub?: string; image?: string; swatch?: string | null; badge?: string };
@@ -37,7 +37,7 @@ function saveRecent(q: string) {
 const categoryOf = (href: string) => href.match(/^\/category\/([^/?#]+)/)?.[1] ?? null;
 
 /** `shown`: category slugs listed in navigation (those with published content); other category suggestions are dropped. */
-function toGroups(g: SearchGroups, shown: ReadonlySet<string>): Group[] {
+function toGroups(g: SearchGroups, shown: ReadonlySet<string>, categoryName: (slug: string | null | undefined) => string | undefined): Group[] {
   const review = (s: SearchGroups["reviews"][number], badge?: string): Item => ({ key: `r:${s.slug}:${badge ?? ""}`, href: `/review/${s.slug}${badge === "Current price" ? "#deal" : ""}`, title: s.productName, sub: [categoryName(s.categorySlug), s.brand].filter(Boolean).join(", "), image: s.image, swatch: s.categorySlug, badge });
   return [
     { id: "reviews", label: "Reviews", items: g.reviews.map((s) => review(s)) },
@@ -95,6 +95,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
 
   const term = q.trim();
   const shown = useMemo(() => new Set(categories.map((c) => c.slug)), [categories]);
+  const categoryName = useCategoryName();
   useEffect(() => {
     if (term.length < 2) return;
     const ctrl = new AbortController();
@@ -102,7 +103,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
       fetch(`/api/search/suggest?groups=1&q=${encodeURIComponent(term)}`, { signal: ctrl.signal })
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((d: { groups?: SearchGroups }) => {
-          setResult({ term, groups: d.groups ? toGroups(d.groups, shown) : [] });
+          setResult({ term, groups: d.groups ? toGroups(d.groups, shown, categoryName) : [] });
           setActive(0);
         })
         .catch((e: Error) => e.name !== "AbortError" && setResult({ term, groups: [], error: true }));
@@ -111,7 +112,7 @@ export default function CommandPalette({ categories }: { categories: NavCategory
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [term, shown]);
+  }, [term, shown, categoryName]);
 
   const groups: Group[] = useMemo(() => {
     if (term.length >= 2) return result?.term === term ? result.groups : [];

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import LogoChip from "@/components/brand-logo-chip";
 import Breadcrumbs, { breadcrumbJsonLd } from "@/components/breadcrumbs";
 import JsonLd from "@/components/json-ld";
 import { displayText } from "@/lib/public/display";
 import { ReviewGrid } from "@/components/review-card";
+import { brandLogoMap, lookupLogo } from "@/lib/commerce/brand-logo-public";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { brandPageEligible, cardSelect, LATEST_FIRST } from "@/lib/public/queries";
@@ -40,13 +42,18 @@ export default async function BrandPage({ params }: { params: Promise<{ slug: st
   const data = await load(slug);
   if (!data) notFound();
   const crumbs = [{ name: "Home", href: "/" }, { name: data.brand, href: `/brand/${slug}` }];
+  // The commerce brand's verified official logo, matched by slug, else by a unique brand name.
+  const logo = lookupLogo(await brandLogoMap(), slug, data.brand);
   return (
     <main>
       <JsonLd data={breadcrumbJsonLd(crumbs, config.siteUrl())} />
       <section className="page-hero">
         <div className="wrap">
           <Breadcrumbs items={crumbs} />
-          <h1>{data.brand} reviews</h1>
+          <h1>
+            {logo && <LogoChip logo={logo} name={data.brand} height={32} />}
+            {data.brand} reviews
+          </h1>
           <p className="lede">{data.reviews.length === 1 ? "1 published review" : `${data.reviews.length} published reviews and guides`} of {data.brand} products.</p>
         </div>
       </section>

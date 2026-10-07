@@ -15,6 +15,7 @@ import { log } from "@/lib/log";
  *                product / CommerceProduct.id (REJECTED)     recordPriceRejected: an offer that was refused
  *   IDENTITY     product / CommerceProduct.id                recordIdentityDecision: every identity decision
  *   DEAL_STATUS  offer / CommerceOffer.id                    classify.ts: only when the persisted deal status changed
+ *   LOGO         brand / CommerceBrand.id                    brand-logos.ts: every official-logo check (VERIFIED / NOT_FOUND / FAILED / REJECTED)
  *
  * Writing an event never throws and never fails the check it records. `details` is kept small
  * (strings ≤ 300 chars, ≤ 20 keys / items per level, ≤ 3 levels, ≤ 2 KB serialized).
@@ -22,9 +23,9 @@ import { log } from "@/lib/log";
  * always keeps the latest event per (entityType, entityId, kind).
  */
 
-export const VERIFICATION_KINDS = ["LINK", "OFFICIAL", "COUPON", "PRICE", "IDENTITY", "DEAL_STATUS"] as const;
+export const VERIFICATION_KINDS = ["LINK", "OFFICIAL", "COUPON", "PRICE", "IDENTITY", "DEAL_STATUS", "LOGO"] as const;
 export type VerificationKind = (typeof VERIFICATION_KINDS)[number];
-export type VerificationEntityType = "offer" | "coupon" | "product";
+export type VerificationEntityType = "offer" | "coupon" | "product" | "brand";
 
 export type VerificationEventInput = {
   entityType: VerificationEntityType;

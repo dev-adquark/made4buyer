@@ -41,6 +41,8 @@ export type SafeFetchOptions = {
   standardPortsOnly?: boolean;
   readBody?: boolean;
   maxBytes?: number;
+  /** How `body` is decoded (default utf8). "latin1" keeps every byte (Buffer.from(body, "latin1")): binary files such as images. */
+  bodyEncoding?: "utf8" | "latin1";
 };
 
 export type SafeFetchResult = {
@@ -127,7 +129,7 @@ function classifyNetworkError(error: unknown, aborted: boolean): SafeFetchResult
   return { kind: "NETWORK", message };
 }
 
-async function readLimited(res: Response, maxBytes: number): Promise<{ body?: string; tooLarge?: boolean }> {
+async function readLimited(res: Response, maxBytes: number, encoding: "utf8" | "latin1" = "utf8"): Promise<{ body?: string; tooLarge?: boolean }> {
   const declared = Number(res.headers.get("content-length") ?? "0");
   if (declared > maxBytes) {
     await res.body?.cancel().catch(() => undefined);
@@ -147,7 +149,7 @@ async function readLimited(res: Response, maxBytes: number): Promise<{ body?: st
     }
     chunks.push(value);
   }
-  return { body: Buffer.concat(chunks).toString("utf8") };
+  return { body: Buffer.concat(chunks).toString(encoding) };
 }
 
 export async function safeFetch(raw: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
@@ -211,7 +213,7 @@ export async function safeFetch(raw: string, options: SafeFetchOptions = {}): Pr
       const result: SafeFetchResult = { ok: res.ok, status: res.status, finalUrl: key, chain, headers: headerRecord(res) };
       if (options.readBody && method !== "HEAD") {
         try {
-          const read = await readLimited(res, maxBytes);
+          const read = await readLimited(res, maxBytes, options.bodyEncoding);
           if (read.tooLarge) return { ...result, ok: false, error: { kind: "RESPONSE_TOO_LARGE", message: `Response exceeds ${maxBytes} bytes` } };
           result.body = read.body;
         } catch (error) {

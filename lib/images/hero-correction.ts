@@ -5,6 +5,7 @@ import { runImageBackfill, type ImageBackfillResult } from "@/lib/jobs/image-bac
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { loadSourceContent, runImageStage } from "@/lib/pipeline/stages";
+import { NOT_EXACT_REASON } from "./integrity";
 
 /**
  * Hero correction, run first by the enrich-images job. Finds single-product pages (a REVIEW, or
@@ -42,19 +43,22 @@ export async function runHeroCorrection(trigger: string, opts: { limit?: number 
         { sourceType: "ENRICHMENT_SERVICE", OR: [{ verifiedAt: null }, { verifiedAt: { lte: IMAGE_RULES_CHANGED_AT } }] },
         // A product-type photo, once a licensed photo of the exact product is known.
         { sourceType: "ENRICHMENT_SERVICE", imageType: "illustrative-product-type", review: { ...SINGLE_PRODUCT, contentEntities: { some: { role: "PRIMARY", entity: { facts: { some: { field: "image", source: "WIKIDATA" } } } } } } },
+        // A Commons "product" photo the image-integrity job found is not the exact product (a group shot): replaced once a day.
+        { sourceType: "WIKIMEDIA_COMMONS", enrichmentStatus: "FAILED", failureReason: { startsWith: NOT_EXACT_REASON }, updatedAt: { lte: new Date(Date.now() - 20 * 3_600_000) } },
         // A placeholder: retried for a relevant photo (Commons, then the product type) once a day.
         { sourceType: "PLACEHOLDER", review: SINGLE_PRODUCT, OR: [{ verifiedAt: null }, { verifiedAt: { lte: new Date(Date.now() - 20 * 3_600_000) } }, { verifiedAt: { lte: IMAGE_RULES_CHANGED_AT } }] },
       ],
     },
     orderBy: { createdAt: "asc" },
     take: opts.limit ?? 200,
-    select: { id: true, sourceType: true, providerPhotoId: true, review: true },
+    select: { id: true, sourceType: true, providerPhotoId: true, enrichmentStatus: true, review: true },
   });
   for (const t of targets) {
     out.checked++;
     const review = t.review;
     try {
-      const asset = await runImageStage(review, await loadSourceContent(review));
+      // A FAILED row is never "kept" over its replacement.
+      const asset = await runImageStage(review, await loadSourceContent(review), { replaceExisting: t.enrichmentStatus === "FAILED" });
       if (!asset) {
         out.failed++;
         continue;

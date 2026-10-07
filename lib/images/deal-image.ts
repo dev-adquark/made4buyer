@@ -185,7 +185,7 @@ export type DealImageProduct = {
 
 /**
  * The image to show on a deal card for this CommerceProduct, or null (show the placeholder).
- * Render it with <SafeImg allowDirect={false} …>: optimizer or placeholder, never a hotlink.
+ * Render it with <SafeImg …>: the URL is on the brand's own official domain (validated here), so it may load directly.
  */
 export function dealImage(product: DealImageProduct | null | undefined): DealImage | null {
   if (!product) return null;

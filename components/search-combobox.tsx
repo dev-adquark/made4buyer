@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
+import { useCategoryName } from "./category-names";
 import { usePresence } from "./presence";
 
 type Suggestion = { slug: string; title: string; productName: string; brand: string | null; categorySlug: string | null; image: string; kind: "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE" };
@@ -22,6 +22,7 @@ export default function SearchCombobox({ variant = "header", defaultValue = "", 
   const [active, setActive] = useState(-1);
   const [loading, setLoading] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
+  const categoryName = useCategoryName();
 
   useEffect(() => {
     const term = q.trim();

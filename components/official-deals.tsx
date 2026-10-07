@@ -1,5 +1,6 @@
 import "@/app/deals/deals.css";
 import Link from "next/link";
+import BrandLogo from "@/components/brand-logo";
 import CopyCodeButton from "@/components/copy-code-button";
 import type { CurrentPrice, PriceDrop, PromoCode } from "@/lib/public/deals";
 import { relativeTime } from "@/lib/public/display";
@@ -98,7 +99,10 @@ export function PriceDropCard({ d, headingLevel = 3 }: { d: PriceDrop; headingLe
         {d.brandName && (
           <>
             <dt>Brand</dt>
-            <dd>{d.brandName}</dd>
+            <dd>
+              {d.brandSlug && <BrandLogo slug={d.brandSlug} name={d.brandName} height={16} />}
+              {d.brandName}
+            </dd>
           </>
         )}
         {!d.official && (
@@ -156,6 +160,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
     <article className="coupon-card" style={themeStyle(c.categories[0]) as React.CSSProperties}>
       <div className="cc-head">
         <H className="cc-brand">
+          <BrandLogo slug={c.brandSlug} name={c.brandName} height={18} />
           {c.brandName}
           <span className="visually-hidden"> promo code</span>
         </H>

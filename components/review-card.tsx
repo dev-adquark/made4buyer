@@ -73,6 +73,11 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
           <span className="kind">
             <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
           </span>
+          {img.illustrative && (
+            <span className="illus-tag" title="Illustrative image — not the reviewed product">
+              Illustrative
+            </span>
+          )}
         </div>
         <div className="body">
           <div className="meta-row">
@@ -95,6 +100,11 @@ export function FeatureStory({ review }: { review: Card }) {
       <Link href={`/review/${review.slug}`} data-cursor="Read">
         <div className="media">
           <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
+          {img.illustrative && (
+            <span className="illus-tag" title="Illustrative image — not the reviewed product">
+              Illustrative
+            </span>
+          )}
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
           {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}

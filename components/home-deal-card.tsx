@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandLogo from "@/components/brand-logo";
 import SafeImg from "@/components/safe-img";
 import type { DealImage } from "@/lib/images/deal-image";
 import { placeholderPath } from "@/lib/pipeline/images";
@@ -20,7 +21,7 @@ export default function HomeDealCard({ d, image }: { d: PriceDrop; image?: DealI
     <article className="hd-card" style={themeStyle(d.categories[0]) as React.CSSProperties}>
       <div className="hd-media">
         {image ? (
-          <SafeImg src={image.src} fallback={placeholderPath(d.categories[0])} alt={image.alt ?? ""} width={300} height={200} sizes="(max-width: 600px) 75vw, 300px" fit="contain" allowDirect={false} loading="lazy" decoding="async" draggable={false} />
+          <SafeImg src={image.src} fallback={placeholderPath(d.categories[0])} alt={image.alt ?? ""} width={300} height={200} sizes="(max-width: 600px) 75vw, 300px" fit="contain" loading="lazy" decoding="async" draggable={false} />
         ) : (
           <span className="hd-mono" aria-hidden="true">
             {brand.slice(0, 1)}
@@ -29,7 +30,10 @@ export default function HomeDealCard({ d, image }: { d: PriceDrop; image?: DealI
         <span className="hd-save">{save}</span>
       </div>
       <div className="hd-body">
-        <span className="hd-brand">{brand}</span>
+        <span className="hd-brand">
+          {d.brandSlug && <BrandLogo slug={d.brandSlug} name={brand} height={16} />}
+          {brand}
+        </span>
         <h3 className="hd-name">
           {d.review ? (
             <Link href={`/review/${d.review.slug}`} draggable={false}>

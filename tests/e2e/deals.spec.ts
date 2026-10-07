@@ -28,9 +28,9 @@ test.afterAll(async () => {
 });
 
 const drops = (page: Page) => page.getByRole("region", { name: "Verified price drops" });
-const codes = (page: Page) => page.getByRole("region", { name: "Verified promo codes" });
+const codes = (page: Page) => page.getByRole("region", { name: "Latest verified coupons" });
 const viewDeal = (scope: Locator | Page) => scope.getByRole("link", { name: /^View deal\b/ });
-const codeLinkOf = (scope: Locator | Page) => scope.getByRole("link", { name: /^Use code\b/ });
+const codeLinkOf = (scope: Locator | Page) => scope.getByRole("link", { name: /^View offer\b/ });
 const copyButton = (scope: Locator | Page) => scope.getByRole("button", { name: /^Cop(y|ied)\b/ });
 
 async function settle(page: Page) {
@@ -53,6 +53,11 @@ test("deals: only the valid drop and the verified code are listed, with the righ
   // Exactly one price drop (the utm duplicate collapsed into it) and one promo code.
   await expect(drops(page).locator("[data-deal]")).toHaveCount(1);
   await expect(codes(page).locator("[data-deal]")).toHaveCount(1);
+  // The third section lists current prices without a stated previous price: none of the fixtures
+  // qualifies (the out-of-stock and broken offers must not fall through into it).
+  const recent = page.getByRole("region", { name: "Recently verified" });
+  await expect(recent).toBeVisible();
+  await expect(recent.locator("[data-deal]")).toHaveCount(0);
   const drop = drops(page).locator("[data-deal]").first();
   await expect(drop).toContainText(FIX.valid.product);
   await expect(drop.getByText("Verified", { exact: true }).first()).toBeVisible();
@@ -69,13 +74,20 @@ test("deals: only the valid drop and the verified code are listed, with the righ
   await expect(viewDeal(drop)).toHaveAttribute("href", FIX.valid.url);
 
   const code = codes(page).locator("[data-deal]").first();
+  // Brand, the offer exactly as stated, the code with "Copy code", when it was verified, the stated
+  // terms and expiry, and "View offer" to the brand's own page that publishes it.
+  await expect(code.getByRole("heading", { name: new RegExp(`^${FIX.brand.name}\\b`) })).toBeVisible();
+  await expect(code.locator(".cc-offer")).toHaveText(FIX.codes.verifiedDiscount);
   await expect(code.locator("code")).toHaveText(FIX.codes.verified);
-  await expect(copyButton(code)).toBeVisible();
-  await expect(code).toContainText(new RegExp(`Offer\\s*${FIX.codes.verifiedDiscount}`));
+  await expect(copyButton(code)).toHaveText("Copy code");
+  await expect(code).toContainText(/✓\s*Verified\s*1 hour ago/);
+  await expect(code.locator("time[datetime]").first()).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}T/);
+  await expect(code).toContainText(/Terms\s*New and returning customers/);
   await expect(code).toContainText(/Expires\s*[A-Z][a-z]{2} \d{1,2}, \d{4} \(as stated\)/);
-  await expect(code).toContainText(/Last checked\s*1 hour ago/);
-  await expect(code).toContainText(FIX.brand.name);
+  await expect(code).not.toContainText("Last checked");
+  await expect(codeLinkOf(code)).toHaveCount(1);
   await expect(codeLinkOf(code)).toHaveAttribute("href", FIX.promoUrl);
+  await expect(codeLinkOf(code)).toHaveAttribute("rel", /\bnofollow\b.*\bnoopener\b|\bnoopener\b.*\bnofollow\b/);
 
   const text = await page.locator("body").innerText();
   for (const hidden of HIDDEN_TEXT) expect(text, `"${hidden}" must not be listed`).not.toContain(hidden);
@@ -118,13 +130,13 @@ test("deals: Copy copies the code and announces it", async ({ browser }) => {
   await context.close();
 });
 
-test("deals: keyboard reaches View deal, Copy and Use code with a visible focus ring", async ({ page }) => {
+test("deals: keyboard reaches View deal, Copy code and View offer with a visible focus ring", async ({ page }) => {
   await page.goto("/deals");
   await settle(page);
   const targets: Array<[string, RegExp]> = [
     ["View deal", /^View deal\b/],
-    ["Copy", /^Copy\b/],
-    ["Use code", /^Use code\b/],
+    ["Copy code", /^Copy code\b/],
+    ["View offer", /^View offer\b/],
   ];
   const reached = new Map<string, { visible: boolean; style: string }>();
   await page.locator("body").focus();

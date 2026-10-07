@@ -1186,6 +1186,24 @@ model CommerceBrand {
   consecutiveFailures  Int               @default(0)
   lastError            String?
   notes                String?
+  /// Official logo (lib/commerce/brand-logos.ts). The URL is linked, never re-hosted. Shown only when logoStatus = VERIFIED.
+  logoUrl              String?
+  /// "official-jsonld" | "official-icon" | "wikidata-commons" | "admin-url" (admin override, see logoLocked).
+  logoSource           String?
+  /// The page or item the logo was read from (official home page, Wikidata item, or the admin's pasted URL).
+  logoSourceUrl        String?
+  /// Licence short name for Wikimedia Commons files (e.g. "Public domain", "CC BY-SA 4.0"); null for official-site logos.
+  logoLicense          String?
+  logoWidth            Int?
+  logoHeight           Int?
+  logoMime             String?
+  logoCheckedAt        DateTime?
+  logoVerifiedAt       DateTime?
+  /// "VERIFIED" | "NOT_FOUND" | "FAILED" | "REJECTED"; null = never checked.
+  logoStatus           String?
+  logoReason           String?
+  /// Admin-chosen logo: the brand-logos job never overwrites a locked brand.
+  logoLocked           Boolean           @default(false)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   runs                 CommerceRun[]
@@ -1193,6 +1211,7 @@ model CommerceBrand {
   coupons              CommerceCoupon[]
 
   @@index([enabled, nextCrawlAt])
+  @@index([logoStatus, logoCheckedAt])
   @@map("commerce_brands")
 }
 

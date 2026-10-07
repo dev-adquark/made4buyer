@@ -7,7 +7,7 @@ import { isCommonsFileUrl, isFreeLicence, type CommonsImage } from "@/lib/produc
 import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
 import { productTypeTopic } from "@/lib/images/product-type";
 import { imageTopic, photoMatchesTopic, type ImageTopic } from "./image-topics";
-import { searchCommonsProductPhoto } from "@/lib/images/commons-search";
+import { commonsFileTitle, namesSeveralProducts, searchCommonsProductPhoto } from "@/lib/images/commons-search";
 
 /**
  * Stage IMAGE_ENRICHMENT. Never blocks publishing. A wrong image is worse than no image.
@@ -204,10 +204,16 @@ export function neutralCategoryDecision(categorySlug: string | null | undefined,
 }
 
 /** A licensed Commons photo of the exact product, if one loads. */
-async function fromProductImages(images: CommonsImage[], issues: ImageDecision["issues"]): Promise<ImageDecision | null> {
+async function fromProductImages(images: CommonsImage[], issues: ImageDecision["issues"], product: { productName: string; brand?: string | null }): Promise<ImageDecision | null> {
   for (const img of images) {
     // Defence in depth: the lookup validated these, but never show an unlicensed or off-Commons file.
     if (!isCommonsFileUrl(img.url) || !isFreeLicence(img.license)) continue;
+    // A group shot (its file title names several products) is never one product's exact photo.
+    const title = commonsFileTitle(img.filePageUrl) ?? commonsFileTitle(img.url);
+    if (title && namesSeveralProducts(title, product.productName, product.brand)) {
+      issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Commons file names several products, not this product's exact photo: ${title}`.slice(0, 300) });
+      continue;
+    }
     const probe = await probeImage(img.url);
     if (!probe.ok) {
       issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Commons product image unusable: ${probe.reason}` });
@@ -265,7 +271,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
 
   // 1. Single-product content: a licensed photo of the exact product comes first.
   if (single && input.productImages?.length) {
-    const product = await fromProductImages(input.productImages, issues);
+    const product = await fromProductImages(input.productImages, issues, input);
     if (product) return product;
   }
 
@@ -302,7 +308,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
     // 2. A freely licensed Commons photo whose own file title names this exact product.
     const commons = await searchCommonsProductPhoto({ productName: input.productName, brand: input.brand }).catch(() => null);
     if (commons) {
-      const found = await fromProductImages([commons], issues);
+      const found = await fromProductImages([commons], issues, input);
       if (found) return found;
     }
     // 3. A labelled illustrative photo of this KIND of product (its type read from the product

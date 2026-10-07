@@ -33,14 +33,17 @@ export const cardSelect = {
   author: true,
   generationMeta: true,
   entities: { select: { source: true } },
-  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true } },
+  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true, subject: true } },
 } satisfies Prisma.NormalizedReviewSelect;
 
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;
 
 export function cardImage(r: ReviewCard) {
   // Same display guard as the review page: only relevant images.
-  return publicImageUrl(relevantImage(r.images[0], { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct: r.kind === "REVIEW" }), r.categorySlug);
+  const asset = relevantImage(r.images[0], { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct: r.kind === "REVIEW" });
+  const pub = publicImageUrl(asset, r.categorySlug);
+  // A topic/stock photo on a single-product card is labelled, so it is never read as the product itself.
+  return { ...pub, illustrative: !pub.isFallback && r.kind === "REVIEW" && (asset as { subject?: string | null } | null | undefined)?.subject === "ILLUSTRATIVE" };
 }
 
 export const categoryCounts = cache(async () => {

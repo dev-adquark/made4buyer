@@ -13,11 +13,13 @@ import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
 import { runClassifyDeals } from "@/lib/commerce/classify";
+import { runBrandLogos } from "@/lib/commerce/brand-logos";
 import { pruneVerificationEvents } from "@/lib/commerce/verification-events";
 import { continueWeeklyRefresh, runWeeklyRefresh } from "@/lib/commerce/weekly-refresh";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfillWithCorrection } from "@/lib/images/hero-correction";
+import { runImageIntegrity } from "@/lib/images/integrity";
 import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
 import { runTitleYearFix } from "./title-years";
@@ -77,6 +79,8 @@ export const JOBS = {
   "reclassify-content": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runReclassify(trigger), locked: true },
   "fix-title-years": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runTitleYearFix(trigger), locked: true },
   "enrich-images": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runImageBackfillWithCorrection(trigger, { limit: 60, pauseMs: 250 }), locked: true },
+  // Image integrity (lib/images/integrity.ts): broken hero images fall back to the placeholder, recovered ones are restored; never deletes.
+  "image-integrity": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runImageIntegrity(trigger), locked: true },
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
   "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
@@ -107,6 +111,8 @@ export const JOBS = {
   "data-audit": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runDataAudit(trigger), locked: true },
   // Weekly deals refresh (lib/commerce/weekly-refresh.ts): called daily; sweeps once per configured weekly slot, resumable.
   "deals-weekly-refresh": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runWeeklyRefresh(trigger), locked: true },
+  // Official brand logos (lib/commerce/brand-logos.ts): official site JSON-LD/icons, then Wikidata P154 → Commons; bounded, polite.
+  "brand-logos": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runBrandLogos(trigger), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -132,6 +138,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-official-verify": ["commerce_engine"],
   "commerce-classify-deals": ["commerce_engine"],
   "deals-weekly-refresh": ["commerce_engine"],
+  "brand-logos": ["commerce_engine"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED", "BUDGET_EXHAUSTED"]);

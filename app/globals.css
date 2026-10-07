@@ -5,6 +5,58 @@
    used like an editor's highlighter — rarely, and always meaning something.
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ── Metric-matched fallbacks (CLS) ──────────────────────────────────────
+   Text paints first in a local font, then swaps to the web font (font-display: swap). These faces
+   size the local font so the swap does not reflow the page; app/layout.tsx puts them in each
+   next/font stack (adjustFontFallback: false). Values were measured in Chromium against the
+   self-hosted woff2 files: rendered-width ratio of a mixed-case sample at the weights and "wdth"
+   settings this stylesheet uses, and the web fonts' ascent/descent (overrides = metric ÷ size-adjust).
+   Two local candidates per face: Arial / Times New Roman (macOS, Windows, iOS) and Roboto /
+   Noto Serif (Android, where Arial and Times are absent; a face whose local() fonts are all
+   missing is skipped, so the next family in the stack applies).
+   - Anybody is set condensed (wdth 60–80): Arial Bold × ~0.78 at 700/900 (uppercase statements,
+     prices, the masthead); at 800 × 0.935 for headings (wdth 78–80, font-stretch 80 % or normal) and
+     × 0.85 where a rule declares font-stretch 70–76 % (the article headline, wdth 72). Roboto is
+     narrower (× 0.83; × 0.99 / 0.90 at 800).
+     Big uppercase titles set at wdth 60–66 (.page-hero h1, issue panels) also declare a matching
+     font-stretch, which selects the narrow faces (Arial × 0.60 at 800, × 0.69 at 900, × 0.72 at 700;
+     Roboto × 0.64 / 0.71 / 0.77). Anybody: ascent 0.795, descent 0.24.
+   - Newsreader: Times New Roman × 1.037, Noto Serif × 0.886. Ascent 0.735, descent 0.265.
+   - Schibsted Grotesk: Arial × 1.048 (regular), Arial Bold × 1.00 (600) / 1.018 (700–800);
+     Roboto × 1.052 / 1.064 / 1.084.
+     Ascent 0.977, descent 0.258.
+   - IBM Plex Mono: Courier New / Menlo / Roboto Mono share the 0.6 em advance, so size-adjust is
+     100 %; only the vertical metrics change (ascent 1.025, descent 0.275).
+   Bold faces are named so the browser never synthesises bold (which widens text).
+   Measures on elements in one known face are in em, not ch: `ch` follows whichever font is loaded
+   (the fallback's "0" is 5–18 % narrower), so a ch max-width reflowed text on swap. The em values
+   equal the old ch widths in the web font (Newsreader 1ch = 0.566em, Anybody 900 wdth 64 = 0.456em). */
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 70% 200%; font-weight: 100 749; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 78%; ascent-override: 101.9%; descent-override: 30.8%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 70% 76.9%; font-weight: 750 849; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 85%; ascent-override: 93.5%; descent-override: 28.2%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 77% 200%; font-weight: 750 849; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 93.5%; ascent-override: 85%; descent-override: 25.7%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 70% 200%; font-weight: 850 1000; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 78%; ascent-override: 101.9%; descent-override: 30.8%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 70% 200%; font-weight: 100 749; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 83%; ascent-override: 95.8%; descent-override: 28.9%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 70% 76.9%; font-weight: 750 849; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 90%; ascent-override: 88.3%; descent-override: 26.7%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 77% 200%; font-weight: 750 849; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 99%; ascent-override: 80.3%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 70% 200%; font-weight: 850 1000; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 83%; ascent-override: 95.8%; descent-override: 28.9%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 50% 69.9%; font-weight: 100 749; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 72%; ascent-override: 110.4%; descent-override: 33.3%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 50% 69.9%; font-weight: 750 849; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 59.7%; ascent-override: 133.2%; descent-override: 40.2%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 50% 69.9%; font-weight: 850 1000; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 69%; ascent-override: 115.2%; descent-override: 34.8%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 100 749; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 76.7%; ascent-override: 103.7%; descent-override: 31.3%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 750 849; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 64.3%; ascent-override: 123.6%; descent-override: 37.3%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 850 1000; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 71.4%; ascent-override: 111.3%; descent-override: 33.6%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Read Fallback"; src: local("Times New Roman"), local("TimesNewRomanPSMT"); size-adjust: 103.7%; ascent-override: 70.9%; descent-override: 25.6%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Read Fallback"; font-style: italic; src: local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT"); size-adjust: 103.7%; ascent-override: 70.9%; descent-override: 25.6%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Read Fallback Noto"; src: local("Noto Serif"), local("NotoSerif-Regular"), local("Droid Serif"); size-adjust: 88.6%; ascent-override: 83%; descent-override: 29.9%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Read Fallback Noto"; font-style: italic; src: local("Noto Serif Italic"), local("NotoSerif-Italic"); size-adjust: 88.6%; ascent-override: 83%; descent-override: 29.9%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback"; font-weight: 100 549; src: local("Arial"), local("ArialMT"), local("Helvetica Neue"), local("HelveticaNeue"); size-adjust: 104.8%; ascent-override: 93.2%; descent-override: 24.6%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback"; font-weight: 550 649; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 100%; ascent-override: 97.7%; descent-override: 25.8%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback"; font-weight: 650 1000; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 101.8%; ascent-override: 96%; descent-override: 25.3%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback Roboto"; font-weight: 100 549; src: local("Roboto"), local("Roboto-Regular"); size-adjust: 105.2%; ascent-override: 92.8%; descent-override: 24.5%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback Roboto"; font-weight: 550 649; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 106.4%; ascent-override: 91.8%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "M4B UI Fallback Roboto"; font-weight: 650 1000; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 108.4%; ascent-override: 90.1%; descent-override: 23.8%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Mono Fallback"; src: local("Courier New"), local("CourierNewPSMT"), local("Menlo"), local("Menlo-Regular"), local("Roboto Mono"), local("RobotoMono-Regular"), local("DejaVu Sans Mono"), local("Liberation Mono"), local("Droid Sans Mono"); size-adjust: 100%; ascent-override: 102.5%; descent-override: 27.5%; line-gap-override: 0%; }
+
 :root {
   /* paper & ink */
   --paper: #eeebe3;
@@ -119,7 +171,7 @@ p { margin: 0 0 14px; max-width: 68ch; }
 .section.tight { padding-block: calc(var(--sec) * 0.55); }
 .muted { color: var(--muted); }
 .small { font-size: 14px; }
-.lede { font-family: var(--f-read); font-size: clamp(19px, 1.7vw, 24px); line-height: 1.45; color: var(--ink-2); max-width: 46ch; }
+.lede { font-family: var(--f-read); font-size: clamp(19px, 1.7vw, 24px); line-height: 1.45; color: var(--ink-2); max-width: 26em; }
 .mono, .label { font-family: var(--f-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.4; }
 .label.muted { color: var(--muted); }
 .ink-section { background: var(--black); color: var(--on-dark); }
@@ -403,7 +455,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .feature-story .media img { width: 100%; height: 100%; object-fit: cover; color: transparent; transition: transform var(--t-slow) var(--ease); }
 .feature-story:hover .media img { transform: scale(1.025); }
 .feature-story h3 { font: 800 clamp(34px, 4.4vw, 68px)/0.95 var(--f-display); font-variation-settings: "wdth" 78; letter-spacing: -0.01em; margin: 18px 0 12px; }
-.feature-story .summary { font-family: var(--f-read); font-size: 20px; line-height: 1.45; color: var(--ink-2); max-width: 52ch; }
+.feature-story .summary { font-family: var(--f-read); font-size: 20px; line-height: 1.45; color: var(--ink-2); max-width: 29.4em; }
 .story-list { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; }
 .story-list > li { border-bottom: 1px solid var(--rule); }
 .story-list > li:first-child { border-top: 0; }
@@ -474,8 +526,8 @@ legend { font-weight: 700; padding: 0 6px; }
 .issue-panel { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; min-height: 560px; padding: 18px; color: var(--ink); text-decoration: none; transition: background var(--t) var(--ease); }
 .issue-panel:hover { background: var(--cat-soft); color: var(--ink); }
 .issue-panel .ip-num { display: flex; justify-content: space-between; align-items: baseline; }
-.issue-panel .ip-num span:first-child { font: 900 64px/1 var(--f-display); font-variation-settings: "wdth" 60; }
-.issue-panel h3 { font: 900 clamp(46px, 4.6vw, 72px)/0.9 var(--f-display); font-variation-settings: "wdth" 66; text-transform: uppercase; margin: 6px 0 14px; transition: font-variation-settings var(--t-slow) var(--ease); }
+.issue-panel .ip-num span:first-child { font: 900 64px/1 var(--f-display); font-stretch: 60%; font-variation-settings: "wdth" 60; }
+.issue-panel h3 { font: 900 clamp(46px, 4.6vw, 72px)/0.9 var(--f-display); font-stretch: 66%; font-variation-settings: "wdth" 66; text-transform: uppercase; margin: 6px 0 14px; transition: font-variation-settings var(--t-slow) var(--ease); }
 .issue-panel:hover h3 { font-variation-settings: "wdth" 88; }
 .issue-panel .ip-media { position: relative; overflow: hidden; background: var(--cat); aspect-ratio: 4 / 5; margin-bottom: 14px; }
 .issue-panel .ip-media img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.05); mix-blend-mode: multiply; transition: transform var(--t-slow) var(--ease), filter var(--t-slow); }
@@ -486,13 +538,13 @@ legend { font-weight: 700; padding: 0 6px; }
 .issue-panel dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin: 0; border-top: 1px solid var(--ink); }
 .issue-panel dl div { padding: 10px 6px 0 0; }
 .issue-panel dt { font: 500 10.5px var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
-.issue-panel dd { margin: 2px 0 0; font: 800 26px/1 var(--f-display); font-variation-settings: "wdth" 70; }
+.issue-panel dd { margin: 2px 0 0; font: 800 26px/1 var(--f-display); font-stretch: 70%; font-variation-settings: "wdth" 70; }
 
 /* compare teaser */
 .duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); border: 1px solid var(--ink); background: var(--sheet); }
 .duel-side { padding: clamp(16px, 2vw, 28px); min-width: 0; }
 .duel-side img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--cat-soft); margin-bottom: 14px; color: transparent; }
-.duel-side h3 { font: 800 clamp(28px, 3vw, 42px)/0.95 var(--f-display); font-variation-settings: "wdth" 75; margin-bottom: 14px; }
+.duel-side h3 { font: 800 clamp(28px, 3vw, 42px)/0.95 var(--f-display); font-stretch: 75%; font-variation-settings: "wdth" 75; margin-bottom: 14px; }
 .duel-side h3 a { text-decoration: none; }
 .duel-vs { display: grid; place-items: center; border-inline: 1px solid var(--rule); padding: 0 14px; font: 900 34px/1 var(--f-display); font-variation-settings: "wdth" 60; writing-mode: vertical-rl; text-transform: uppercase; }
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); margin: 0; font: 13px var(--f-mono); }
@@ -521,7 +573,7 @@ legend { font-weight: 700; padding: 0 6px; }
 
 /* ── empty states: designed, never fake ───────────────────────────────── */
 .empty, .empty-sheet { position: relative; padding: clamp(28px, 4vw, 56px); background: var(--sheet); border: 1px solid var(--ink); }
-.empty-sheet .es-title, .empty h2, .empty h3 { font: 900 clamp(34px, 4.6vw, 72px)/0.9 var(--f-display); font-variation-settings: "wdth" 66; text-transform: uppercase; margin: 10px 0 14px; max-width: 16ch; }
+.empty-sheet .es-title, .empty h2, .empty h3 { font: 900 clamp(34px, 4.6vw, 72px)/0.9 var(--f-display); font-stretch: 66%; font-variation-settings: "wdth" 66; text-transform: uppercase; margin: 10px 0 14px; max-width: 7.5em; /* = 16ch of Anybody at wdth 66; ch would follow the fallback font before the swap */ }
 .empty p, .empty-sheet p { font-family: var(--f-read); font-size: 18px; color: var(--ink-2); margin-bottom: 0; }
 .empty .btnrow { margin-bottom: 0; }
 .empty::before { content: "EMPTY"; position: absolute; right: clamp(16px, 3vw, 40px); top: clamp(16px, 3vw, 32px); font: 500 11px var(--f-mono); letter-spacing: 0.12em; color: var(--muted); border: 1px dashed var(--rule-strong); padding: 4px 8px; transform: rotate(4deg); }
@@ -545,9 +597,12 @@ legend { font-weight: 700; padding: 0 6px; }
 /* ── page heads (listing pages) ───────────────────────────────────────── */
 .page-hero { position: relative; padding: clamp(28px, 4vw, 56px) 0 clamp(24px, 3vw, 40px); border-bottom: 1px solid var(--ink); }
 .page-hero .ph-top { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: baseline; }
-.page-hero h1 { font-size: clamp(64px, 12vw, 200px); line-height: 0.82; text-transform: uppercase; font-variation-settings: "wdth" 62; letter-spacing: -0.01em; margin: 10px 0 18px; }
+.page-hero h1 { font-size: clamp(64px, 12vw, 200px); line-height: 0.82; text-transform: uppercase; font-stretch: 62%; font-variation-settings: "wdth" 62; letter-spacing: -0.01em; margin: 10px 0 18px; }
 .page-hero h1 .swatch { display: none; }
-.page-hero .lede { max-width: 56ch; }
+/* The /deals subtitle is set uppercase at wdth 88, which is as wide as lowercase at wdth 72: this
+   picks the matching metric fallback face (see "Metric-matched fallbacks" at the top). */
+.page-hero h1 .deals-sub { font-stretch: 72%; }
+.page-hero .lede { max-width: 31.7em; }
 .page-hero .issue-no { font: 900 clamp(64px, 12vw, 200px)/0.82 var(--f-display); font-variation-settings: "wdth" 50; color: var(--cat); -webkit-text-stroke: 0; }
 .page-hero.has-issue .ph-title { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 clamp(14px, 2vw, 32px); align-items: end; }
 .page-hero.on-ink, .page-hero.dark { background: var(--black); color: var(--on-dark); border-color: var(--black); }
@@ -585,8 +640,8 @@ legend { font-weight: 700; padding: 0 6px; }
 }
 .article-hero { border-bottom: 1px solid var(--ink); padding-top: clamp(20px, 3vw, 40px); }
 .article-hero .ah-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gutter); align-items: end; padding-bottom: clamp(24px, 3vw, 44px); }
-.article-hero h1 { font-size: clamp(42px, 5.6vw, 92px); line-height: 0.92; font-variation-settings: "wdth" 72; margin: 14px 0 18px; }
-.article-hero .lede { max-width: 40ch; }
+.article-hero h1 { font-size: clamp(42px, 5.6vw, 92px); line-height: 0.92; font-stretch: 72%; font-variation-settings: "wdth" 72; margin: 14px 0 18px; }
+.article-hero .lede { max-width: 22.6em; }
 .doc-figure { margin: 0; }
 .doc-figure .frame { position: relative; overflow: hidden; background: var(--cat-soft); aspect-ratio: 4 / 3; }
 .doc-figure .frame img { width: 100%; height: 100%; object-fit: cover; color: transparent; transform: translateY(var(--parallax, 0)) scale(1.06); }
@@ -605,9 +660,9 @@ legend { font-weight: 700; padding: 0 6px; }
 .doc-main > section { scroll-margin-top: calc(var(--header-h) + 64px); margin-bottom: clamp(40px, 5vw, 64px); }
 .doc-main > section > h2 { font-size: clamp(34px, 3.4vw, 52px); padding-top: 14px; border-top: 1px solid var(--ink); }
 .prose { font-family: var(--f-read); }
-.prose p { font-size: clamp(18px, 1.35vw, 21px); line-height: 1.7; margin: 0 0 1.05em; max-width: 64ch; }
+.prose p { font-size: clamp(18px, 1.35vw, 21px); line-height: 1.7; margin: 0 0 1.05em; max-width: 36.2em; }
 .prose h2 { font-size: clamp(30px, 2.8vw, 44px); margin: 1.4em 0 0.4em; }
-.pullquote { margin: 1.2em 0 1.4em; padding: 0.4em 0 0.4em 0.9em; border-left: 6px solid var(--cat); font: 400 clamp(24px, 2.4vw, 34px)/1.25 var(--f-read); font-style: italic; max-width: 32ch; }
+.pullquote { margin: 1.2em 0 1.4em; padding: 0.4em 0 0.4em 0.9em; border-left: 6px solid var(--cat); font: 400 clamp(24px, 2.4vw, 34px)/1.25 var(--f-read); font-style: italic; max-width: 18.1em; }
 .pullquote footer { margin-top: 10px; font: 500 11.5px var(--f-mono); font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .callout { padding: 18px 20px; border: 1px solid var(--ink); background: var(--sheet); }
 .callout .label { display: block; margin-bottom: 6px; }
@@ -628,7 +683,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .offer-panel .btn.primary { width: 100%; margin-top: 16px; }
 .offer-alt { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--rule); }
 .no-offer { padding: 4px 0; }
-.no-offer strong { font: 800 26px/1 var(--f-display); font-variation-settings: "wdth" 72; display: block; margin-bottom: 8px; }
+.no-offer strong { font: 800 26px/1 var(--f-display); font-stretch: 72%; font-variation-settings: "wdth" 72; display: block; margin-bottom: 8px; }
 .no-offer p { margin: 0; color: var(--muted); font-size: 14.5px; }
 .disclosure { font-size: 13px; color: var(--muted); margin: 14px 0 0; }
 .where-to-buy { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); }
@@ -653,7 +708,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .compare-head > div { padding: 14px 16px; border-left: 1px solid var(--rule); min-width: 0; }
 .compare-head > div:first-child { border-left: 0; display: flex; align-items: flex-end; }
 .compare-head img { width: 100%; max-width: 200px; aspect-ratio: 3 / 2; object-fit: cover; background: var(--cat-soft); margin-bottom: 10px; color: transparent; }
-.compare-head .name { display: block; font: 800 24px/1 var(--f-display); font-variation-settings: "wdth" 75; text-decoration: none; margin-bottom: 4px; }
+.compare-head .name { display: block; font: 800 24px/1 var(--f-display); font-stretch: 75%; font-variation-settings: "wdth" 75; text-decoration: none; margin-bottom: 4px; }
 .compare-head .name:hover { text-decoration: underline; }
 .compare-head .remove { margin-top: 10px; }
 .compare-section { border-bottom: 1px solid var(--ink); }
@@ -677,7 +732,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .match-progress li[aria-current="step"] { border-top-color: var(--cat); color: var(--ink); }
 .match-progress a { text-decoration: none; }
 .match-progress .val { display: block; font: 600 13px var(--f-ui); text-transform: none; letter-spacing: 0; margin-top: 2px; color: var(--ink); }
-.match-q { font: 900 clamp(52px, 9vw, 150px)/0.86 var(--f-display); font-variation-settings: "wdth" 64; text-transform: uppercase; margin: clamp(28px, 5vw, 64px) 0 clamp(22px, 3vw, 36px); max-width: 14ch; }
+.match-q { font: 900 clamp(52px, 9vw, 150px)/0.86 var(--f-display); font-stretch: 64%; font-variation-settings: "wdth" 64; text-transform: uppercase; margin: clamp(28px, 5vw, 64px) 0 clamp(22px, 3vw, 36px); max-width: 6.4em; }
 .match-enter { animation: rise var(--t-slow) var(--ease) both; }
 @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
 .option-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 0; list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
@@ -686,7 +741,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .option-grid a:hover, .option-grid button:hover { background: var(--cat, var(--ink)); color: var(--cat-on, #fff); }
 .option-grid a:hover span, .option-grid button:hover span { color: inherit; }
 .option-grid button[aria-pressed="true"], .option-grid a[aria-current="true"] { background: var(--ink); color: var(--paper); }
-.option-grid strong { font: 800 clamp(26px, 2.6vw, 38px)/0.95 var(--f-display); font-variation-settings: "wdth" 72; }
+.option-grid strong { font: 800 clamp(26px, 2.6vw, 38px)/0.95 var(--f-display); font-stretch: 72%; font-variation-settings: "wdth" 72; }
 .option-grid span { font: 500 12px var(--f-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .option-grid svg { width: 28px; height: 28px; }
 .option-grid .off { cursor: default; color: var(--muted); background: repeating-linear-gradient(-45deg, transparent 0 8px, rgba(24, 24, 28, 0.05) 8px 9px); }
@@ -904,7 +959,7 @@ details summary { cursor: pointer; font-weight: 600; }
 }
 
 /* static pages: big editorial title, reading-width body */
-.doc-page h1 { font-size: clamp(56px, 10vw, 156px); line-height: 0.85; text-transform: uppercase; font-variation-settings: "wdth" 62; margin: 8px 0 28px; }
+.doc-page h1 { font-size: clamp(56px, 10vw, 156px); line-height: 0.85; text-transform: uppercase; font-stretch: 62%; font-variation-settings: "wdth" 62; margin: 8px 0 28px; }
 .doc-page .lede, .doc-page .prose > p:first-of-type { font-size: clamp(21px, 1.8vw, 26px); }
 .doc-page .prose a { text-decoration-thickness: 1px; }
 
@@ -930,3 +985,9 @@ details summary { cursor: pointer; font-weight: 600; }
 }
 .deals-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .deals-filter select { flex: 0 1 240px; min-height: 40px; max-width: 100%; }
+
+/* Card label for a topic photo on a single-product card (never presented as the product). */
+.review-card .media { position: relative; }
+.review-card .illus-tag { position: absolute; right: 8px; bottom: 8px; padding: 2px 6px; background: rgba(12, 12, 14, 0.78); color: #fff; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.04em; pointer-events: none; }
+.feature-story .media { position: relative; }
+.feature-story .illus-tag { position: absolute; right: 10px; bottom: 10px; padding: 2px 6px; background: rgba(12, 12, 14, 0.78); color: #fff; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.04em; pointer-events: none; }

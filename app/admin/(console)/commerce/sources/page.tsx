@@ -7,6 +7,7 @@ import { brandCounts, inCrawlWindow, listBrands, readBrandSeed, windowLabel, win
 import { db } from "@/lib/db";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { AddBrandForm, BRAND_API, BrandForm } from "./brand-form";
+import BrandLogoCell from "./brand-logo-cell";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Commerce sources" };
@@ -152,6 +153,7 @@ export default async function CommerceSourcesPage({ searchParams }: { searchPara
                 Records found
               </th>
               <th scope="col">Verification</th>
+              <th scope="col">Logo</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -239,6 +241,9 @@ export default async function CommerceSourcesPage({ searchParams }: { searchPara
                     )}
                     {(s?.products ?? 0) > 0 && <Link href={`/admin/commerce/products?brand=${encodeURIComponent(b.id)}`}>Products</Link>}
                   </td>
+                  <td data-label="Logo">
+                    <BrandLogoCell b={b} returnTo={returnTo} />
+                  </td>
                   <td data-label="Actions">
                     <div className="btnrow" style={{ margin: 0 }}>
                       <ActionForm action={BRAND_API} fields={{ id: b.id, action: "toggle" }} label={b.enabled ? "Disable" : "Enable"} returnTo={returnTo} />
@@ -253,7 +258,7 @@ export default async function CommerceSourcesPage({ searchParams }: { searchPara
             })}
             {!brands.length && (
               <tr>
-                <td colSpan={7}>{counts.total ? "No brands match the filter." : "No brands yet. Import the seed brands or add one below."}</td>
+                <td colSpan={8}>{counts.total ? "No brands match the filter." : "No brands yet. Import the seed brands or add one below."}</td>
               </tr>
             )}
           </tbody>

@@ -1,3 +1,4 @@
+import BrandLogo from "@/components/brand-logo";
 import CopyCodeButton from "@/components/copy-code-button";
 import type { PromoCode } from "@/lib/public/deals";
 import { relativeTime } from "@/lib/public/display";
@@ -15,7 +16,10 @@ export default function HomeCouponCard({ c }: { c: PromoCode }) {
   const checked = c.lastVerifiedAt ? relativeTime(c.lastVerifiedAt) : null;
   return (
     <article className="hc-card" style={themeStyle(c.categories[0]) as React.CSSProperties}>
-      <span className="hd-brand">{c.brandName}</span>
+      <span className="hd-brand">
+        <BrandLogo slug={c.brandSlug} name={c.brandName} height={16} />
+        {c.brandName}
+      </span>
       <h3 className="hc-offer">{c.discount ?? `Promo code from ${c.brandName}`}</h3>
       <span className="hc-code">
         <code id={codeId}>{c.code}</code>

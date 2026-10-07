@@ -59,7 +59,8 @@ export default function SafeImg({ src, fallback, alt, responsive, sizes, width, 
       width={width}
       height={height}
       alt={alt}
-      loading={priority ? "eager" : (loading ?? "lazy")}
+      // A high-priority (LCP) image is never lazy, whether marked with `priority` or `fetchPriority="high"`.
+      loading={priority || fetchPriority === "high" ? "eager" : (loading ?? "lazy")}
       fetchPriority={priority ? "high" : fetchPriority}
       decoding={decoding}
       style={fitStyle || style ? { ...style, ...fitStyle } : undefined}
