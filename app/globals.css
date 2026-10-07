@@ -991,3 +991,8 @@ details summary { cursor: pointer; font-weight: 600; }
 .review-card .illus-tag { position: absolute; right: 8px; bottom: 8px; padding: 2px 6px; background: rgba(12, 12, 14, 0.78); color: #fff; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.04em; pointer-events: none; }
 .feature-story .media { position: relative; }
 .feature-story .illus-tag { position: absolute; right: 10px; bottom: 10px; padding: 2px 6px; background: rgba(12, 12, 14, 0.78); color: #fff; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.04em; pointer-events: none; }
+
+/* Touch targets ≥ 24 px (WCAG 2.5.8) for small inline links, without changing their look. */
+.arrow-link { min-height: 24px; align-items: center; }
+.breadcrumbs ol { row-gap: 4px; }
+.breadcrumbs a { display: inline-flex; align-items: center; min-height: 24px; }
