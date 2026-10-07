@@ -449,17 +449,35 @@ export function couponMaxAgeDays(): number {
 }
 
 /** VERIFIED, started, unexpired and recently re-verified coupons for one brand (what the public component shows). */
+/** Public coupons: VERIFIED, re-seen within the max age, started and not expired. */
+function publicCouponWhere(now: Date) {
+  const since = new Date(now.getTime() - couponMaxAgeDays() * 86_400_000);
+  return {
+    status: "VERIFIED",
+    lastVerifiedAt: { gte: since },
+    AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }],
+  };
+}
+
 export async function verifiedCouponsFor(brand: { brandId?: string | null; merchant?: string | null }, now = new Date(), take = 6) {
   if (!brand.brandId && !brand.merchant) return [];
-  const since = new Date(now.getTime() - couponMaxAgeDays() * 86_400_000);
   return db.commerceCoupon.findMany({
-    where: {
-      status: "VERIFIED",
-      ...(brand.brandId ? { brandId: brand.brandId } : { merchant: brand.merchant! }),
-      lastVerifiedAt: { gte: since },
-      AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }],
-    },
+    where: { ...publicCouponWhere(now), ...(brand.brandId ? { brandId: brand.brandId } : { merchant: brand.merchant! }) },
     orderBy: [{ lastVerifiedAt: "desc" }],
     take,
   });
+}
+
+/** Public coupons for many brands in ONE query (at most `perBrand` each, newest first). */
+export async function verifiedCouponsForBrands(brandIds: string[], now = new Date(), perBrand = 6) {
+  if (!brandIds.length) return new Map<string, Awaited<ReturnType<typeof verifiedCouponsFor>>>();
+  const rows = await db.commerceCoupon.findMany({ where: { ...publicCouponWhere(now), brandId: { in: brandIds } }, orderBy: [{ lastVerifiedAt: "desc" }], take: 500 });
+  const out = new Map<string, typeof rows>();
+  for (const r of rows) {
+    if (!r.brandId) continue;
+    const list = out.get(r.brandId) ?? [];
+    if (list.length < perBrand) list.push(r);
+    out.set(r.brandId, list);
+  }
+  return out;
 }

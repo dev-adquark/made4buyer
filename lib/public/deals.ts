@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import { verifiedCouponsFor } from "@/lib/commerce/coupons";
+import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { registrableDomain } from "@/lib/net/ip";
@@ -219,7 +219,9 @@ export async function loadPriceDrops(now = Date.now()): Promise<PriceDrop[]> {
 
 export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, select: { id: true, name: true, slug: true, categories: true, officialDomain: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
-  const perBrand = await Promise.all(brands.map(async (b) => ({ b, coupons: await verifiedCouponsFor({ brandId: b.id }, now, 6) })));
+  // One query for every brand (a query per brand exhausted the connection pool with 100 brands).
+  const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, 6);
+  const perBrand = brands.map((b) => ({ b, coupons: byBrand.get(b.id) ?? [] }));
   const seen = new Set<string>();
   const out: PromoCode[] = [];
   for (const { b, coupons } of perBrand) {
