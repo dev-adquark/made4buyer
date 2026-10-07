@@ -589,7 +589,7 @@ export async function runWeeklyRefresh(trigger: string, opts: WeeklyRunOptions =
     const ids = await publicDealIds();
     state.counters.dealsAtStart = ids.length;
     await writeJson(SNAPSHOT_KEY, { sweepId: state.sweepId, ids }, trigger);
-    log.info("weekly deals sweep started", { stage: "COMMERCE", trigger, weekKey, forced, deals: ids.length });
+    log.info("weekly deals sweep started", { stage: "COMMERCE", trigger, week: weekKey, forced, deals: ids.length });
   }
   const s = state!;
   s.invocations++;
@@ -641,7 +641,7 @@ export async function runWeeklyRefresh(trigger: string, opts: WeeklyRunOptions =
   const invocationMs = Date.now() - t0;
   if (s.stage === "done") {
     const reason = summaryLine(s, s.counters.durationMs);
-    log.info("weekly deals sweep completed", { stage: "COMMERCE", trigger, weekKey: s.weekKey, ...s.counters });
+    log.info("weekly deals sweep completed", { stage: "COMMERCE", trigger, week: s.weekKey, ...s.counters });
     return { status: "COMPLETED", reason, weekKey: s.weekKey, sweepId: s.sweepId, stage: "done", progress: "done", counters: s.counters, errors: s.errors.slice(-10), invocationMs, durationMs: s.counters.durationMs, ...base };
   }
   const progress = progressLabel(s);
