@@ -1160,6 +1160,12 @@ model CommerceBrand {
   productUrlPatterns   String[]          @default([])
   /// Official promotions/offers pages (coupon extraction; first-party only).
   promoUrls            String[]          @default([])
+  /// Official sale/deal listing pages: crawled with a link selector (depth 1) to reach discounted product pages.
+  dealUrls             String[]          @default([])
+  /// Explicit official product pages crawled every run (in addition to discovery).
+  productUrls          String[]          @default([])
+  /// Currency of the brand's US storefront prices; offers in other currencies are not stored.
+  currency             String            @default("USD")
   enabled              Boolean           @default(true)
   priority             Int               @default(100)
   crawlFrequencyHours  Int               @default(24)
@@ -1236,6 +1242,8 @@ model CommerceRun {
   rejected       Int?
   errors         Json?
   usageUsd       Float?
+  /// Apify compute units used by the run (stats.computeUnits), when reported.
+  computeUnits   Float?
   startedAt      DateTime            @default(now())
   finishedAt     DateTime?
   collectedAt    DateTime?
@@ -1317,12 +1325,17 @@ model CommerceOffer {
   linkCheckedAt     DateTime?
   linkHttpStatus    Int?
   linkFinalUrl      String?
+  /// Persisted result of lib/commerce/deal-status.ts: ACTIVE | VERIFIED | EXPIRED | INVALID | BROKEN | CONFLICTING | UNVERIFIED.
+  dealStatus        String?
+  dealStatusReasons Json?
+  dealStatusAt      DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   product           CommerceProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([productId, destinationUrl])
   @@index([status, observedAt])
+  @@index([dealStatus])
   @@map("commerce_offers")
 }
 
@@ -1371,4 +1384,25 @@ model CommerceMatchLog {
   @@index([commerceProductId])
   @@index([result, createdAt])
   @@map("commerce_match_logs")
+}
+
+/// Every verification check the commerce engine performs (link, official page, coupon, price, identity),
+/// with its result — including checks that changed nothing. AuditLog keeps only changes.
+model CommerceVerificationEvent {
+  id         String   @id @default(cuid())
+  /// offer | coupon | product
+  entityType String
+  entityId   String
+  /// LINK | OFFICIAL | COUPON | PRICE | IDENTITY | DEAL_STATUS
+  kind       String
+  /// e.g. OK, BROKEN, VERIFIED, MISMATCH, ACTIVE, EXPIRED …
+  result     String
+  reason     String?
+  sourceUrl  String?
+  details    Json?
+  checkedAt  DateTime @default(now())
+
+  @@index([entityType, entityId, checkedAt])
+  @@index([kind, checkedAt])
+  @@map("commerce_verification_events")
 }
