@@ -996,3 +996,6 @@ details summary { cursor: pointer; font-weight: 600; }
 .arrow-link { min-height: 24px; align-items: center; }
 .breadcrumbs ol { row-gap: 4px; }
 .breadcrumbs a { display: inline-flex; align-items: center; min-height: 24px; }
+
+/* Large decorative issue number: the category's ink shade keeps ≥ 3:1 contrast on the paper background. */
+.page-hero .issue-no { color: var(--cat-ink, var(--cat)); }
