@@ -165,7 +165,7 @@ describe("commerce product runs", () => {
     expect(f).toMatchObject({ matchBasis: "brand+name", confidence: 0.9 });
   });
 
-  it("rejects a variant and an ambiguous match with a logged reason and writes no facts or offers", async () => {
+  it("rejects a variant and an ambiguous match with a logged reason; no facts attached, the official page keeps its own offer", async () => {
     const brand = await addBrand();
     await addEntity("Breville Barista Pro", "breville-barista-pro");
     await crawl(brand, [item()]);
@@ -174,7 +174,9 @@ describe("commerce product runs", () => {
     expect(p.identityReason).toContain("Barista Pro");
     expect(await db.commerceMatchLog.count({ where: { result: "MATCH_REJECTED" } })).toBe(1);
     expect(await db.productFact.count()).toBe(0);
-    expect(await db.commerceOffer.count()).toBe(0);
+    // The official page (with its stated model/SKU) is a product in its own right: its offer is
+    // stored for verified deals, but nothing is attached to a Made4Buyers product.
+    expect(await db.commerceOffer.count()).toBe(1);
 
     // Two Made4Buyers products that both read as this page: ambiguous, never attached.
     await addEntity("Breville Barista Express", "breville-barista-express");
@@ -185,7 +187,7 @@ describe("commerce product runs", () => {
     expect(p.identityReason).toMatch(/ambiguous: 2/);
     expect(await db.commerceMatchLog.count()).toBe(2);
     expect(await db.productFact.count()).toBe(0);
-    expect(await db.commerceOffer.count()).toBe(0);
+    expect(await db.commerceOffer.count()).toBe(1);
   });
 
   it("marks a product UNMATCHED when the brand has no Made4Buyers product, and counts unreadable items", async () => {
@@ -237,7 +239,7 @@ describe("commerce product runs", () => {
 
   it("skips (and records why) when the monthly budget is spent or the switch is off", async () => {
     const brand = await addBrand();
-    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "moJRLRc85AitArpNN", trigger: "test", status: "COLLECTED", usageUsd: 4.01 } });
+    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "moJRLRc85AitArpNN", trigger: "test", status: "COLLECTED", usageUsd: 30.01 } });
     const r = await startProductRun(brand, [EXPRESS_URL], "test");
     expect(r).toMatchObject({ status: "SKIPPED", code: "BUDGET_EXHAUSTED" });
     expect(await db.commerceRun.findUniqueOrThrow({ where: { id: r.runId } })).toMatchObject({ status: "SKIPPED", startUrls: 1 });
@@ -318,5 +320,23 @@ describe("live-sample regressions", () => {
     expect(collected).toMatchObject({ collected: 1 });
     expect(await db.commerceProduct.findFirstOrThrow()).toMatchObject({ identityStatus: "MATCHED" });
     expect(await db.commerceOffer.count()).toBe(0);
+  });
+});
+
+describe("standalone official products (no Made4Buyers review)", () => {
+  it("stores the official price of an identified product for deals, but not for a page without an identifier", async () => {
+    const brand = await addBrand();
+    await crawl(brand, [item()]);
+    const p = await db.commerceProduct.findUniqueOrThrow({ where: { canonicalUrl: EXPRESS_URL } });
+    expect(p).toMatchObject({ identityStatus: "UNMATCHED", productEntityId: null });
+    expect(await db.commerceOffer.count({ where: { productId: p.id } })).toBe(1);
+    expect(await db.productFact.count()).toBe(0);
+
+    const ld = { ...(expressJsonLd()[0] as Record<string, unknown>) };
+    for (const k of ["sku", "gtin", "gtin13", "gtin12", "mpn", "model", "productID"]) delete ld[k];
+    const url = "https://www.breville.com/us/en/products/espresso/no-identifier.html";
+    await crawl(brand, [item({ url, canonicalUrl: url, jsonLd: [{ ...ld, url }] })]);
+    const q = await db.commerceProduct.findUnique({ where: { canonicalUrl: url } });
+    if (q) expect(await db.commerceOffer.count({ where: { productId: q.id } })).toBe(0);
   });
 });

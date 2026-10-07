@@ -375,6 +375,12 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
 
 type ItemOutcome = { url: string; result: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED" | "NOT_EXTRACTED" | "ERROR"; reason?: string; entityIds?: string[] };
 
+/** A product identified by its own official page: official domain, a name and at least one identifier. */
+export function standaloneIdentity(n: NormalizedCommerceRecord & { ok: true }, brand: Pick<CommerceBrand, "officialDomain">): boolean {
+  const p = n.product;
+  return onDomain(n.pageUrl, brand.officialDomain) && !!p.name?.trim() && [p.sku, p.gtin, p.mpn, p.model].some((v) => typeof v === "string" && v.trim().length >= 2);
+}
+
 async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Date, cache: Map<string, Candidate[]>): Promise<ItemOutcome> {
   const n = normalizeCommerceRecord(raw.payload);
   if (!n.ok) return { url: raw.url, result: "NOT_EXTRACTED", reason: `${n.code}: ${n.reason}` };
@@ -395,7 +401,14 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
   }
   // Products whose official status may have changed with this decision.
   const entityIds = [decision.entityId, decision.nearEntityId, previous?.productEntityId].filter((x): x is string => !!x);
-  if (decision.status !== "MATCHED" || !decision.entityId || !decision.basis) return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds };
+  if (decision.status !== "MATCHED" || !decision.entityId || !decision.basis) {
+    // Not one of our reviewed products, but still a real product: on the brand's own official site
+    // with a stated identity (name + SKU/GTIN/MPN/model), its price is the official price of that
+    // exact product (the page IS the product). Store the offer so it can appear as a verified deal;
+    // facts are never attached to a Made4Buyers product without an exact match.
+    if (standaloneIdentity(n, brand)) await writeOffers(product.id, brand, n, source, raw, now);
+    return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds };
+  }
 
   const facts = factsFromPage(n.product, { source, sourceName: hostOf(n.pageUrl), sourceUrl: n.canonicalUrl, observedAt: now, matchBasis: decision.basis });
   await saveCommerceFacts(decision.entityId, facts, { confidence: confidenceOf(decision.basis), extractionMethod: n.extractionMethod, now });

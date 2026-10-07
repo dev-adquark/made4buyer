@@ -152,7 +152,7 @@ describe("commerce coupon crawl", () => {
 
   it("honours the monthly budget and needs an Apify token", async () => {
     const brand = await addBrand();
-    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 4.5 } });
+    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 30.5 } });
     expect(await runCouponCrawl("test")).toMatchObject({ status: "BUDGET_EXHAUSTED", started: 0 });
     expect(stub.posts).toHaveLength(0);
     const r = withEnv({ APIFY_API_TOKEN: undefined });
