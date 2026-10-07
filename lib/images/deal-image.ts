@@ -1,6 +1,6 @@
 import { variantParam } from "@/lib/commerce/shopify";
 import { registrableDomain } from "@/lib/products/page-extract";
-import { matchesImagePattern } from "./remote-patterns";
+import { onOfficialImageDomain } from "./remote-patterns";
 
 /**
  * Deal-card images: the official product page's OWN photo of that exact product / variant.
@@ -197,7 +197,8 @@ export function dealImage(product: DealImageProduct | null | undefined): DealIma
   }
   for (const img of storedDealImages(product.data)) {
     if (onDomainImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
-    if (!matchesImagePattern(img.src)) continue;
+    // On the brand's own official domain (checked above): loads directly from that domain.
+    if (!onOfficialImageDomain(img.src)) continue;
     return img;
   }
   return null;
