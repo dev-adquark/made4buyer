@@ -288,40 +288,67 @@ export default async function Home() {
         </section>
       )}
 
-      {/* ── Categories: compact tiles, only categories with published content ── */}
-      {activeCats.length > 0 && (
-        <section className="section home-cats" aria-labelledby="cats-title">
-          <div className="wrap">
-            <SectionHeader id="cats-title" label={`${activeCats.length} categories`} title="Browse by category" />
-            <HomeRail id="home-categories" label="Categories">
-              {activeCats.map((c) => {
-                const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
-                const counts = [c.reviews && `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}`, c.guides && `${c.guides} ${c.guides === 1 ? "guide" : "guides"}`, c.comparisons && `${c.comparisons} ${c.comparisons === 1 ? "comparison" : "comparisons"}`].filter(Boolean).join(" · ");
-                return (
-                  <li key={c.slug} style={style(c.slug)}>
-                    <Link className="hcat" href={`/category/${c.slug}`} draggable={false} data-cursor="Open">
-                      <span className="hcat-media">
-                        {photo ? (
-                          <>
-                            <SafeImg src={photo.url} fallback={placeholderPath(c.slug)} alt="" width={320} height={200} sizes="(max-width: 600px) 60vw, 240px" loading="lazy" decoding="async" draggable={false} />
-                            <span className="credit">Photo: {photo.photographer} / Pexels</span>
-                          </>
-                        ) : (
-                          <span className="fallback" aria-hidden="true">
-                            {c.name.slice(0, 1)}
-                          </span>
-                        )}
+      {/* ── Category issues ── */}
+      <section className="section tight home-issues" aria-labelledby="cats-title">
+        <div className="wrap">
+          <SectionHeader id="cats-title" label={`${ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0).length} categories`} title="Browse by category">
+            Swipe or scroll sideways. Each category is an issue with its own colour.
+          </SectionHeader>
+        </div>
+        <ul className="issue-rail" aria-label="Categories">
+          {/* Only categories with published content (same rule as the global nav); issue numbers run in order. */}
+          {ledger
+            .filter((c) => c.reviews + c.comparisons + c.guides > 0)
+            .map((c, i) => ({ ...c, issue: i + 1 }))
+            .map((c) => {
+            const photo = (photos as Record<string, { url: string; alt: string; photographer: string } | null>)[c.slug];
+            return (
+              <li key={c.slug} style={style(c.slug)}>
+                <Link className="issue-panel" href={`/category/${c.slug}`} data-cursor="Open">
+                  <span className="ip-num">
+                    <span aria-hidden="true">{String(c.issue).padStart(2, "0")}</span>
+                    <span className="cat-tag">Issue</span>
+                  </span>
+                  <h3>{c.name}</h3>
+                  <span className="ip-media">
+                    {photo ? (
+                      <>
+                        <SafeImg src={photo.url} fallback={placeholderPath(c.slug)} alt="" width={400} height={500} loading="lazy" decoding="async" />
+                        <span className="credit">Photo: {photo.photographer} / Pexels</span>
+                      </>
+                    ) : (
+                      <span className="fallback" aria-hidden="true">
+                        {c.name.slice(0, 1)}
                       </span>
-                      <span className="hcat-name">{c.name}</span>
-                      {counts && <span className="hcat-count">{counts}</span>}
-                    </Link>
-                  </li>
-                );
-              })}
-            </HomeRail>
-          </div>
-        </section>
-      )}
+                    )}
+                  </span>
+                  <span>
+                    <p>{c.description}</p>
+                    <dl>
+                      <div>
+                        <dt>Reviews</dt>
+                        <dd>{c.reviews}</dd>
+                      </div>
+                      <div>
+                        <dt>Comparisons</dt>
+                        <dd>{c.comparisons}</dd>
+                      </div>
+                      <div>
+                        <dt>Guides</dt>
+                        <dd>{c.guides}</dd>
+                      </div>
+                      <div>
+                        <dt>Prices</dt>
+                        <dd>{c.deals}</dd>
+                      </div>
+                    </dl>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       {/* ── Editorial: most read, buying guides and comparisons as compact lists ── */}
       {readCols.length > 0 && (

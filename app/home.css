@@ -123,3 +123,17 @@
   .home .collage { display: none; }
   .home .feature-story { padding-bottom: 14px; }
 }
+
+/* ── Browse by category (issue rail): same design; compact on phones so it doesn't take a full screen per panel ── */
+@media (max-width: 720px) {
+  .home .home-issues .issue-rail { grid-auto-columns: minmax(62vw, 260px); }
+  .home .home-issues .issue-panel { grid-template-rows: auto auto auto auto; min-height: 0; padding: 12px; }
+  .home .home-issues .issue-panel .ip-num span:first-child { font-size: 34px; }
+  .home .home-issues .issue-panel h3 { font-size: 30px; margin: 2px 0 8px; }
+  .home .home-issues .issue-panel .ip-media { aspect-ratio: 16 / 10; margin-bottom: 8px; }
+  .home .home-issues .issue-panel .ip-media .fallback { font-size: 96px; }
+  .home .home-issues .issue-panel p { font-size: 14px; line-height: 1.35; margin: 0 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .home .home-issues .issue-panel dl div { padding-top: 6px; }
+  .home .home-issues .issue-panel dt { font-size: 9.5px; }
+  .home .home-issues .issue-panel dd { font-size: 18px; }
+}
