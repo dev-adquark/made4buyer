@@ -12,7 +12,7 @@ import { brandKey, classifySource, sameProduct } from "@/lib/products/page-extra
 import type { Fact, FactSource, MatchResult, ProductIdentity } from "@/lib/products/types";
 import { sha256 } from "@/lib/util/text";
 import { commerceAudit, commerceAuditOnce } from "./audit";
-import { dueBrands, importSeedBrands } from "./brands";
+import { dueBrands, ensureBrandsSeeded } from "./brands";
 import { discoverProductUrls } from "./discovery";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { verifyOfficial } from "./official";
@@ -43,7 +43,7 @@ function envNum(name: string, fallback: number, min: number, max: number): numbe
 }
 
 export const monthlyBudgetUsd = () => envNum("COMMERCE_MONTHLY_BUDGET_USD", 4, 0, 10_000);
-export const brandsPerRun = () => Math.floor(envNum("COMMERCE_BRANDS_PER_RUN", 10, 1, 200));
+export const brandsPerRun = () => Math.floor(envNum("COMMERCE_BRANDS_PER_RUN", 6, 1, 200));
 
 const ACTIVE = ["READY", "RUNNING"];
 const FAILED = ["FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT", "ABORTING"];
@@ -527,8 +527,7 @@ const STOP_CODES = new Set(["APIFY_NOT_CONFIGURED", "SWITCH_OFF", "BUDGET_EXHAUS
 /** commerce-discover: discovered product URLs of due brands → one product run per brand. */
 export async function runCommerceDiscover(trigger: string, now = new Date()) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", started: 0 };
-  // First run on a fresh database: load the configured brand seed (idempotent; admin edits win).
-  if ((await db.commerceBrand.count()) === 0) await importSeedBrands();
+  await ensureBrandsSeeded();
   const limit = brandsPerRun();
   const brands = (await dueBrands(now, limit)).slice(0, limit);
   const results: Array<{ brand: string; status: string; discovery?: string; reason?: string }> = [];

@@ -239,3 +239,14 @@ describe("crawl windows and staggering", () => {
     }
   });
 });
+
+describe("ensureBrandsSeeded (first job on an empty production database)", () => {
+  it("imports the seed once, then never again", async () => {
+    const { ensureBrandsSeeded } = await import("@/lib/commerce/brands");
+    expect(await ensureBrandsSeeded()).toBe(true);
+    const n = await db.commerceBrand.count();
+    expect(n).toBe(100);
+    expect(await ensureBrandsSeeded()).toBe(false);
+    expect(await db.commerceBrand.count()).toBe(n);
+  });
+});

@@ -69,7 +69,17 @@ export const JOBS = {
   "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
   "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
   // Commerce intelligence engine (Apify, budget-capped): discover → start runs; collect → match → offers; first-party coupons.
-  "commerce-discover": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCommerceDiscover(trigger), locked: true },
+  // Each discover pass first collects finished product and coupon runs, so the every-2-hours
+  // passes keep collection current without relying on any other scheduler.
+  "commerce-discover": {
+    lockTtlMs: 15 * 60_000,
+    run: async (trigger: string) => {
+      const collected = await runCommerceCollect(trigger);
+      const coupons = await collectCouponRuns(trigger);
+      return { ...(await runCommerceDiscover(trigger)), collected: { checked: collected.checked, collected: collected.collected, staleOffers: collected.staleOffers }, coupons: { checked: coupons.checked, collected: coupons.collected } };
+    },
+    locked: true,
+  },
   "commerce-collect": { lockTtlMs: 20 * 60_000, run: async (trigger: string) => ({ ...(await runCommerceCollect(trigger)), coupons: await collectCouponRuns(trigger) }), locked: true },
   "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.

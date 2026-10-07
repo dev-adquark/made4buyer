@@ -11,6 +11,7 @@ import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, parseCoup
 import { commerceAudit } from "./audit";
 import { COUPON_PAGE_FUNCTION } from "./page-functions/coupon";
 import { revalidateCommerce } from "./revalidate";
+import { ensureBrandsSeeded } from "./brands";
 import { sourceRunnable } from "./sources";
 
 /**
@@ -151,6 +152,7 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
   const spent = await commerceSpendThisMonth();
   if (spent >= budget) return { status: "BUDGET_EXHAUSTED", started: 0, reason: `Commerce Apify spend this month $${spent.toFixed(2)} has reached the $${budget.toFixed(2)} budget (COMMERCE_MONTHLY_BUDGET_USD)` };
 
+  await ensureBrandsSeeded();
   const now = Date.now();
   const results: StartResult[] = [];
   const brands = await db.commerceBrand.findMany({ where: { enabled: true, promoUrls: { isEmpty: false } }, orderBy: [{ priority: "desc" }, { name: "asc" }] });
@@ -174,6 +176,7 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
     results.push(await startRun({ sourceId: s.id, name: s.slug, domain: s.domain, urls: s.startUrls }, trigger));
   }
   const started = results.filter((r) => r.status === "STARTED").length;
+  log.info("coupon crawl", { trigger, brands: brands.length, started, notDue: results.filter((r) => r.status === "NOT_DUE").length, skipped: results.filter((r) => r.status !== "STARTED" && r.status !== "NOT_DUE").length });
   return { status: "OK", started, results };
 }
 

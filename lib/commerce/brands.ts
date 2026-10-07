@@ -377,3 +377,10 @@ export async function dueBrands(now = new Date(), limit = 10): Promise<CommerceB
   });
   return candidates.filter((b) => inCrawlWindow(b, now) || windowOverdue(b, now)).slice(0, take);
 }
+
+/** First run on a fresh database: load the configured brand seed (idempotent; admin edits win). */
+export async function ensureBrandsSeeded(): Promise<boolean> {
+  if ((await db.commerceBrand.count()) > 0) return false;
+  await importSeedBrands();
+  return true;
+}
