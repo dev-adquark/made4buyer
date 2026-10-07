@@ -19,6 +19,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const fallback = NextResponse.redirect(new URL("/", req.url), 302);
   if (!/^[a-z0-9]{10,40}$/i.test(id)) return fallback;
+  // Abuse guard before any database work (per instance; clicks beyond 30/min are also not recorded below).
+  if (!memoryRateLimit(`go:${clientIp(req) ?? "unknown"}`, 120, 60_000)) return new NextResponse("Too many requests", { status: 429, headers: { "Retry-After": "60", "Cache-Control": "no-store" } });
   const offer = await db.commerceOffer.findUnique({ where: { id }, select: { id: true, status: true, destinationUrl: true, affiliateUrl: true, affiliateStatus: true, linkStatus: true, product: { select: { productEntityId: true } } } });
   if (!offer || (offer.status !== "FRESH" && offer.status !== "STALE") || !offer.product.productEntityId) return fallback;
   const link = await db.contentEntity.findFirst({

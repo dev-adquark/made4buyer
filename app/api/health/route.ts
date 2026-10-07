@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { integrationStatus, releaseInfo } from "@/lib/config";
+import { releaseInfo } from "@/lib/config";
 import { db } from "@/lib/db";
 import { checkSchema } from "@/lib/ops/schema-check";
 
@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const release = releaseInfo();
   const timestamp = new Date().toISOString();
-  const integrations = integrationStatus();
   let database: "ok" | "unavailable" = "ok";
   let latencyMs: number | undefined;
   try {
@@ -31,8 +30,7 @@ export async function GET() {
     timestamp,
     version: release.version,
     commit: release.commit,
-    environment: release.environment,
-    integrations,
+    // Which integrations are configured is admin-only information (Admin → Go-live); not public.
   };
   return NextResponse.json(body, { status: database === "ok" ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }

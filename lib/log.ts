@@ -32,7 +32,12 @@ export function redactString(value: string): string {
   let out = value;
   for (const secret of secretValues()) out = out.split(secret).join("[REDACTED]");
   // Never log credentials embedded in URLs.
-  return out.replace(/\/\/([^/@\s:]+):([^/@\s]+)@/g, "//[REDACTED]@");
+  return out
+    .replace(/\/\/([^/@\s:]+):([^/@\s]+)@/g, "//[REDACTED]@")
+    // Token-shaped values that are not (or no longer) in the environment: query tokens, Apify tokens, bearer headers.
+    .replace(/([?&](?:token|key|api_key|apikey|access_token)=)[^&\s"']+/gi, "$1[REDACTED]")
+    .replace(/apify_api_[A-Za-z0-9]+/g, "[REDACTED]")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}/gi, "$1[REDACTED]");
 }
 
 export function redact(value: unknown, depth = 0): unknown {

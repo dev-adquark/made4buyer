@@ -232,6 +232,7 @@ test("security: cron, health, robots and admin API protection", async ({ request
   const health = await (await request.get("/api/health")).json();
   expect(health).toMatchObject({ status: "ok", database: "ok" });
   expect(JSON.stringify(health)).not.toMatch(/postgres:|password/);
+  expect(health).not.toHaveProperty("integrations");
   expect(await (await request.get("/robots.txt")).text()).toMatch(/Sitemap: http:\/\/localhost:\d+\/sitemap\.xml/);
   expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { origin: "https://evil.example" } })).status()).toBe(403);
   expect((await request.post("/api/admin/reviews", { form: { id: "x", action: "publish" }, headers: { accept: "application/json", origin: `http://localhost:${process.env.E2E_PORT ?? 3100}` }, maxRedirects: 0 })).status()).toBe(401);

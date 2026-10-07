@@ -16,8 +16,11 @@ export async function POST(req: Request) {
   const form = await req.formData().catch(() => null);
   const email = String(form?.get("email") ?? "").slice(0, 200);
   const password = String(form?.get("password") ?? "").slice(0, 500);
-  const [byIp, byEmail] = await Promise.all([dbRateLimit(`login:ip:${ip}`, 10, 15 * 60_000), dbRateLimit(`login:email:${email.toLowerCase()}`, 5, 15 * 60_000)]);
-  if (!byIp.allowed || !byEmail.allowed) return back(req, "rate");
+  const [byIp, byEmail] = await Promise.all([dbRateLimit(`login:ip:${ip}`, 10, 15 * 60_000), dbRateLimit(`login:email:${ip}:${email.toLowerCase()}`, 5, 15 * 60_000)]);
+  // Per IP+email (so a stranger cannot lock the real admin out), plus a looser global cap per email
+  // against distributed guessing.
+  const emailGlobal = await dbRateLimit(`login:email-all:${email.toLowerCase()}`, 50, 15 * 60_000);
+  if (!byIp.allowed || !byEmail.allowed || !emailGlobal.allowed) return back(req, "rate");
   const ctx = { actor: email || "anonymous", ip, userAgent: req.headers.get("user-agent") };
   if (!validCredentials(email, password)) {
     await audit(ctx, { action: "admin.login_failed", entityType: "admin_session", entityId: "-" });
