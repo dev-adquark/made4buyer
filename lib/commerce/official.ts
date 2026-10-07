@@ -3,6 +3,7 @@ import { log } from "@/lib/log";
 import { brandKey } from "@/lib/products/page-extract";
 import { commerceAudit } from "./audit";
 import { onDomain } from "./urls";
+import { recordVerification, type VerificationEventInput } from "./verification-events";
 
 /**
  * Official-source verification (job "commerce-official-verify"; also run inline by commerce-collect
@@ -110,18 +111,32 @@ export async function verifyOfficial(ids?: string[], now = new Date()) {
   const decisions = await decideOfficial(ids, now);
   const counts: Record<string, number> = { VERIFIED: 0, MISMATCH: 0, NOT_FOUND: 0, NONE: 0 };
   let changed = 0;
+  const events: VerificationEventInput[] = [];
+  const written: string[] = [];
   for (const [id, d] of decisions) {
     counts[d.status ?? "NONE"]++;
     const e = d.entity;
+    // Every decision is a check (recorded even when nothing changed); "not checked" (no crawled brand) is not.
+    if (d.status) events.push({ entityType: "product", entityId: id, kind: "OFFICIAL", result: d.status, reason: d.reason, sourceUrl: d.url, details: { previous: e.officialStatus, changed: e.officialStatus !== d.status, verifiedAt: d.verifiedAt }, checkedAt: now });
     const same = e.officialStatus === d.status && e.officialUrl === d.url && (e.officialVerifiedAt?.getTime() ?? null) === (d.verifiedAt?.getTime() ?? null);
     if (same) continue;
+    written.push(id);
     await db.productEntity.update({ where: { id }, data: { officialStatus: d.status, officialUrl: d.url, officialVerifiedAt: d.verifiedAt } });
     if (e.officialStatus !== d.status) {
       changed++;
       await commerceAudit("OFFICIAL_VERIFICATION", "product_entity", id, { before: { officialStatus: e.officialStatus }, after: { officialStatus: d.status }, metadata: { url: d.url, reason: d.reason } });
     }
   }
-  return { checked: decisions.size, changed, ...counts };
+  await recordVerification(events);
+  // Official evidence feeds the deal status of these products' offers: re-classify them. Dynamic
+  // import: classify.ts → lib/public/deals.ts → deal-status.ts.
+  let dealStatus: { checked: number; changed: number } | { status: "FAILED"; reason: string } | undefined;
+  if (written.length) {
+    const { classifyOfferStatusesSafe } = await import("./classify");
+    const r = await classifyOfferStatusesSafe({ productEntityIds: written, now });
+    dealStatus = r.status === "OK" ? { checked: r.checked, changed: r.changed } : r;
+  }
+  return { checked: decisions.size, changed, ...counts, ...(dealStatus ? { dealStatus } : {}) };
 }
 
 /** Job "commerce-official-verify". Idempotent; run under a job lock. */

@@ -13,6 +13,8 @@ import type { Fact, FactSource, MatchResult, ProductIdentity } from "@/lib/produ
 import { sha256 } from "@/lib/util/text";
 import { commerceAudit, commerceAuditOnce } from "./audit";
 import { dueBrands, ensureBrandsSeeded } from "./brands";
+import { classifyOfferStatusesSafe } from "./classify";
+import { buildDealActorInput, crawlableStartUrls, dealPagesPerRun, fetchBrandRobots, followedPageAllowed, type BrandRobots, type RobotsRule } from "./deal-crawl";
 import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from "./discovery";
 import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
@@ -20,14 +22,18 @@ import { loadSummaryFacts } from "@/lib/products/current-facts";
 import { verifyOfficial } from "./official";
 import { PRODUCT_PAGE_FUNCTION } from "./page-functions/product";
 import { revalidateCommerce } from "./revalidate";
+import { syncSeedFields } from "./seed-sync";
 import { normalizeDestinationUrl, onDomain } from "./urls";
+import { recordIdentityDecision, recordPriceChange, recordPriceRejected } from "./verification-events";
 
 /**
  * Commerce intelligence engine, product extraction (apify/web-scraper).
  *
  *   commerce-discover → for due brands: offer pages due for a price re-check (lib/commerce/recheck.ts),
- *                       then discovered product URLs → startProductRun (one run per brand, depth 0:
- *                       only those URLs, robots.txt respected, budget- and switch-gated)
+ *                       then the brand's official deal pages (dealUrls, followed one level deep to
+ *                       product pages only — lib/commerce/deal-crawl.ts) and explicit productUrls,
+ *                       then discovered product URLs → startProductRun (one run per brand; without
+ *                       deal pages depth 0: only those URLs; robots.txt respected, budget- and switch-gated)
  *   commerce-collect  → poll RUNNING runs; for SUCCEEDED ones store every dataset item unchanged
  *                       (CommerceRawRecord), normalize, upsert CommerceProduct, match EXACTLY against
  *                       ProductEntity, and only then write ProductFacts + CommerceOffers with provenance.
@@ -61,7 +67,13 @@ export function backoffHours(consecutiveFailures: number): number {
 
 // ── Apify API (token stays server-side; never logged) ────────────────────────
 
-type ApifyRunData = { id: string; status: string; defaultDatasetId?: string; finishedAt?: string | null; statusMessage?: string | null; usageTotalUsd?: number | null };
+type ApifyRunData = { id: string; status: string; defaultDatasetId?: string; finishedAt?: string | null; statusMessage?: string | null; usageTotalUsd?: number | null; stats?: { computeUnits?: number | null } | null };
+
+/** Compute units Apify reports for a run (stats.computeUnits), when it reports a finite number. */
+const computeUnitsOf = (data: ApifyRunData): number | undefined => {
+  const v = data.stats?.computeUnits;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
+};
 
 async function apify<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown } = {}): Promise<T> {
   const token = config.apify.token();
@@ -123,7 +135,7 @@ function cleanUrls(brand: CommerceBrand, urls: string[]): string[] {
 const exactUrlRegex = (u: string) => `^${u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/?(?:[?#].*)?$`;
 
 /** Actor input: only the discovered product URLs (depth 0), robots.txt respected, Apify's default proxy pool. */
-export function buildProductActorInput(brand: Pick<CommerceBrand, "slug" | "productUrlPatterns">, urls: string[]) {
+export function buildProductActorInput(brand: Pick<CommerceBrand, "slug" | "productUrlPatterns">, urls: string[], opts: { robotsRules?: RobotsRule[] | null } = {}) {
   const productPatterns = brand.productUrlPatterns.length ? brand.productUrlPatterns.map(globToRegex) : urls.map(exactUrlRegex);
   return {
     startUrls: urls.map((url) => ({ url })),
@@ -134,9 +146,19 @@ export function buildProductActorInput(brand: Pick<CommerceBrand, "slug" | "prod
     injectJQuery: false,
     proxyConfiguration: { useApifyProxy: true },
     pageFunction: PRODUCT_PAGE_FUNCTION,
-    customData: { brand: brand.slug, productPatterns },
+    // robotsRules: the official host's robots.txt rules (null = not read: the page fetches nothing extra).
+    customData: { brand: brand.slug, productPatterns, robotsRules: opts.robotsRules ?? null },
   };
 }
+
+export type StartRunOptions = {
+  /** Official deal/sale listing pages (LISTING): the run then follows their product links one level deep. */
+  listingUrls?: string[];
+  /** robots.txt of the official host, read at run start (rules go to the page function). */
+  robots?: BrandRobots | null;
+  /** How many of the leading product URLs are price re-checks (they stay ahead of the deal pages). */
+  recheckUrls?: number;
+};
 
 async function recordSkip(brand: CommerceBrand, trigger: string, startUrls: number, code: string, reason: string, status = "SKIPPED") {
   const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: commerceActorId(), trigger, status, startUrls, errors: [{ code, reason }], finishedAt: new Date() } });
@@ -144,23 +166,28 @@ async function recordSkip(brand: CommerceBrand, trigger: string, startUrls: numb
 }
 
 /** Starts one product run for a brand, or records why it was skipped. Never throws. */
-export async function startProductRun(brand: CommerceBrand, urls: string[], trigger: string, note?: string): Promise<StartResult> {
+export async function startProductRun(brand: CommerceBrand, urls: string[], trigger: string, note?: string, opts: StartRunOptions = {}): Promise<StartResult> {
   const list = cleanUrls(brand, urls);
-  const skip = async (code: string, reason: string): Promise<StartResult> => ({ status: "SKIPPED", code, reason, runId: await recordSkip(brand, trigger, list.length, code, reason) });
+  const listing = [...new Set((opts.listingUrls ?? []).map((u) => normalizeUrl(u)).filter((u): u is string => !!u))].slice(0, 20);
+  const total = list.length + listing.filter((u) => !list.includes(u)).length;
+  const skip = async (code: string, reason: string): Promise<StartResult> => ({ status: "SKIPPED", code, reason, runId: await recordSkip(brand, trigger, total, code, reason) });
   if (!apifyConfigured()) return skip("APIFY_NOT_CONFIGURED", "APIFY_API_TOKEN not configured (BLOCKED_BY_ENVIRONMENT)");
   if (!(await getSwitches()).commerce_engine) return skip("SWITCH_OFF", "paused in Admin → Automation: Commerce engine is off");
   const budget = await commerceBudget();
   if (budget.exhausted) return skip("BUDGET_EXHAUSTED", `monthly Apify budget exhausted ($${budget.spentUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
-  if (!list.length) return skip("NO_URLS", note ? `no product URLs: ${note}` : "no product URLs discovered");
+  if (!list.length && !listing.length) return skip("NO_URLS", note ? `no product URLs: ${note}` : "no product URLs discovered");
   const active = await db.commerceRun.findFirst({ where: { brandId: brand.id, purpose: "PRODUCT", status: { in: [...ACTIVE, "SUCCEEDED", "COLLECTING"] } } });
   if (active) return { status: "SKIPPED", code: "ACTIVE_RUN", reason: `run ${active.apifyRunId ?? active.id} is still ${active.status}` };
   try {
     const q = new URLSearchParams({ timeout: String(config.apify.runTimeoutSecs()), memory: String(config.apify.memoryMb()) });
-    const { data } = await apify<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body: buildProductActorInput(brand, list) });
+    const robotsRules = opts.robots?.rules ?? null;
+    // One run per brand: with deal pages, the listing pages lead (after re-checks, which are in `list`).
+    const body = listing.length ? buildDealActorInput(brand, listing, list, { robotsRules, leadingProductUrls: opts.recheckUrls }) : buildProductActorInput(brand, list, { robotsRules });
+    const { data } = await apify<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body });
     if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
-    const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: commerceActorId(), apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, trigger, status: "RUNNING", startUrls: list.length } });
+    const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: commerceActorId(), apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, trigger, status: "RUNNING", startUrls: total } });
     await db.commerceBrand.update({ where: { id: brand.id }, data: { crawlStatus: "RUNNING" } });
-    log.info("commerce run started", { stage: "CONTENT_FETCH", brand: brand.slug, runId: data.id, urls: list.length });
+    log.info("commerce run started", { stage: "CONTENT_FETCH", brand: brand.slug, runId: data.id, urls: list.length, dealPages: listing.length });
     return { status: "STARTED", runId: run.id, apifyRunId: data.id };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
@@ -338,12 +365,16 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
   for (const o of n.offers) {
     // A product we have not reviewed is listed only for its price: no stated price, no offer.
     if (opts.requirePrice && !(typeof o.price === "number" && o.price > 0)) continue;
-    // A US-market brand shows US-dollar prices only; an offer in another currency belongs to another storefront.
-    const nonUsd = brand.market === "US" && o.currency && o.currency.toUpperCase() !== "USD";
+    // Currency as an upper-case ISO code everywhere ("usd" → "USD"): /deals and the status function match it exactly.
+    const currency = typeof o.currency === "string" && o.currency.trim() ? o.currency.trim().toUpperCase() : null;
+    // A US-market brand shows its storefront currency (USD) only; an offer in another currency belongs to another storefront.
+    const expected = (brand.currency || "USD").toUpperCase();
+    const wrongCurrency = brand.market === "US" && currency && currency !== expected;
     const invalid = o.price != null && !(Number.isFinite(o.price) && o.price > 0);
-    if (nonUsd || invalid) {
-      const reason = nonUsd ? `currency ${o.currency} is not USD for a US-market brand` : `invalid price ${o.price}`;
+    if (wrongCurrency || invalid) {
+      const reason = wrongCurrency ? `currency ${currency} is not ${expected} for a US-market brand` : `invalid price ${o.price}`;
       await commerceAuditOnce("PRICE_REJECTED", "commerce_product", productId, `${o.url ?? n.canonicalUrl}|${o.price}|${o.currency ?? ""}`, { metadata: { url: o.url ?? n.canonicalUrl, price: o.price ?? null, currency: o.currency ?? null, reason } });
+      await recordPriceRejected({ commerceProductId: productId, sourceUrl: o.url ?? n.canonicalUrl, price: o.price ?? null, listPrice: o.listPrice ?? null, currency: o.currency ?? null, reason, at: now });
       continue;
     }
     // Only an offer on this same site; an offer URL elsewhere is never used as a destination.
@@ -356,20 +387,21 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
       sellerType: source === "MANUFACTURER" ? "MANUFACTURER" : "RETAILER",
       price: o.price ?? null,
       listPrice: o.listPrice ?? null,
-      currency: o.currency ?? null,
+      currency,
       availability: o.availability ?? null,
       observedAt: now,
       sourceRawId: raw.id,
       status: "FRESH",
     };
     const key = { productId_destinationUrl: { productId, destinationUrl: dest } };
-    const before = await db.commerceOffer.findUnique({ where: key, select: { price: true, currency: true } });
+    const before = await db.commerceOffer.findUnique({ where: key, select: { price: true, listPrice: true, currency: true } });
     const offer = await db.commerceOffer.upsert({
       where: key,
       // Affiliate fields are set only by a real affiliate provider; this pipeline never invents one.
       create: { productId, destinationUrl: dest, affiliateUrl: null, affiliateProvider: null, affiliateStatus: "NONE", ...fields },
       update: fields,
     });
+    await recordPriceChange({ offerId: offer.id, before, after: { price: fields.price, listPrice: fields.listPrice, currency: fields.currency }, sourceUrl: dest, at: now });
     if ((before?.price ?? null) !== fields.price && (before || fields.price != null)) {
       await commerceAudit("PRICE_UPDATED", "commerce_offer", offer.id, { before: { price: before?.price ?? null, currency: before?.currency ?? null }, after: { price: fields.price, currency: fields.currency }, metadata: { url: dest, created: !before } });
     }
@@ -387,8 +419,14 @@ export function standaloneIdentity(n: NormalizedCommerceRecord & { ok: true }, b
 }
 
 async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Date, cache: Map<string, Candidate[]>): Promise<ItemOutcome> {
-  const n = normalizeCommerceRecord(raw.payload);
+  const n = normalizeCommerceRecord(raw.payload, { market: brand.market });
   if (!n.ok) return { url: raw.url, result: "NOT_EXTRACTED", reason: `${n.code}: ${n.reason}` };
+  // A page reached from a deal page (or a deal page that returned a product) must itself be a product
+  // page of the brand's official US storefront: listing pages never create products.
+  if (n.crawlLabel !== "PRODUCT") {
+    const allowed = followedPageAllowed(n.pageUrl, brand);
+    if (!allowed.ok) return { url: raw.url, result: "NOT_EXTRACTED", reason: `LINK_NOT_PRODUCT: ${allowed.reason}` };
+  }
   if (!onDomain(n.pageUrl, brand.officialDomain) && classifySource(n.pageUrl, brand.name) === "SECONDARY") {
     return { url: raw.url, result: "NOT_EXTRACTED", reason: `SOURCE_NOT_ALLOWED: ${hostOf(n.pageUrl)} is neither ${brand.officialDomain} nor a known retailer` };
   }
@@ -401,6 +439,7 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
   const decision = decideIdentity(n, await candidatesFor(keys, cache));
   await db.commerceProduct.update({ where: { id: product.id }, data: { identityStatus: decision.status, identityReason: decision.reason.slice(0, 2000), productEntityId: decision.entityId } });
   await db.commerceMatchLog.create({ data: { commerceProductId: product.id, productEntityId: decision.entityId ?? decision.nearEntityId ?? null, result: decision.status, basis: decision.basis, reason: decision.reason.slice(0, 2000) } });
+  await recordIdentityDecision({ commerceProductId: product.id, result: decision.status, basis: decision.basis, reason: decision.reason, productEntityId: decision.entityId, nearEntityId: decision.nearEntityId, sourceUrl: n.canonicalUrl, at: now });
   if (previous && (previous.identityStatus !== decision.status || previous.productEntityId !== decision.entityId)) {
     await commerceAudit("PRODUCT_UPDATED", "commerce_product", product.id, { before: previous, after: { identityStatus: decision.status, productEntityId: decision.entityId }, metadata: { url: n.canonicalUrl, reason: decision.reason } });
   }
@@ -448,14 +487,15 @@ async function storeRaws(run: CommerceRun, items: unknown[]): Promise<CommerceRa
 }
 
 async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null }, data: ApifyRunData, now: Date): Promise<CommerceCollectResult> {
-  const claimed = await db.commerceRun.updateMany({ where: { id: run.id, status: { in: [...ACTIVE, "SUCCEEDED"] } }, data: { status: "COLLECTING", usageUsd: data.usageTotalUsd ?? run.usageUsd, datasetId: data.defaultDatasetId ?? run.datasetId, finishedAt: data.finishedAt ? new Date(data.finishedAt) : run.finishedAt ?? now } });
+  const claimed = await db.commerceRun.updateMany({ where: { id: run.id, status: { in: [...ACTIVE, "SUCCEEDED"] } }, data: { status: "COLLECTING", usageUsd: data.usageTotalUsd ?? run.usageUsd, computeUnits: computeUnitsOf(data) ?? run.computeUnits, datasetId: data.defaultDatasetId ?? run.datasetId, finishedAt: data.finishedAt ? new Date(data.finishedAt) : run.finishedAt ?? now } });
   if (!claimed.count) return { runId: run.id, apifyRunId: run.apifyRunId, status: "ALREADY_COLLECTED" };
   const brand = run.brand;
   try {
     if (!brand) throw new PipelineError("APIFY_RESPONSE_INVALID", "run has no brand", undefined, false);
     const datasetId = data.defaultDatasetId ?? run.datasetId;
     if (!datasetId) throw new PipelineError("APIFY_RESPONSE_INVALID", "Run has no dataset", undefined, false);
-    const q = new URLSearchParams({ clean: "true", format: "json", limit: String(run.startUrls + 5) });
+    // A run with deal pages also holds the pages it followed (at most COMMERCE_DEAL_PAGES_PER_RUN).
+    const q = new URLSearchParams({ clean: "true", format: "json", limit: String(run.startUrls + dealPagesPerRun() + 5) });
     const items = await apify<unknown>(`/datasets/${encodeURIComponent(datasetId)}/items?${q}`);
     if (!Array.isArray(items)) throw new PipelineError("APIFY_RESPONSE_INVALID", "Dataset items response is not an array");
     const raws = await storeRaws(run, items);
@@ -503,12 +543,12 @@ export async function collectCommerceRuns(trigger: string, now = new Date()) {
       if (data.status === "SUCCEEDED") results.push(await collectSucceeded(run, data, now));
       else if (FAILED.includes(data.status)) {
         const reason = (data.statusMessage ?? data.status).slice(0, 500);
-        await db.commerceRun.update({ where: { id: run.id }, data: { status: data.status, usageUsd: data.usageTotalUsd ?? run.usageUsd, finishedAt: data.finishedAt ? new Date(data.finishedAt) : now, errors: [{ code: "APIFY_RUN_FAILED", reason }] } });
+        await db.commerceRun.update({ where: { id: run.id }, data: { status: data.status, usageUsd: data.usageTotalUsd ?? run.usageUsd, computeUnits: computeUnitsOf(data) ?? run.computeUnits, finishedAt: data.finishedAt ? new Date(data.finishedAt) : now, errors: [{ code: "APIFY_RUN_FAILED", reason }] } });
         if (run.brandId) await brandFailed(run.brandId, data.status, `run ${run.apifyRunId} ended ${data.status}: ${reason}`, now);
         await commerceAudit("APIFY_RUN_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: run.brand?.slug ?? null, apifyRunId: run.apifyRunId, status: data.status, reason } });
         results.push({ runId: run.id, apifyRunId: run.apifyRunId, status: data.status, reason });
       } else {
-        if (data.usageTotalUsd != null) await db.commerceRun.update({ where: { id: run.id }, data: { usageUsd: data.usageTotalUsd } });
+        if (data.usageTotalUsd != null || computeUnitsOf(data) != null) await db.commerceRun.update({ where: { id: run.id }, data: { usageUsd: data.usageTotalUsd ?? run.usageUsd, computeUnits: computeUnitsOf(data) ?? run.computeUnits } });
         results.push({ runId: run.id, apifyRunId: run.apifyRunId, status: data.status });
       }
     } catch (error) {
@@ -526,9 +566,10 @@ export async function collectCommerceRuns(trigger: string, now = new Date()) {
       log.warn("inline official verification failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
     }
   }
+  const dealStatus = await classifyOfferStatusesSafe({ now });
   const collected = results.filter((r) => r.status === "COLLECTED").length;
   if (collected) await revalidateCommerce(touched);
-  return { status: "OK", trigger, checked: runs.length, collected, results: results.map((r) => ({ ...r, entityIds: undefined })), official: official ?? null };
+  return { status: "OK", trigger, checked: runs.length, collected, results: results.map((r) => ({ ...r, entityIds: undefined })), official: official ?? null, dealStatus };
 }
 
 // ── Freshness ────────────────────────────────────────────────────────────────
@@ -546,52 +587,88 @@ const STOP_CODES = new Set(["APIFY_NOT_CONFIGURED", "SWITCH_OFF", "BUDGET_EXHAUS
 
 export const isStopCode = (code: string | undefined) => !!code && STOP_CODES.has(code);
 
-export type BrandRunUrls = { urls: string[]; recheck: number; recheckDue: number; discovery: string; reason?: string };
+export type BrandRunUrls = {
+  /** PRODUCT start URLs: re-checks, explicit productUrls, then discovered URLs (≤ maxProductsPerRun). */
+  urls: string[];
+  /** LISTING start URLs: the brand's official deal pages (crawlable ones). */
+  listingUrls: string[];
+  recheck: number;
+  recheckDue: number;
+  /** Explicit productUrls included. */
+  explicit: number;
+  discovery: string;
+  reason?: string;
+  robots: BrandRobots | null;
+  /** Deal/product URLs left out (off-domain, robots.txt), with the reason. */
+  skipped: Array<{ url: string; reason: string }>;
+};
 
 /**
  * The URLs of one brand run: offer pages due for a price re-check first (lib/commerce/recheck.ts),
- * then newly discovered product URLs up to maxProductsPerRun. Discovery is skipped when re-checks
- * already fill the run. Never throws.
+ * then the brand's official deal pages (LISTING) and explicit productUrls, then newly discovered
+ * product URLs up to maxProductsPerRun. Discovery is skipped when re-checks and explicit product
+ * pages already fill the run. robots.txt of the official host is read once (its rules go to the page
+ * function). Never throws.
  */
 export async function brandRunUrls(brand: CommerceBrand, now: Date, opts: { discovery?: DiscoveryOptions } = {}): Promise<BrandRunUrls> {
   const cap = Math.max(1, brand.maxProductsPerRun);
+  let robots: BrandRobots | null = null;
+  try {
+    robots = await fetchBrandRobots(brand.officialDomain);
+  } catch (error) {
+    log.warn("commerce robots.txt read failed", { stage: "COMMERCE", brand: brand.slug, error: String(error).slice(0, 200) });
+  }
+  const deal = crawlableStartUrls(brand.dealUrls ?? [], brand, robots);
+  const explicit = crawlableStartUrls(brand.productUrls ?? [], brand, robots);
+  const skipped = [...deal.skipped, ...explicit.skipped].slice(0, 20);
   let recheck: RecheckResult = { urls: [], due: 0, skipped: [] };
   try {
     recheck = await recheckCandidates(brand, now, cap);
   } catch (error) {
     log.warn("commerce re-check selection failed", { stage: "COMMERCE", brand: brand.slug, error: String(error).slice(0, 200) });
   }
-  if (recheck.urls.length >= cap) return { urls: recheck.urls.slice(0, cap), recheck: Math.min(cap, recheck.urls.length), recheckDue: recheck.due, discovery: "NOT_NEEDED", reason: `${recheck.urls.length} offer page(s) due for a price re-check fill the run` };
+  const head = [...new Set([...recheck.urls, ...explicit.urls])];
+  const base = { listingUrls: deal.urls, recheck: Math.min(cap, recheck.urls.length), recheckDue: recheck.due, robots, skipped };
+  if (head.length >= cap) {
+    const urls = head.slice(0, cap);
+    return { ...base, urls, explicit: urls.filter((u) => explicit.urls.includes(u) && !recheck.urls.includes(u)).length, discovery: "NOT_NEEDED", reason: `${recheck.urls.length} offer page(s) due for a price re-check${explicit.urls.length ? ` and ${explicit.urls.length} explicit product page(s)` : ""} fill the run` };
+  }
   let d: DiscoveryResult;
   try {
     d = await discoverProductUrls(brand, opts.discovery);
   } catch (error) {
     d = { status: "ERROR", urls: [], reason: String(error).slice(0, 300) };
   }
-  const urls = [...new Set([...recheck.urls, ...(d.urls ?? [])])].slice(0, cap);
-  return { urls, recheck: recheck.urls.length, recheckDue: recheck.due, discovery: d.status, reason: d.reason ?? (d.status !== "OK" ? d.status : undefined) };
+  const urls = [...new Set([...head, ...(d.urls ?? [])])].slice(0, cap);
+  return { ...base, urls, recheck: recheck.urls.length, explicit: urls.filter((u) => explicit.urls.includes(u) && !recheck.urls.includes(u)).length, discovery: d.status, reason: d.reason ?? (d.status !== "OK" ? d.status : undefined) };
 }
 
-export type BrandRunResult = StartResult & { brand: string; urls: number; recheck: number; discovery: string };
+export type BrandRunResult = StartResult & { brand: string; urls: number; recheck: number; dealPages: number; discovery: string };
 
-/** Builds one brand's run (re-checks first, then discovery) and starts it. Never throws. */
+/** Builds one brand's run (re-checks, deal pages + explicit product pages, then discovery) and starts it. Never throws. */
 export async function startBrandRun(brand: CommerceBrand, trigger: string, now: Date, opts: { discovery?: DiscoveryOptions } = {}): Promise<BrandRunResult> {
   const b = await brandRunUrls(brand, now, opts);
-  const r = await startProductRun(brand, b.urls, trigger, b.reason);
+  const r = await startProductRun(brand, b.urls, trigger, b.reason, { listingUrls: b.listingUrls, robots: b.robots, recheckUrls: b.recheck });
   if (r.code === "NO_URLS") await brandFailed(brand.id, `DISCOVERY_${b.discovery}`, r.reason ?? "no product URLs", now);
-  return { ...r, brand: brand.slug, urls: b.urls.length, recheck: b.recheck, discovery: b.discovery };
+  return { ...r, brand: brand.slug, urls: b.urls.length + b.listingUrls.length, recheck: b.recheck, dealPages: b.listingUrls.length, discovery: b.discovery };
 }
 
 /** commerce-discover: offer pages due for a price re-check, then discovered product URLs, of due brands → one product run per brand. */
 export async function runCommerceDiscover(trigger: string, now = new Date()) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", started: 0 };
   await ensureBrandsSeeded();
+  // Seed fields added after the brands were imported (deal pages, product pages …): fills only empty ones; cheap when the seed is unchanged.
+  try {
+    await syncSeedFields();
+  } catch (error) {
+    log.warn("commerce seed sync failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
+  }
   const limit = brandsPerRun();
   const brands = (await dueBrands(now, limit)).slice(0, limit);
-  const results: Array<{ brand: string; status: string; discovery?: string; recheck?: number; reason?: string }> = [];
+  const results: Array<{ brand: string; status: string; discovery?: string; recheck?: number; dealPages?: number; reason?: string }> = [];
   for (const brand of brands) {
     const r = await startBrandRun(brand, trigger, now);
-    results.push({ brand: brand.slug, status: r.status, discovery: r.discovery, ...(r.recheck ? { recheck: r.recheck } : {}), reason: r.reason });
+    results.push({ brand: brand.slug, status: r.status, discovery: r.discovery, ...(r.recheck ? { recheck: r.recheck } : {}), ...(r.dealPages ? { dealPages: r.dealPages } : {}), reason: r.reason });
     if (isStopCode(r.code)) break; // the same reason applies to every remaining brand
   }
   const started = results.filter((r) => r.status === "STARTED").length;

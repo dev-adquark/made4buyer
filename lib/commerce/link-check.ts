@@ -8,6 +8,7 @@ import { headThenGet, LINK_CHECK_USER_AGENT } from "@/lib/pipeline/verify-link";
 import { commerceAudit } from "./audit";
 import { revalidateCommerce } from "./revalidate";
 import { normalizeDestinationUrl } from "./urls";
+import { recordVerification, type VerificationEventInput } from "./verification-events";
 
 /**
  * Offer destination checks (job "commerce-validate-links").
@@ -252,6 +253,20 @@ export async function dueOffers(now: Date, limit: number, checkedBefore?: Date):
 
 export type LinkCheckOutcome = { offerId: string; host: string; from: string; to: LinkStatus; httpStatus: number | null; reason: string };
 
+/** LINK verification event for one check (every check, changed or not). */
+function linkEvent(offer: DueOffer, check: LinkCheck, next: NextLinkState, now: Date): VerificationEventInput {
+  return {
+    entityType: "offer",
+    entityId: offer.id,
+    kind: "LINK",
+    result: next.linkStatus,
+    reason: next.reason,
+    sourceUrl: offer.destinationUrl,
+    details: { httpStatus: next.linkHttpStatus, finalUrl: next.linkFinalUrl, check: check.kind, previous: offer.linkStatus, changed: next.linkStatus !== offer.linkStatus },
+    checkedAt: now,
+  };
+}
+
 async function storeCheck(offer: DueOffer, next: NextLinkState, now: Date): Promise<LinkCheckOutcome & { changed: boolean }> {
   await db.commerceOffer.update({ where: { id: offer.id }, data: { linkStatus: next.linkStatus, linkHttpStatus: next.linkHttpStatus, linkFinalUrl: next.linkFinalUrl?.slice(0, 2000) ?? null, linkCheckedAt: now } });
   const changed = next.linkStatus !== offer.linkStatus;
@@ -293,6 +308,7 @@ export async function runLinkValidation(trigger: string, now = new Date(), opts:
 
   const robots = new Map<string, ReturnType<typeof robotsFor>>();
   const results: Array<LinkCheckOutcome & { changed: boolean }> = [];
+  const events: VerificationEventInput[] = [];
   const touchedEntities = new Set<string>();
   const delay = sameHostDelayMs();
   const budget = Math.min(linkCheckBudgetMs(), opts.budgetMs ?? Infinity);
@@ -310,8 +326,10 @@ export async function runLinkValidation(trigger: string, now = new Date(), opts:
         if (i > 0) await sleep(delay);
         try {
           const check = await checkDestination(offer.destinationUrl, { robots, pause: () => sleep(delay) });
-          const r = await storeCheck(offer, nextLinkState(offer, check), now);
+          const next = nextLinkState(offer, check);
+          const r = await storeCheck(offer, next, now);
           results.push(r);
+          events.push(linkEvent(offer, check, next, now));
           if (r.changed && offer.product.productEntityId) touchedEntities.add(offer.product.productEntityId);
         } catch (error) {
           log.warn("offer link check failed", { stage: "COMMERCE", offerId: offer.id, error: String(error).slice(0, 200) });
@@ -320,6 +338,7 @@ export async function runLinkValidation(trigger: string, now = new Date(), opts:
     }
   };
   await Promise.all(Array.from({ length: Math.min(HOST_CONCURRENCY, byHost.size) }, worker));
+  await recordVerification(events);
 
   const changed = results.filter((r) => r.changed);
   if (changed.length) {
@@ -329,6 +348,10 @@ export async function runLinkValidation(trigger: string, now = new Date(), opts:
     for (const id of touchedEntities) await refreshSummary(id, new Date()).catch((error) => log.warn("summary refresh after link check failed", { stage: "COMMERCE", entityId: id, error: String(error).slice(0, 200) }));
     await revalidateCommerce(touchedEntities);
   }
+  // Persisted deal status of the checked offers (the same decision /deals makes live). Dynamic import:
+  // classify.ts → lib/public/deals.ts → this module.
+  const { classifyOfferStatusesSafe } = await import("./classify");
+  const dealStatus = results.length ? await classifyOfferStatusesSafe({ offerIds: results.map((r) => r.offerId), now }) : null;
   const count = (s: LinkStatus) => results.filter((r) => r.to === s).length;
   log.info("commerce link validation", { stage: "COMMERCE", trigger, due: offers.length, checked: results.length, changed: changed.length });
   return {
@@ -339,6 +362,7 @@ export async function runLinkValidation(trigger: string, now = new Date(), opts:
     changed: changed.length,
     ...(outOfTime ? { reason: `time budget reached; ${offers.length - results.length} offer(s) left for the next run` } : {}),
     byStatus: Object.fromEntries(LINK_STATUSES.map((s) => [s, count(s)]).filter(([, n]) => n)),
+    ...(dealStatus ? { dealStatus: dealStatus.status === "OK" ? { checked: dealStatus.checked, changed: dealStatus.changed } : dealStatus } : {}),
     results: results.slice(0, 100).map((r): LinkCheckOutcome => ({ offerId: r.offerId, host: r.host, from: r.from, to: r.to, httpStatus: r.httpStatus, reason: r.reason })),
   };
 }

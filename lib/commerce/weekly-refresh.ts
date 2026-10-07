@@ -7,6 +7,7 @@ import { runDataAudit } from "@/lib/ops/data-audit";
 import { maxAgeMs } from "@/lib/products/facts";
 import { audit, type AuditContext } from "@/lib/security/audit";
 import { ensureBrandsSeeded } from "./brands";
+import { classifyOfferStatusesSafe } from "./classify";
 import { markExpiredCoupons } from "./coupons";
 import { collectCouponRuns, runCouponCrawl } from "./coupons-run";
 import { HIDDEN_LINK_STATUSES, linkCheckBudgetMs, runLinkValidation } from "./link-check";
@@ -35,7 +36,9 @@ import { revalidateCommerce } from "./revalidate";
  *   recheck    for every brand with public-candidate offers: a run of its offer pages due for a price
  *              re-check (then newly discovered URLs). COMMERCE_WEEKLY_BRANDS_PER_INVOCATION (default 8)
  *              brands per invocation; budget- and switch-gated; failure backoff respected
- *   discover   discovery runs for enabled brands not crawled in 7 days
+ *   discover   discovery runs for enabled brands not crawled in 7 days, and for every brand with
+ *              official deal pages (dealUrls) not yet run in this sweep: each brand run includes its
+ *              deal pages (lib/commerce/deal-crawl.ts), so every deal brand gets a deal crawl per sweep
  *   coupons    official promotions pages of every promo brand (once per sweep)
  *   settle     wait (≤ COMMERCE_WEEKLY_SETTLE_HOURS, default 3) for this sweep's Apify runs, collecting them
  *   links      every offer destination checked once in this sweep (robots.txt, one request at a time per host)
@@ -422,7 +425,8 @@ const STAGE_FNS: Record<Stage, StageFn> = {
     const s = c.state;
     if (!s.cursor.queue) {
       const cutoff = new Date(c.now.getTime() - DISCOVER_AFTER_DAYS * DAY);
-      const brands = await db.commerceBrand.findMany({ where: { enabled: true, id: { notIn: s.processed }, OR: [{ lastCrawlAt: null }, { lastCrawlAt: { lt: cutoff } }] }, orderBy: [{ priority: "desc" }, { name: "asc" }], select: { id: true } });
+      // Brands with official deal pages get a deal crawl every sweep (their run includes the deal pages).
+      const brands = await db.commerceBrand.findMany({ where: { enabled: true, id: { notIn: s.processed }, OR: [{ lastCrawlAt: null }, { lastCrawlAt: { lt: cutoff } }, { dealUrls: { isEmpty: false } }] }, orderBy: [{ priority: "desc" }, { name: "asc" }], select: { id: true } });
       s.cursor = { queue: brands.map((b) => b.id), total: brands.length, done: 0 };
       s.counters.brandsTargeted += brands.length;
       await c.save();
@@ -492,6 +496,7 @@ const STAGE_FNS: Record<Stage, StageFn> = {
   async summary(c) {
     const s = c.state;
     const since = new Date(s.startedAt);
+    await classifyOfferStatusesSafe({ now: new Date() });
     const runs = await db.commerceRun.findMany({ where: { purpose: "PRODUCT", trigger: { startsWith: "weekly:" }, startedAt: { gte: since }, apifyRunId: { not: null } }, select: { extracted: true, accepted: true, rejected: true } });
     s.counters.recordsExtracted = runs.reduce((n, r) => n + (r.extracted ?? 0), 0);
     s.counters.recordsAccepted = runs.reduce((n, r) => n + (r.accepted ?? 0), 0);

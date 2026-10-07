@@ -35,7 +35,10 @@ describe("data/commerce/brands.seed.json", () => {
 
   it("states no ownership or headquarters", () => {
     for (const b of seed as Array<Record<string, unknown>>) {
-      expect(Object.keys(b).sort()).toEqual(["categories", "discoveryUrls", "market", "name", "notes", "officialDomain", "productUrlPatterns", "promoUrls", "slug"]);
+      // Only known registry fields (no ownership/HQ claims); dealUrls and platform are optional.
+      const allowed = ["categories", "dealUrls", "discoveryUrls", "market", "name", "notes", "officialDomain", "platform", "productUrlPatterns", "promoUrls", "slug"];
+      for (const k of Object.keys(b)) expect(allowed).toContain(k);
+      for (const k of ["categories", "discoveryUrls", "market", "name", "notes", "officialDomain", "productUrlPatterns", "promoUrls", "slug"]) expect(Object.keys(b)).toContain(k);
       expect(String(b.notes)).not.toMatch(/headquarter|owned by|based in|subsidiary/i);
     }
   });

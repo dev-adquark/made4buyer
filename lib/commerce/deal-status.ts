@@ -171,6 +171,15 @@ export type OfferDealVerdict = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+/** How each source states its comparison price (the label shown is the source's own wording). */
+const LIST_PRICE_LABELS: Record<string, string> = {
+  StrikethroughPrice: "Was",
+  WasPrice: "Was",
+  ListPrice: "Regular price",
+  RegularPrice: "Regular price",
+  CompareAtPrice: "Compare at",
+};
+
 const HOUR_MS = 3_600_000;
 /** Absolute tolerance for comparing two stated regular prices (cents of rounding, per-locale display). */
 const PRICE_TOLERANCE = (a: number) => Math.max(1, a * 0.01);
@@ -369,7 +378,7 @@ export function offerDealStatus(offer: DealOfferInput, product: DealProductInput
     officialStore: officialSite && offer.sellerType === "MANUFACTURER",
     officialConfirmed,
     saving,
-    listPriceLabel: type === "StrikethroughPrice" ? "Was" : type === "ListPrice" ? "Regular price" : "List price",
+    listPriceLabel: LIST_PRICE_LABELS[type ?? ""] ?? "List price",
     validUntil,
     availabilityLabel: av && AVAILABLE[av] ? AVAILABLE[av] : null,
   };

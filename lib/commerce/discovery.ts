@@ -61,7 +61,8 @@ const NON_PRODUCT_PATH = /(^|\/)(blog|blogs|news|newsroom|press|stories|article|
 const NOT_A_NEW_PRODUCT = /(^|[\/_-])(recalls?|gift-?cards?|e-?gift|refurb|refurbished|renewed|reconditioned|open-?box|pre-?owned|warranty|registration)([\/_.-]|$)/i;
 /** Country/language codes used as storefront path prefixes (ISO 3166-1 / 639-1 subsets). */
 // Codes that are also everyday path words (tv, pc, id, it, is, do, go, me, so, to, no, ai, io) are left out.
-const LOCALE_CODES = new Set("ad ae af ag al am ao ar at au az ba bb bd be bf bg bh bi bj bn bo br bs bt bw by bz ca cd cf cg ch ci cl cm cn co cr cs cu cv cy cz da de dj dk dm dz ec ee eg el en er es et fa fi fj fm fr ga gb gd ge gh gm gn gq gr gt gw gy he hi hk hn hr ht hu ie il in iq ir ja jm jo jp ka ke kg kh ki kk km kn ko kp kr kw kz la lb lc li lk lr ls lt lu lv ly ma mc md mg mh mk ml mm mn mo mr ms mt mu my mv mw mx mz na nb ne ng ni nl nn np nr nz om pa pe pg ph pk pl pt pw py qa ro rs ru rw sa sb sc sd se sg si sk sl sm sn sq sr ss st sv sy sz td tg th tj tl tm tn tr tt tw tz ua ug uk us uy uz va vc ve vi vn vu ws ye za zh zm zw".split(" "));
+export const STOREFRONT_LOCALE_CODES: readonly string[] = "ad ae af ag al am ao ar at au az ba bb bd be bf bg bh bi bj bn bo br bs bt bw by bz ca cd cf cg ch ci cl cm cn co cr cs cu cv cy cz da de dj dk dm dz ec ee eg el en er es et fa fi fj fm fr ga gb gd ge gh gm gn gq gr gt gw gy he hi hk hn hr ht hu ie il in iq ir ja jm jo jp ka ke kg kh ki kk km kn ko kp kr kw kz la lb lc li lk lr ls lt lu lv ly ma mc md mg mh mk ml mm mn mo mr ms mt mu my mv mw mx mz na nb ne ng ni nl nn np nr nz om pa pe pg ph pk pl pt pw py qa ro rs ru rw sa sb sc sd se sg si sk sl sm sn sq sr ss st sv sy sz td tg th tj tl tm tn tr tt tw tz ua ug uk us uy uz va vc ve vi vn vu ws ye za zh zm zw".split(" ");
+const LOCALE_CODES = new Set(STOREFRONT_LOCALE_CODES);
 
 /**
  * The storefront locale a URL path belongs to, or null when the path has no locale prefix.

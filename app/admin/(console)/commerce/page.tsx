@@ -160,7 +160,7 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
           ) : (
             "no enabled brand is scheduled"
           )}
-          . Per-brand crawl status: <Link href="/admin/commerce/sources">Brands &amp; sources</Link>.
+          . Per-brand crawl status and editing: <Link href="/admin/commerce/sources">Sources</Link>.
         </p>
       </section>
 
@@ -183,7 +183,7 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
 
       <h2 id="health-h">Runs and data</h2>
       <div className="stats" aria-labelledby="health-h">
-        <Stat label="Brands enabled" value={`${brandsEnabled} / ${brandsTotal}`} note={<><Link href="/admin/commerce/brands">Manage brands</Link> · <Link href="/admin/commerce/sources">Crawl status</Link></>} />
+        <Stat label="Brands enabled" value={`${brandsEnabled} / ${brandsTotal}`} note={<><Link href="/admin/commerce/sources">Sources (manage &amp; crawl status)</Link> · <Link href="/admin/commerce/runs">Runs</Link></>} />
         <Stat label="Runs (last 24 h)" value={`${runStats.last24h.succeeded} ok · ${runStats.last24h.failed} failed`} note={`${runStats.last24h.total} total`} />
         <Stat label="Runs (this month)" value={`${runStats.month.succeeded} ok · ${runStats.month.failed} failed`} note={`${runStats.month.total} total`} />
         <Stat label="Last successful run" value={runStats.lastSuccessAt ? when(runStats.lastSuccessAt) : "—"} note={runStats.lastSuccessAt ? "Apify run succeeded" : "no successful run yet"} />
@@ -248,10 +248,13 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
         </table>
       </div>
       <p className="small muted">
-        Computed with the same functions as /deals (lib/commerce/deal-status.ts): an offer is ACTIVE only when it is an official-site page (or a retailer page for a product confirmed on the official site) stating a list price above the price, USD, observed within the price window, link not hidden, in stock, its stated end not passed and not a duplicate.
+        Persisted statuses per offer, with reasons and verification checks: <Link href="/admin/commerce/deals">Deals</Link>. Computed with the same functions as /deals (lib/commerce/deal-status.ts): an offer is ACTIVE only when it is an official-site page (or a retailer page for a product confirmed on the official site) stating a list price above the price, USD, observed within the price window, link not hidden, in stock, its stated end not passed and not a duplicate.
       </p>
 
       <h2 id="runs-h">Apify runs</h2>
+      <p className="small muted">
+        Every run with what it found, its failures and its cost: <Link href="/admin/commerce/runs">Runs</Link>.
+      </p>
       <form className="toolbar" action="/admin/commerce">
         <div className="field">
           <label htmlFor="run-status">Status</label>

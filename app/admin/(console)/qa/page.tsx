@@ -1,7 +1,7 @@
 import type { Prisma, ReviewStatus } from "@prisma/client";
 import Link from "next/link";
 import Flash from "@/components/flash";
-import { ActionForm, Badge, Pager, pct, when } from "@/components/admin-ui";
+import { ActionForm, Badge, Pager, pct, when, safeHref } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { categoryName } from "@/lib/taxonomy/definitions";
@@ -120,7 +120,7 @@ export default async function QaPage({ searchParams }: { searchParams: SearchPar
                       {r.sourceUrl && (
                         <>
                           {" · "}
-                          <a href={r.sourceUrl} rel="noopener noreferrer" target="_blank">
+                          <a href={safeHref(r.sourceUrl)} rel="noopener noreferrer" target="_blank">
                             source
                           </a>
                         </>

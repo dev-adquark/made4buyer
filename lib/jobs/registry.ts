@@ -12,6 +12,8 @@ import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline
 import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
+import { runClassifyDeals } from "@/lib/commerce/classify";
+import { pruneVerificationEvents } from "@/lib/commerce/verification-events";
 import { continueWeeklyRefresh, runWeeklyRefresh } from "@/lib/commerce/weekly-refresh";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
@@ -59,7 +61,16 @@ export const JOBS = {
   "scrape-sources": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runScrapeSources(trigger), locked: true },
   "collect-scrapes": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCollectScrapes(trigger), locked: true },
   "retry-failed": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runFailedRetry({ trigger }), locked: true },
-  "cleanup-cache": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runCacheCleanup({ trigger }), locked: true },
+  // Also prunes commerce verification events older than 90 days (the latest per entity + kind is always kept).
+  "cleanup-cache": {
+    lockTtlMs: 10 * 60_000,
+    run: async (trigger: string) => {
+      const r = await runCacheCleanup({ trigger });
+      const pruned = await pruneVerificationEvents(90).catch((error: unknown) => ({ deleted: 0, error: String(error).slice(0, 200) }));
+      return { ...r, verificationEventsPruned: pruned.deleted, ...("error" in pruned ? { verificationEventsPruneError: pruned.error } : {}) };
+    },
+    locked: true,
+  },
   "publish-cycle": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runPublishCycleJob({ trigger }), locked: true },
   // 08:00 and 19:00 Asia/Kolkata. Idempotent: acts only when a slot is due and not done.
   "daily-article": { lockTtlMs: 6 * 60_000, run: (trigger: string) => runDailyArticle(trigger), locked: true },
@@ -90,6 +101,8 @@ export const JOBS = {
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
   "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },
   "commerce-official-verify": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runOfficialVerify(trigger), locked: true },
+  // Persisted deal status (lib/commerce/classify.ts): the /deals decision stored per offer for Admin and history.
+  "commerce-classify-deals": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runClassifyDeals(trigger), locked: true },
   // Data-integrity audit (lib/ops/data-audit.ts): flags only, plus two safe audited status fixes.
   "data-audit": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runDataAudit(trigger), locked: true },
   // Weekly deals refresh (lib/commerce/weekly-refresh.ts): called daily; sweeps once per configured weekly slot, resumable.
@@ -117,6 +130,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],
   "commerce-official-verify": ["commerce_engine"],
+  "commerce-classify-deals": ["commerce_engine"],
   "deals-weekly-refresh": ["commerce_engine"],
 };
 

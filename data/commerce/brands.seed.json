@@ -20,7 +20,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. Apple's deal link leads to the refurbished store; not used (a refurbished price is not a price drop on the new product)."
   },
   {
     "name": "Samsung",
@@ -41,11 +42,19 @@
       "https://www.samsung.com/us/sitemap.xml",
       "https://www.samsung.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.samsung.com/us/**-sku-*"
+    ],
     "promoUrls": [
       "https://www.samsung.com/us/offer/"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 94 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://www.samsung.com/us/offer/",
+      "https://www.samsung.com/us/shop/tv-and-home-theater-offers/",
+      "https://www.samsung.com/us/shop/home-appliance-and-smart-home-offers/",
+      "https://www.samsung.com/us/shop/memory-monitor-storage-offers/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 94 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Google Store",
@@ -64,7 +73,10 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://store.google.com/us/collection/offers?hl=en-US"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. product URL pattern not added: sample product page has no JSON-LD Product."
   },
   {
     "name": "Microsoft",
@@ -85,7 +97,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 22 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 22 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: deal page (www.microsoft.com/en-us/store/b/sale) times out for our crawler (bot protection)."
   },
   {
     "name": "Dell",
@@ -99,9 +112,15 @@
       "accessories"
     ],
     "discoveryUrls": [],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.dell.com/en-us/shop/*/apd/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 9 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin."
+    "dealUrls": [
+      "https://www.dell.com/en-us/shop/deals/dc/monitor-deals",
+      "https://www.dell.com/en-us/shop/deals/dc/pc-accessories-deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 9 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin. Deals pages verified 2026-10-07."
   },
   {
     "name": "HP",
@@ -125,7 +144,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 86 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 86 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: deal pages (www.hp.com/us-en/shop/slp/weekly-deals/*) time out for our crawler (bot protection)."
   },
   {
     "name": "ASUS",
@@ -148,7 +168,8 @@
     "promoUrls": [
       "https://www.asus.com/us/deals/"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. No usable deals page 2026-10-07: deal listings render client-side from the store API; only nav-menu product links are in the HTML."
   },
   {
     "name": "Razer",
@@ -169,7 +190,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 6 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 6 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: deal page (www.razer.com/store/limited-time-offer) rate-limits our crawler (HTTP 429)."
   },
   {
     "name": "LG",
@@ -185,9 +207,14 @@
     "discoveryUrls": [
       "https://www.lg.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.lg.com/us/*/lg-*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.lg.com/us/promotions/top-appliance-deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "PlayStation Direct",
@@ -200,7 +227,10 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [
+      "https://direct.playstation.com/en-us/deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. Deals pages verified 2026-10-07. product URL pattern not added: sample product page has no JSON-LD Product."
   },
   {
     "name": "Nintendo",
@@ -218,7 +248,8 @@
     "promoUrls": [
       "https://www.nintendo.com/us/store/sales-and-deals/"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 49 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 49 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. No usable deals page 2026-10-07: sales-and-deals page (https://www.nintendo.com/us/store/sales-and-deals/) renders products client-side (only 2 product links in HTML)."
   },
   {
     "name": "Xbox",
@@ -231,11 +262,16 @@
     "discoveryUrls": [
       "https://www.xbox.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.xbox.com/en-US/games/store/*/*"
+    ],
     "promoUrls": [
       "https://www.xbox.com/en-US/promotions/sales/sales-and-specials"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://www.xbox.com/en-US/promotions/sales/sales-and-specials"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Meta",
@@ -249,7 +285,8 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 30 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 30 sitemap(s), none usable (gzip-only or off-domain); add discovery URLs in Admin. No public deals page verified 2026-10-07: site geo-redirects our crawler to a non-US locale; no US deals page could be verified."
   },
   {
     "name": "Motorola",
@@ -263,9 +300,14 @@
       "https://www.motorola.com/us/en/sitemap.xml",
       "https://www.motorola.com/us/es/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.motorola.com/us/en/p/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 51 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.motorola.com/us/en/specials"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 51 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "OnePlus",
@@ -284,7 +326,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 72 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 72 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Bose",
@@ -297,11 +340,16 @@
     "discoveryUrls": [
       "https://www.bose.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.bose.com/p/*/*/*.html"
+    ],
     "promoUrls": [
       "https://www.bose.com/c/sale"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://www.bose.com/c/sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Sonos",
@@ -316,11 +364,16 @@
       "https://www.sonos.com/sitemap.xml",
       "https://www.sonos.com/sonos-pro/sitemap-index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.sonos.com/en-us/shop/*"
+    ],
     "promoUrls": [
       "https://www.sonos.com/en-us/shop/deals"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://www.sonos.com/en-us/shop/promotional-offers"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "JBL",
@@ -335,7 +388,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Beats",
@@ -350,7 +404,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Sennheiser",
@@ -365,7 +420,11 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://us.sennheiser-hearing.com/collections/offers-collection"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. deals live on the us.sennheiser-hearing.com storefront; product URL patterns need that host, so none added."
   },
   {
     "name": "Shure",
@@ -380,7 +439,10 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.shure.com/en-US/special-offers"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. product URL pattern not added: sample product page has no JSON-LD Product."
   },
   {
     "name": "Audio-Technica",
@@ -393,7 +455,8 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Anker",
@@ -411,7 +474,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 10 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 10 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: fall-sale page (https://www.anker.com/fall-sale) lists Anker SOLIX products whose anker.com links redirect to ankersolix.com (off-domain)."
   },
   {
     "name": "Belkin",
@@ -424,9 +488,14 @@
     "discoveryUrls": [
       "https://www.belkin.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.belkin.com/p/*/*.html"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.belkin.com/sale/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Logitech",
@@ -440,9 +509,15 @@
     "discoveryUrls": [
       "https://www.logitech.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.logitech.com/en-us/shop/p/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.logitech.com/en-us/shop/deals",
+      "https://www.logitech.com/en-us/shop/outlet"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Corsair",
@@ -459,7 +534,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 21 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: special-offers page (https://www.corsair.com/us/en/s/special-offers) renders products client-side (only 1 product link in HTML)."
   },
   {
     "name": "SteelSeries",
@@ -472,9 +548,14 @@
       "audio"
     ],
     "discoveryUrls": [],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://steelseries.com/gaming-*/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [
+      "https://steelseries.com/deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. Deals pages verified 2026-10-07."
   },
   {
     "name": "HyperX",
@@ -489,9 +570,15 @@
     "discoveryUrls": [
       "https://hyperx.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://hyperx.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://hyperx.com/collections/sale"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Keychron",
@@ -504,9 +591,15 @@
     "discoveryUrls": [
       "https://www.keychron.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.keychron.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.keychron.com/pages/prime-big-deal-day-2026"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Elgato",
@@ -522,7 +615,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 18 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 18 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Western Digital",
@@ -538,7 +632,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: weekly-sale page renders products client-side (no product links in HTML)."
   },
   {
     "name": "Seagate",
@@ -553,7 +648,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: deals page renders products client-side (no product links in HTML)."
   },
   {
     "name": "SanDisk",
@@ -569,7 +665,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: deal pages render products client-side (no product links in HTML)."
   },
   {
     "name": "Kingston",
@@ -585,7 +682,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "NVIDIA",
@@ -601,7 +699,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Intel",
@@ -616,7 +715,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "BenQ",
@@ -631,7 +731,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: deals page only carries internal CMS paths for products, no public product links in HTML."
   },
   {
     "name": "Synology",
@@ -646,7 +747,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "NETGEAR",
@@ -663,7 +765,10 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 27 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.netgear.com/deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 27 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. product URL pattern not added: sample product page has no JSON-LD Product."
   },
   {
     "name": "TP-Link",
@@ -677,7 +782,8 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 1 sitemap(s), none for the US storefront or product pages; add discovery URLs in Admin."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists 1 sitemap(s), none for the US storefront or product pages; add discovery URLs in Admin. No public deals page verified 2026-10-07: US promotion page is not a product deals listing."
   },
   {
     "name": "eero",
@@ -692,7 +798,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: deals are a client-side filter of /shop (no product links in HTML)."
   },
   {
     "name": "Ubiquiti",
@@ -707,7 +814,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: /shop/deals redirects to the store home page."
   },
   {
     "name": "Linksys",
@@ -720,7 +828,9 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. No public deals page verified 2026-10-07: /sale redirects to the home page."
   },
   {
     "name": "Nikon",
@@ -733,9 +843,14 @@
     "discoveryUrls": [
       "https://www.nikonusa.com/google/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.nikonusa.com/p/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.nikonusa.com/cameras-on-sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Fujifilm",
@@ -750,7 +865,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 141 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 141 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "DJI",
@@ -766,7 +882,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Insta360",
@@ -781,7 +898,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Epson",
@@ -796,7 +914,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: /deals redirects to the general store page, not a deals listing."
   },
   {
     "name": "Brother",
@@ -812,9 +931,15 @@
       "https://www.brother-usa.com/sitemap_categories_0.xml",
       "https://www.brother-usa.com/sitemap_statics_0.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.brother-usa.com/p/*/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.brother-usa.com/c/shop/deals",
+      "https://www.brother-usa.com/c/outlet"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 4 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Garmin",
@@ -831,9 +956,14 @@
       "https://www.garmin.com/www-sitemaps-index.xml",
       "https://www.garmin.com/category-sitemap-index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.garmin.com/en-US/p/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 4 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.garmin.com/en-US/c/promotions/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 3 of 4 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Oura",
@@ -849,7 +979,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Ring",
@@ -862,9 +993,14 @@
     "discoveryUrls": [
       "https://ring.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://ring.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://ring.com/offers-collection"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Philips Hue",
@@ -877,9 +1013,16 @@
     "discoveryUrls": [
       "https://www.philips-hue.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.philips-hue.com/en-us/p/*/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.philips-hue.com/en-us/products/promotions",
+      "https://www.philips-hue.com/en-us/products/promotions/outlet",
+      "https://www.philips-hue.com/en-us/products/promotions/create-your-own-starter-kit"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "ecobee",
@@ -892,9 +1035,18 @@
     "discoveryUrls": [
       "https://www.ecobee.com/sitemap-index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.ecobee.com/en-us/smart-thermostats/*",
+      "https://www.ecobee.com/en-us/thermostat-accessories/*",
+      "https://www.ecobee.com/en-us/sensors/*",
+      "https://www.ecobee.com/en-us/cameras/*",
+      "https://www.ecobee.com/en-us/bundles-exclusives/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.ecobee.com/en-us/offers/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "eufy",
@@ -912,9 +1064,14 @@
       "https://www.eufy.com/server-sitemap-index-pages.xml",
       "https://www.eufy.com/server-sitemap-index-collections.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.eufy.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.eufy.com/eufy-sales"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Wyze",
@@ -927,9 +1084,16 @@
     "discoveryUrls": [
       "https://www.wyze.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.wyze.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.wyze.com/collections/sale",
+      "https://www.wyze.com/pages/wyze-deal-days"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Roku",
@@ -945,7 +1109,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 5 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site redirects our crawler to roku.com/intl; no US deals page could be verified."
   },
   {
     "name": "TCL",
@@ -960,7 +1125,11 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://us.tcl.com/pages/current-offers"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07. deals live on the us.tcl.com storefront; product URL patterns need that host, so none added."
   },
   {
     "name": "Hisense",
@@ -975,7 +1144,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: deals page links only to category pages (no product links in HTML)."
   },
   {
     "name": "VIZIO",
@@ -990,7 +1160,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Dyson",
@@ -1006,7 +1177,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "iRobot",
@@ -1020,9 +1192,15 @@
     "discoveryUrls": [
       "https://www.irobot.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.irobot.com/en_US/*/*.html"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.irobot.com/en_US/deals.html",
+      "https://www.irobot.com/en_US/accessory-deals.html"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "SharkNinja",
@@ -1036,9 +1214,15 @@
     "discoveryUrls": [
       "https://www.sharkninja.com/sitemap_index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.sharkninja.com/*/*.html"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.sharkninja.com/sales-offers/shop-all-sale",
+      "https://www.sharkninja.com/sales-offers"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Breville",
@@ -1051,9 +1235,14 @@
     "discoveryUrls": [
       "https://www.breville.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.breville.com/en-us/product/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.breville.com/en-us/sales"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Vitamix",
@@ -1073,7 +1262,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 6 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "GE Appliances",
@@ -1089,7 +1279,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: sale page renders products client-side (no product links in HTML)."
   },
   {
     "name": "Peloton",
@@ -1104,7 +1295,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: offers page renders client-side (no product links in HTML)."
   },
   {
     "name": "Therabody",
@@ -1118,9 +1310,16 @@
     "discoveryUrls": [
       "https://www.therabody.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.therabody.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.therabody.com/collections/therabody-outlet",
+      "https://www.therabody.com/collections/prime-day-sale"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Philips",
@@ -1134,9 +1333,15 @@
       "https://www.usa.philips.com/prx/sitemap-B2C-en_US-products-index.xml",
       "https://www.usa.philips.com/prx/sitemap-B2C-en_US-sfdc-index.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.usa.philips.com/c-p/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.usa.philips.com/c-e/shop/oral-healthcare-deals",
+      "https://www.usa.philips.com/c-e/shop/mother-childcare-deals"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 7 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "EcoFlow",
@@ -1152,7 +1357,9 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Casper",
@@ -1165,11 +1372,17 @@
     "discoveryUrls": [
       "https://casper.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://casper.com/products/*"
+    ],
     "promoUrls": [
       "https://casper.com/collections/clearance"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://casper.com/collections/clearance"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Herman Miller",
@@ -1182,7 +1395,8 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. No public deals page found 2026-10-07."
   },
   {
     "name": "DEWALT",
@@ -1197,7 +1411,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07."
   },
   {
     "name": "Samsonite",
@@ -1214,7 +1429,10 @@
     "promoUrls": [
       "https://shop.samsonite.com/sale/"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://shop.samsonite.com/sale/"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07. product URL pattern not added: sample product page returned HTTP 307 (bot challenge)."
   },
   {
     "name": "OpenAI",
@@ -1229,7 +1447,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Anthropic",
@@ -1245,7 +1464,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "GitHub",
@@ -1259,7 +1479,8 @@
     "discoveryUrls": [],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). robots.txt lists no Sitemap; add discovery URLs in Admin. No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "JetBrains",
@@ -1274,7 +1495,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Adobe",
@@ -1294,7 +1516,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 5 of 9 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Canva",
@@ -1310,7 +1533,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 2 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Notion",
@@ -1333,7 +1557,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 8 of 12 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 8 of 12 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Shopify",
@@ -1348,7 +1573,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Squarespace",
@@ -1363,7 +1589,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "NordVPN",
@@ -1387,7 +1614,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 10 of 297 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 10 of 297 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "1Password",
@@ -1402,7 +1630,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Zoom",
@@ -1417,7 +1646,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Atlassian",
@@ -1433,7 +1663,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Dropbox",
@@ -1448,7 +1679,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Vercel",
@@ -1463,7 +1695,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Wix",
@@ -1478,7 +1711,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Slack",
@@ -1493,7 +1727,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 3 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page found 2026-10-07 (software brand; pricing pages are not deal pages)."
   },
   {
     "name": "Purple",
@@ -1506,11 +1741,21 @@
     "discoveryUrls": [
       "https://purple.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://purple.com/mattresses/*",
+      "https://purple.com/pillows/*",
+      "https://purple.com/bed-frames/*",
+      "https://purple.com/seat-cushions/*",
+      "https://purple.com/sheets/*",
+      "https://purple.com/bundles/*"
+    ],
     "promoUrls": [
       "https://purple.com/sale"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://purple.com/sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Traeger",
@@ -1524,9 +1769,15 @@
     "discoveryUrls": [
       "https://www.traeger.com/sitemap"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.traeger.com/accessories/**",
+      "https://www.traeger.com/grills/**"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.traeger.com/sale"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Ryobi",
@@ -1539,9 +1790,14 @@
     "discoveryUrls": [
       "https://www.ryobitools.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.ryobitools.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.ryobitools.com/collections/savings"
+    ],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Furbo",
@@ -1556,7 +1812,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 2 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: candidate sale/deals paths return a generic page, not a product listing."
   },
   {
     "name": "Owlet",
@@ -1569,9 +1826,15 @@
     "discoveryUrls": [
       "https://owletcare.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://owletcare.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://owletcare.com/collections/prime-big-deal-days"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Away",
@@ -1584,9 +1847,15 @@
     "discoveryUrls": [
       "https://www.awaytravel.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.awaytravel.com/products/*"
+    ],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [
+      "https://www.awaytravel.com/collections/sale"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Deals pages verified 2026-10-07."
   },
   {
     "name": "Jackery",
@@ -1600,11 +1869,17 @@
     "discoveryUrls": [
       "https://www.jackery.com/sitemap.xml"
     ],
-    "productUrlPatterns": [],
+    "productUrlPatterns": [
+      "https://www.jackery.com/products/*"
+    ],
     "promoUrls": [
       "https://www.jackery.com/pages/deals"
     ],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06."
+    "dealUrls": [
+      "https://www.jackery.com/pages/deals"
+    ],
+    "platform": "shopify",
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). Promo page confirmed HTTP 200 and allowed by robots.txt on 2026-10-06. Deals pages verified 2026-10-07."
   },
   {
     "name": "Kobo",
@@ -1619,7 +1894,8 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No public deals page verified 2026-10-07: site blocks our crawler (HTTP 403)."
   },
   {
     "name": "Weber",
@@ -1634,6 +1910,7 @@
     ],
     "productUrlPatterns": [],
     "promoUrls": [],
-    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented)."
+    "dealUrls": [],
+    "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: sale pages render products client-side (only 1 product link in HTML)."
   }
 ]

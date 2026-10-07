@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
 import { commerceAudit } from "./audit";
+import { recordVerification, type VerificationEventInput } from "./verification-events";
 import { CODE_SHAPE, findCodesInText } from "./page-functions/coupon";
 
 /**
@@ -363,10 +364,16 @@ async function auditStatusChange(id: string, code: string, from: string | null |
   if (action) await commerceAudit(action, "commerce_coupon", id, { before: { status: from ?? null }, after: { status: to }, metadata: { code, evidence: evidence ?? null } });
 }
 
+/** COUPON verification event for one check of a code (every check, changed or not). */
+function couponEvent(id: string, c: { code: string; sourceUrl: string }, from: string | null | undefined, to: string, evidence: string | null | undefined, at: Date, check: string): VerificationEventInput {
+  return { entityType: "coupon", entityId: id, kind: "COUPON", result: to, reason: evidence ?? null, sourceUrl: c.sourceUrl, details: { code: c.code, previous: from ?? null, changed: (from ?? null) !== to, check }, checkedAt: at };
+}
+
 /** Writes coupons observed in one crawl (unique merchant+code+sourceUrl). Never deletes. */
 export async function upsertCoupons(input: { brandId: string | null; coupons: NormalizedCoupon[]; observedAt: Date; rawIds?: Record<string, string>; now?: Date }): Promise<UpsertSummary> {
   const now = input.now ?? new Date();
   const out: UpsertSummary = { created: 0, updated: 0, statuses: {}, changed: 0 };
+  const events: VerificationEventInput[] = [];
   for (const c of input.coupons) {
     const where = { merchant_code_sourceUrl: { merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl } };
     const existing = await db.commerceCoupon.findUnique({ where, select: { id: true, status: true, verificationEvidence: true } });
@@ -396,14 +403,17 @@ export async function upsertCoupons(input: { brandId: string | null; coupons: No
       out.updated++;
       if (existing.status !== v.status) out.changed++;
       await auditStatusChange(existing.id, c.code, existing.status, v.status, v.evidence);
+      events.push(couponEvent(existing.id, c, existing.status, v.status, v.evidence, now, "OBSERVED"));
     } else {
       const row = await db.commerceCoupon.create({ data: { ...data, merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl, firstSeenAt: input.observedAt } });
       out.created++;
       out.changed++;
       await commerceAudit("COUPON_CREATED", "commerce_coupon", row.id, { after: { status: v.status }, metadata: { merchant: c.merchant, code: c.code, sourceUrl: c.sourceUrl, discount: c.discount, expiresAt: c.expiresAt?.toISOString() ?? null } });
+      events.push(couponEvent(row.id, c, null, v.status, v.evidence, now, "OBSERVED"));
     }
     out.statuses[v.status] = (out.statuses[v.status] ?? 0) + 1;
   }
+  await recordVerification(events);
   return out;
 }
 
@@ -416,6 +426,7 @@ export async function recordDisappearances(input: { merchant: string; sourceUrl:
   const now = input.now ?? new Date();
   const gone = await db.commerceCoupon.findMany({ where: { merchant: input.merchant, sourceUrl: input.sourceUrl, code: { notIn: input.presentCodes }, status: { notIn: ["INVALID", "EXPIRED"] } } });
   let invalid = 0;
+  const events: VerificationEventInput[] = [];
   for (const c of gone) {
     const misses = await db.commerceRawRecord.count({ where: { url: input.sourceUrl, purpose: "COUPON", fetchedAt: { gt: c.observedAt } } });
     const v = verifyCoupon({ firstParty: true, seenInLatestCrawl: false, sufficient: true, conflict: null, expiresAt: c.expiresAt, consecutiveMisses: misses, previousStatus: c.status, sourceUrl: c.sourceUrl, observedAt: c.observedAt }, now);
@@ -424,21 +435,26 @@ export async function recordDisappearances(input: { merchant: string; sourceUrl:
       if (v.status === "INVALID") invalid++;
       await auditStatusChange(c.id, c.code, c.status, v.status, v.evidence);
     }
+    events.push(couponEvent(c.id, c, c.status, v.status, v.evidence ?? `not on ${c.sourceUrl} in this crawl (${misses} consecutive miss(es))`, now, "MISSING"));
   }
+  await recordVerification(events);
   return { missed: gone.length, invalid };
 }
 
 /** Marks every coupon whose stated expiry has passed as EXPIRED (rows kept; one COUPON_EXPIRED event each). */
 export async function markExpiredCoupons(now = new Date()): Promise<number> {
-  const due = await db.commerceCoupon.findMany({ where: { expiresAt: { lt: now }, status: { not: "EXPIRED" } }, select: { id: true, code: true, status: true, expiresAt: true } });
+  const due = await db.commerceCoupon.findMany({ where: { expiresAt: { lt: now }, status: { not: "EXPIRED" } }, select: { id: true, code: true, status: true, expiresAt: true, sourceUrl: true } });
   let count = 0;
+  const events: VerificationEventInput[] = [];
   for (const c of due) {
     // Conditional update: a concurrent run that already expired it does not produce a second event.
     const r = await db.commerceCoupon.updateMany({ where: { id: c.id, status: c.status }, data: { status: "EXPIRED" } });
     if (!r.count) continue;
     count++;
     await auditStatusChange(c.id, c.code, c.status, "EXPIRED", `stated expiry ${c.expiresAt?.toISOString()} has passed`);
+    events.push(couponEvent(c.id, c, c.status, "EXPIRED", `stated expiry ${c.expiresAt?.toISOString()} has passed`, now, "EXPIRY"));
   }
+  await recordVerification(events);
   return count;
 }
 

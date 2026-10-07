@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ActionForm, Badge, Stat, when } from "@/components/admin-ui";
+import { ActionForm, Badge, Stat, when, safeHref } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
@@ -83,7 +83,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Sea
                     <td data-label="Field">{field}</td>
                     <td data-label="Value">{show(f?.value)}{f?.unit ? ` ${f.unit}` : ""}</td>
                     <td data-label="Status"><Badge value={f?.status} tone={TONE[f?.status ?? ""] ?? "neutral"} /></td>
-                    <td data-label="Source">{f?.sourceUrl ? <a href={f.sourceUrl} rel="noopener noreferrer" target="_blank">{f.sourceName}</a> : (f?.sourceName ?? "—")} <span className="small muted">{f?.source ?? ""}</span></td>
+                    <td data-label="Source">{safeHref(f?.sourceUrl) ? <a href={safeHref(f?.sourceUrl)} rel="noopener noreferrer" target="_blank">{f.sourceName}</a> : (f?.sourceName ?? "—")} <span className="small muted">{f?.source ?? ""}</span></td>
                     <td data-label="Checked">{when(f?.observedAt ?? null)}</td>
                     <td data-label="Note" className="small">{f?.note}</td>
                   </tr>

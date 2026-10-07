@@ -1,5 +1,6 @@
 import type { CommerceBrand, Prisma } from "@prisma/client";
 import seedFile from "@/data/commerce/brands.seed.json";
+import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
@@ -10,7 +11,7 @@ import { URGENT_MIN_INTERVAL_HOURS, urgentRecheckBrandIds } from "./recheck";
 /**
  * Commerce brands: the official brand sites the commerce engine reads products, prices and
  * first-party promotions from. Brands are data. The seed (data/commerce/brands.seed.json) is
- * only a starting point that admins edit in Admin → Commerce → Brands. Importing it again never
+ * only a starting point that admins edit in Admin → Commerce → Sources (the source registry). Importing it again never
  * overwrites an admin's edits: an existing brand only has its *empty* list fields filled.
  */
 
@@ -21,10 +22,12 @@ export const BRAND_LIMITS = {
   crawlWindowStartHour: { min: 0, max: 23 },
   crawlWindowHours: { min: 1, max: 24 },
   listItems: 20,
+  /** Deal and product URL lists (one page each). */
+  urlListItems: 50,
   notes: 1000,
 } as const;
 
-export const ARRAY_FIELDS = ["categories", "discoveryUrls", "productUrlPatterns", "promoUrls"] as const;
+export const ARRAY_FIELDS = ["categories", "discoveryUrls", "productUrlPatterns", "promoUrls", "dealUrls", "productUrls"] as const;
 type ArrayField = (typeof ARRAY_FIELDS)[number];
 
 export type BrandInput = {
@@ -36,6 +39,12 @@ export type BrandInput = {
   discoveryUrls: string[];
   productUrlPatterns: string[];
   promoUrls: string[];
+  /** Official sale/deal listing pages (crawled one link deep to reach discounted product pages). */
+  dealUrls: string[];
+  /** Explicit official product pages crawled every run. */
+  productUrls: string[];
+  /** ISO 4217 currency of the brand's storefront prices (default USD). */
+  currency: string;
   enabled: boolean;
   priority: number;
   crawlFrequencyHours: number;
@@ -49,6 +58,7 @@ export type BrandInput = {
 };
 
 export const DEFAULT_BRAND_TIMEZONE = "America/New_York";
+export const DEFAULT_BRAND_CURRENCY = "USD";
 /** Seed brands are spread across the day in 2-hour windows (12 windows) by a hash of the slug. */
 export const SEED_WINDOW_HOURS = 2;
 
@@ -57,7 +67,8 @@ export type BrandInputRaw = {
   [K in keyof BrandInput]?: K extends ArrayField ? string[] | string : BrandInput[K] | string | null;
 };
 
-export type BrandSeed = Pick<BrandInput, "name" | "slug" | "officialDomain" | "market" | "categories" | "discoveryUrls" | "productUrlPatterns" | "promoUrls"> & { notes?: string | null };
+export type BrandSeed = Pick<BrandInput, "name" | "slug" | "officialDomain" | "market" | "categories" | "discoveryUrls" | "productUrlPatterns" | "promoUrls"> &
+  Partial<Pick<BrandInput, "dealUrls" | "productUrls" | "currency">> & { notes?: string | null };
 
 export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -90,10 +101,59 @@ export function normalizeDomain(raw: string): Validation<string> {
   if (!checked.url || checked.url.host !== host) return { ok: false, error: `Official domain is not a public host name: ${raw.trim()}` };
   // A real domain name (or, only when the loopback test switch is on, a loopback test host).
   const hostname = checked.url.hostname;
-  if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname) && !/^(127\.0\.0\.1|localhost)$/.test(hostname)) {
+  if (checked.url.port && !config.allowLoopbackForTests()) return { ok: false, error: `Official domain must not name a port: ${raw.trim()}` };
+  if (/^(127\.0\.0\.1|localhost)$/.test(hostname)) return { ok: true, value: host };
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)) {
     return { ok: false, error: `Official domain is not a valid domain name: ${raw.trim()}` };
   }
+  // Syntactic public-host check (no network call; robots.txt is checked live at the first crawl).
+  const labels = hostname.split(".");
+  if (RESERVED_TLDS.has(labels[labels.length - 1])) return { ok: false, error: `Official domain is not a public host name (reserved or internal top-level domain): ${raw.trim()}` };
+  if (PUBLIC_SUFFIXES.has(baseDomain(hostname))) return { ok: false, error: `Official domain is a public suffix, not a site: ${raw.trim()}` };
   return { ok: true, value: host };
+}
+
+/** Top-level domains that never resolve to a public site (RFC 2606 / RFC 6761 / common internal names). */
+const RESERVED_TLDS = new Set(["test", "example", "invalid", "localhost", "local", "internal", "intranet", "lan", "home", "corp", "private", "localdomain", "arpa", "onion", "alt", "home-network"]);
+/** Multi-label public suffixes: a brand domain must be a registrable name below one of them, never the suffix itself. */
+const PUBLIC_SUFFIXES = new Set(["co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "com.au", "net.au", "org.au", "co.jp", "ne.jp", "co.nz", "com.br", "co.in", "com.mx", "co.za", "com.sg", "com.cn", "com.hk", "com.tw", "co.kr", "com.tr", "github.io", "vercel.app", "netlify.app", "herokuapp.com", "pages.dev", "web.app", "firebaseapp.com", "blogspot.com", "azurewebsites.net", "cloudfront.net", "amazonaws.com", "appspot.com"]);
+
+/** Query parameters that only track a click or a campaign: never part of a registry URL. */
+const TRACKING_PARAMS = new Set(["gclid", "gbraid", "wbraid", "dclid", "fbclid", "msclkid", "yclid", "igshid", "twclid", "ttclid", "li_fat_id", "mc_cid", "mc_eid", "_ga", "_gl", "_hsenc", "_hsmi", "mkt_tok", "srsltid", "cjevent", "cjdata", "irclickid", "irgwc", "clickid", "click_id", "ranmid", "raneaid", "ransiteid", "aff_id", "affid", "affiliate_id", "aff_sub", "awc", "sscid", "epik", "s_kwcid", "ef_id", "trk", "trkid", "zanpid", "spm", "icid", "cmpid", "camp", "campaign_id", "ref_src"]);
+
+/** The first tracking parameter in a URL's query string (utm_*, click ids, affiliate ids), or null. */
+export function trackingParam(url: URL): string | null {
+  for (const key of url.searchParams.keys()) {
+    const k = key.toLowerCase();
+    if (k.startsWith("utm_") || TRACKING_PARAMS.has(k)) return key;
+  }
+  return null;
+}
+
+/** ISO 4217 currency code (uppercase, a code the runtime knows). */
+export function normalizeCurrency(raw: unknown): Validation<string> {
+  const v = String(raw ?? "").trim().toUpperCase() || DEFAULT_BRAND_CURRENCY;
+  if (!/^[A-Z]{3}$/.test(v)) return { ok: false, error: `Currency: a three-letter ISO 4217 code, e.g. USD: ${String(raw ?? "").trim()}` };
+  let known: string[] = [];
+  try {
+    known = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("currency") ?? [];
+  } catch {
+    known = [];
+  }
+  if (known.length && !known.includes(v)) return { ok: false, error: `Currency: ${v} is not an ISO 4217 code` };
+  return { ok: true, value: v };
+}
+
+/** A slug from a brand name ("Acme Audio" → "acme-audio"); empty when nothing usable remains. */
+export function slugFromName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
 }
 
 /** The domain without a leading "www." — used for the brand's own subdomains (e.g. sitemaps.example.com). */
@@ -109,15 +169,35 @@ export function onBrandDomain(url: URL, officialDomain: string): boolean {
   return url.hostname === base || url.hostname.endsWith(`.${base}`);
 }
 
-function checkUrlList(name: string, urls: string[], officialDomain: string): string | null {
-  if (urls.length > BRAND_LIMITS.listItems) return `${name}: at most ${BRAND_LIMITS.listItems} entries`;
+/**
+ * One registry URL: https, a public host (validateOutboundUrl: no IP literals of private ranges,
+ * localhost, internal names or credentials), no explicit port, on the official domain or one of its
+ * subdomains, and no click/campaign tracking parameters. Returns an error message or null.
+ */
+export function checkRegistryUrl(name: string, u: string, officialDomain: string): string | null {
+  if (u.length > 2000) return `${name}: URL too long: ${u.slice(0, 80)}…`;
+  const r = validateOutboundUrl(u, { standardPortsOnly: true });
+  if (!r.url || r.url.protocol !== "https:") return `${name} must be public https:// URLs: ${u}`;
+  // The loopback test switch (never on in production) lets the suite point a brand at a stub server on a port.
+  if (r.url.port && !config.allowLoopbackForTests()) return `${name} must not name a port: ${u}`;
+  if (/^[\d.]+$|:/.test(r.url.hostname) && !config.allowLoopbackForTests()) return `${name} must use the brand's domain name, not an IP address: ${u}`;
+  if (!onBrandDomain(r.url, officialDomain)) return `${name} must be on ${officialDomain} (or its subdomains): ${u}`;
+  const tracking = trackingParam(r.url);
+  if (tracking) return `${name} must not carry tracking parameters (${tracking}): ${u}`;
+  return null;
+}
+
+function checkUrlList(name: string, urls: string[], officialDomain: string, max: number = BRAND_LIMITS.listItems): string | null {
+  if (urls.length > max) return `${name}: at most ${max} entries`;
   for (const u of urls) {
-    const r = validateOutboundUrl(u, { standardPortsOnly: true });
-    if (!r.url || r.url.protocol !== "https:") return `${name} must be public https:// URLs: ${u}`;
-    if (!onBrandDomain(r.url, officialDomain)) return `${name} must be on ${officialDomain} (or its subdomains): ${u}`;
+    const error = checkRegistryUrl(name, u, officialDomain);
+    if (error) return error;
   }
   return null;
 }
+
+const URL_LIST_LABEL: Record<Exclude<ArrayField, "categories" | "productUrlPatterns">, string> = { discoveryUrls: "Discovery URLs", promoUrls: "Promo URLs", dealUrls: "Deal URLs", productUrls: "Product URLs" };
+const urlListMax = (k: ArrayField) => (k === "dealUrls" || k === "productUrls" ? BRAND_LIMITS.urlListItems : BRAND_LIMITS.listItems);
 
 /**
  * Product URL globs (`*` within a segment, `**` across segments) must be https and stay on the
@@ -157,8 +237,19 @@ export function validateBrandInput(raw: BrandInputRaw, defaults: Partial<BrandIn
   const discoveryUrls = list("discoveryUrls");
   const productUrlPatterns = list("productUrlPatterns");
   const promoUrls = list("promoUrls");
-  const urlError = checkUrlList("Discovery URLs", discoveryUrls, officialDomain) ?? checkPatterns(productUrlPatterns, officialDomain) ?? checkUrlList("Promo URLs", promoUrls, officialDomain);
+  const dealUrls = list("dealUrls");
+  const productUrls = list("productUrls");
+  const urlError =
+    checkUrlList(URL_LIST_LABEL.discoveryUrls, discoveryUrls, officialDomain) ??
+    checkPatterns(productUrlPatterns, officialDomain) ??
+    checkUrlList(URL_LIST_LABEL.promoUrls, promoUrls, officialDomain) ??
+    checkUrlList(URL_LIST_LABEL.dealUrls, dealUrls, officialDomain, urlListMax("dealUrls")) ??
+    checkUrlList(URL_LIST_LABEL.productUrls, productUrls, officialDomain, urlListMax("productUrls"));
   if (urlError) return { ok: false, error: urlError };
+
+  const currencyRaw = raw.currency === undefined || raw.currency === null || String(raw.currency).trim() === "" ? (defaults.currency ?? DEFAULT_BRAND_CURRENCY) : raw.currency;
+  const currency = normalizeCurrency(currencyRaw);
+  if (!currency.ok) return currency;
 
   const priority = toInt(raw.priority, defaults.priority ?? 100);
   const crawlFrequencyHours = toInt(raw.crawlFrequencyHours, defaults.crawlFrequencyHours ?? 24);
@@ -185,19 +276,21 @@ export function validateBrandInput(raw: BrandInputRaw, defaults: Partial<BrandIn
     const r = validateOutboundUrl(store, { standardPortsOnly: true });
     if (!r.url || r.url.protocol !== "https:") return { ok: false, error: `Official store URL must be a public https:// URL: ${store}` };
     if (!onBrandDomain(r.url, officialDomain)) return { ok: false, error: `Official store URL must be on ${officialDomain} (or its subdomains): ${store}` };
+    const storeError = checkRegistryUrl("Official store URL", store, officialDomain);
+    if (storeError) return { ok: false, error: storeError };
     officialStoreUrl = r.url.toString();
   }
 
   const notesRaw = raw.notes !== undefined ? raw.notes : defaults.notes;
   const notes = typeof notesRaw === "string" && notesRaw.trim() ? notesRaw.trim().slice(0, L.notes) : null;
   const enabled = toBool(raw.enabled, defaults.enabled ?? true);
-  return { ok: true, value: { name, slug, officialDomain, market, categories, discoveryUrls, productUrlPatterns, promoUrls, enabled, priority, crawlFrequencyHours, maxProductsPerRun, crawlWindowStartHour, crawlWindowHours, timezone: tzRaw, officialStoreUrl, notes } };
+  return { ok: true, value: { name, slug, officialDomain, market, categories, discoveryUrls, productUrlPatterns, promoUrls, dealUrls, productUrls, currency: currency.value, enabled, priority, crawlFrequencyHours, maxProductsPerRun, crawlWindowStartHour, crawlWindowHours, timezone: tzRaw, officialStoreUrl, notes } };
 }
 
 /** Admin form → validated input. Lists are textareas, one entry per line. */
 export function parseBrandForm(get: (name: string) => string, defaults: Partial<BrandInput> = {}): Validation<BrandInput> {
   const raw: BrandInputRaw = {};
-  for (const k of ["name", "slug", "officialDomain", "market", "priority", "crawlFrequencyHours", "maxProductsPerRun", "crawlWindowStartHour", "crawlWindowHours", "timezone", "officialStoreUrl", "notes", ...ARRAY_FIELDS] as const) raw[k] = get(k);
+  for (const k of ["name", "slug", "officialDomain", "market", "currency", "priority", "crawlFrequencyHours", "maxProductsPerRun", "crawlWindowStartHour", "crawlWindowHours", "timezone", "officialStoreUrl", "notes", ...ARRAY_FIELDS] as const) raw[k] = get(k);
   // Unchecked checkboxes are absent from a form post: "enabledPresent" says the field was on the form.
   raw.enabled = get("enabledPresent") ? (get("enabled") ? "true" : "false") : undefined;
   return validateBrandInput(raw, defaults);
@@ -212,7 +305,20 @@ export function readBrandSeed(data: unknown = seedFile): BrandSeed[] {
     const strs = (k: string) => (Array.isArray(o[k]) ? (o[k] as unknown[]).filter((v): v is string => typeof v === "string") : []);
     const s = (k: string) => (typeof o[k] === "string" ? (o[k] as string) : "");
     if (!s("slug") || !s("name") || !s("officialDomain")) throw new Error(`brands.seed.json: brand ${i} needs name, slug and officialDomain`);
-    return { name: s("name"), slug: s("slug"), officialDomain: s("officialDomain"), market: s("market") || "US", categories: strs("categories"), discoveryUrls: strs("discoveryUrls"), productUrlPatterns: strs("productUrlPatterns"), promoUrls: strs("promoUrls"), notes: s("notes") || null };
+    return {
+      name: s("name"),
+      slug: s("slug"),
+      officialDomain: s("officialDomain"),
+      market: s("market") || "US",
+      categories: strs("categories"),
+      discoveryUrls: strs("discoveryUrls"),
+      productUrlPatterns: strs("productUrlPatterns"),
+      promoUrls: strs("promoUrls"),
+      dealUrls: strs("dealUrls"),
+      productUrls: strs("productUrls"),
+      ...(s("currency") ? { currency: s("currency") } : {}),
+      notes: s("notes") || null,
+    };
   });
 }
 
@@ -234,7 +340,7 @@ export async function importSeedBrands(seed: BrandSeed[] = readBrandSeed()): Pro
     const b = v.value;
     const existing = await db.commerceBrand.findUnique({ where: { slug: b.slug } });
     if (!existing) {
-      await db.commerceBrand.create({ data: { name: b.name, slug: b.slug, officialDomain: b.officialDomain, market: b.market, categories: b.categories, discoveryUrls: b.discoveryUrls, productUrlPatterns: b.productUrlPatterns, promoUrls: b.promoUrls, notes: b.notes, ...seedWindow(b.slug) } });
+      await db.commerceBrand.create({ data: { name: b.name, slug: b.slug, officialDomain: b.officialDomain, market: b.market, categories: b.categories, discoveryUrls: b.discoveryUrls, productUrlPatterns: b.productUrlPatterns, promoUrls: b.promoUrls, dealUrls: b.dealUrls, productUrls: b.productUrls, currency: b.currency, notes: b.notes, ...seedWindow(b.slug) } });
       result.created++;
       continue;
     }
@@ -244,7 +350,7 @@ export async function importSeedBrands(seed: BrandSeed[] = readBrandSeed()): Pro
     for (const k of ARRAY_FIELDS) {
       if (!existing[k].length && b[k].length) {
         // Seed URLs are checked against the domain the admin may have changed since; never mix sites.
-        const ok = k === "categories" || (k === "productUrlPatterns" ? checkPatterns(b[k], existing.officialDomain) : checkUrlList(k, b[k], existing.officialDomain)) === null;
+        const ok = k === "categories" || (k === "productUrlPatterns" ? checkPatterns(b[k], existing.officialDomain) : checkUrlList(URL_LIST_LABEL[k], b[k], existing.officialDomain, urlListMax(k))) === null;
         if (ok) fill[k] = b[k];
       }
     }

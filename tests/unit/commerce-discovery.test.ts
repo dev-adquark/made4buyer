@@ -260,3 +260,14 @@ describe("every country storefront prefix counts as non-US", () => {
     expect(isUsStorefront("https://www.example.com/tv/oled-65-c4")).toBe(true);
   });
 });
+
+describe("robotsAllows merges every User-agent: * group", () => {
+  it("applies rules from later * groups too", async () => {
+    const { robotsAllows } = await import("@/lib/pipeline/apify");
+    const robots = "User-agent: *\nDisallow: /cart\n\nUser-agent: Googlebot\nDisallow: /x\n\nUser-agent: *\nDisallow: /checkout\nAllow: /checkout/help\n";
+    expect(robotsAllows(robots, "/cart")).toBe(false);
+    expect(robotsAllows(robots, "/checkout/pay")).toBe(false);
+    expect(robotsAllows(robots, "/checkout/help")).toBe(true);
+    expect(robotsAllows(robots, "/products/x")).toBe(true);
+  });
+});

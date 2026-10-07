@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Flash from "@/components/flash";
-import { ActionForm, Badge, pct, when } from "@/components/admin-ui";
+import { ActionForm, Badge, pct, when, safeHref } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { publicImageUrl } from "@/lib/pipeline/images";
@@ -115,7 +115,7 @@ export default async function ReviewDetail({ params, searchParams }: { params: P
           </dd>
           <dt>Source</dt>
           <dd>
-            {r.source} / {r.sourceId} {r.sourceUrl && <a href={r.sourceUrl} target="_blank" rel="noopener noreferrer">source ↗</a>}
+            {r.source} / {r.sourceId} {safeHref(r.sourceUrl) && <a href={safeHref(r.sourceUrl)} target="_blank" rel="noopener noreferrer">source ↗</a>}
           </dd>
           <dt>Confidence</dt>
           <dd>

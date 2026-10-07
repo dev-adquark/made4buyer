@@ -1,4 +1,4 @@
-import { ActionForm, Badge, Stat, when } from "@/components/admin-ui";
+import { ActionForm, Badge, safeHref, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { COUPON_STATUSES, couponMaxAgeDays } from "@/lib/commerce/coupons";
@@ -105,7 +105,7 @@ export default async function CommerceCouponsPage({ searchParams }: { searchPara
                   <Badge value={c.status} tone={TONE[c.status] ?? "neutral"} />
                 </td>
                 <td data-label="Source">
-                  <a className="small" href={c.sourceUrl} rel="nofollow noopener noreferrer" target="_blank">
+                  <a className="small" href={safeHref(c.sourceUrl)} rel="nofollow noopener noreferrer" target="_blank">
                     {c.sourceUrl.replace(/^https?:\/\//, "").slice(0, 60)}
                   </a>
                 </td>

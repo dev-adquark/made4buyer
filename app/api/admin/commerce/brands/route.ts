@@ -1,14 +1,15 @@
 import { adminAction, field } from "@/lib/admin/route";
-import { crawlBrandNow, createBrand, importSeedBrands, parseBrandForm, toggleBrand, updateBrand } from "@/lib/commerce/brands";
+import { crawlBrandNow, createBrand, importSeedBrands, parseBrandForm, slugFromName, toggleBrand, updateBrand } from "@/lib/commerce/brands";
 import { db } from "@/lib/db";
 import { audit } from "@/lib/security/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PAGE = "/admin/commerce/brands";
+/** The source registry (Admin → Commerce → Sources); /admin/commerce/brands redirects there. */
+const PAGE = "/admin/commerce/sources";
 
-/** Admin → Commerce → Brands: create | update | toggle | crawl-now | import-seed. Every change is audited. */
+/** Admin → Commerce → Sources (brand registry): create | update | toggle | crawl-now | import-seed. Every change is audited. */
 export const POST = adminAction(PAGE, async ({ form, ctx }) => {
   const action = field(form, "action");
   const id = field(form, "id");
@@ -46,7 +47,8 @@ export const POST = adminAction(PAGE, async ({ form, ctx }) => {
   }
 
   if (action === "create") {
-    const parsed = parseBrandForm((n) => field(form, n));
+    // "Add brand" may leave the slug blank: it is derived from the name (and still validated).
+    const parsed = parseBrandForm((n) => (n === "slug" && !field(form, "slug") ? slugFromName(field(form, "name")) : field(form, n)));
     if (!parsed.ok) return { error: parsed.error };
     const r = await createBrand(parsed.value);
     if (!r.ok) return { error: r.error };

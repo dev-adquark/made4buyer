@@ -94,10 +94,11 @@ export function robotsAllows(robots: string, path: string): boolean {
       if (value) current.rules.push({ allow: key === "allow", path: value });
     } else lastWasAgent = false;
   }
-  const group = groups.find((g) => g.agents.includes("*"));
-  if (!group) return true;
+  // Every "User-agent: *" group applies (some sites split them, e.g. three separate * groups).
+  const rules = groups.filter((g) => g.agents.includes("*")).flatMap((g) => g.rules);
+  if (!rules.length) return true;
   let best: { allow: boolean; len: number } | null = null;
-  for (const r of group.rules) {
+  for (const r of rules) {
     if (robotsPatternMatches(r.path, path) && (!best || r.path.length > best.len || (r.path.length === best.len && r.allow))) best = { allow: r.allow, len: r.path.length };
   }
   return best ? best.allow : true;

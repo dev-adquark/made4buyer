@@ -34,6 +34,21 @@ export function pct(v: number | null | undefined): string {
   return v === null || v === undefined ? "—" : `${(v * 100).toFixed(1)}%`;
 }
 
+/**
+ * An href for a stored (scraped or admin-entered) URL: only absolute http(s) URLs are linked, so a
+ * stored `javascript:` / `data:` value can never become a clickable link in Admin. Returns undefined
+ * otherwise (render the text without a link).
+ */
+export function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function when(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;

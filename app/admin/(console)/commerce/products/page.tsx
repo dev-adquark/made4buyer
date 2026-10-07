@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { Badge, Pager, Stat, when } from "@/components/admin-ui";
+import { Badge, Pager, safeHref, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
+import { listPriceLabelFor, NOT_CLASSIFIED_LABEL, parseDealReasons } from "@/lib/commerce/admin-queries";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,26 @@ export const metadata = { title: "Commerce products" };
 const PAGE_SIZE = 40;
 type Tone = "ok" | "warn" | "error" | "info" | "neutral";
 const TONE: Record<string, Tone> = { MATCHED: "ok", MATCH_REJECTED: "error", UNMATCHED: "neutral", FRESH: "ok", STALE: "warn" };
+const DEAL_TONE: Record<string, Tone> = { ACTIVE: "ok", VERIFIED: "info", EXPIRED: "neutral", BROKEN: "error", CONFLICTING: "warn", UNVERIFIED: "warn", INVALID: "error" };
+const LINK_TONE: Record<string, Tone> = { OK: "ok", REDIRECTED_SAME_SITE: "ok", UNCHECKED: "neutral", BROKEN: "error", OFF_SITE: "error", UNREACHABLE: "error", BLOCKED: "warn" };
+const OFFICIAL_TONE: Record<string, Tone> = { VERIFIED: "ok", MISMATCH: "error", NOT_FOUND: "warn", UNVERIFIED: "warn" };
+
+/** Persisted deal status (never computed here); null → "Not classified yet". */
+function DealStatusCell({ status, at }: { status: string | null; at: Date | null }) {
+  return status ? (
+    <>
+      <Badge value={status} tone={DEAL_TONE[status] ?? "neutral"} />
+      {at && <div className="small muted">{when(at)}</div>}
+    </>
+  ) : (
+    <span className="small muted">{NOT_CLASSIFIED_LABEL}</span>
+  );
+}
+
+function OfficialCell({ entityId, status }: { entityId: string | null; status: string | null | undefined }) {
+  if (!entityId) return <span className="small muted">Not attached</span>;
+  return <Badge value={status ?? "NOT CHECKED"} tone={status ? (OFFICIAL_TONE[status] ?? "neutral") : "neutral"} />;
+}
 const IDENTITY = ["MATCHED", "MATCH_REJECTED", "UNMATCHED"];
 
 const host = (url: string) => {
@@ -57,10 +78,10 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
   const ids = rows.map((r) => r.id);
   const [latestLogs, entities, detailRaw, detailLogs, detailEntity] = await Promise.all([
     ids.length ? db.commerceMatchLog.findMany({ where: { commerceProductId: { in: ids } }, orderBy: { createdAt: "desc" }, distinct: ["commerceProductId"] }) : Promise.resolve([]),
-    db.productEntity.findMany({ where: { id: { in: rows.map((r) => r.productEntityId).filter(Boolean) as string[] } }, select: { id: true, name: true } }),
+    db.productEntity.findMany({ where: { id: { in: rows.map((r) => r.productEntityId).filter(Boolean) as string[] } }, select: { id: true, name: true, officialStatus: true, officialVerifiedAt: true } }),
     detail?.lastRawId ? db.commerceRawRecord.findUnique({ where: { id: detail.lastRawId } }) : Promise.resolve(null),
     detail ? db.commerceMatchLog.findMany({ where: { commerceProductId: detail.id }, orderBy: { createdAt: "desc" }, take: 100 }) : Promise.resolve([]),
-    detail?.productEntityId ? db.productEntity.findUnique({ where: { id: detail.productEntityId }, select: { id: true, name: true } }) : Promise.resolve(null),
+    detail?.productEntityId ? db.productEntity.findUnique({ where: { id: detail.productEntityId }, select: { id: true, name: true, officialStatus: true, officialUrl: true, officialVerifiedAt: true } }) : Promise.resolve(null),
   ]);
   const count = (s: string) => byIdentity.find((b) => b.identityStatus === s)?._count._all ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -78,7 +99,7 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
       <h1>Commerce products</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        Products read from official brand and retailer pages by the commerce engine. A product is attached to a Made4Buyers product only after an exact identity match (model, MPN or GTIN); every decision is logged with its reason. Prices are shown only from fresh offers.
+        Products read from official brand and retailer pages by the commerce engine. A product is attached to a Made4Buyers product only after an exact identity match (model, MPN or GTIN); every decision is logged with its reason. Prices are shown only from fresh offers. Deal status is the persisted classification (see <Link href="/admin/commerce/deals">Deals</Link>); official verification is the attached Made4Buyers product’s official-site status.
       </p>
       <div className="stats">
         <Stat label="Matched" value={count("MATCHED")} />
@@ -133,10 +154,22 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
             Brand {detail.brand?.name ?? "—"} · Model {detail.model ?? "—"} · MPN {detail.mpn ?? "—"} · SKU {detail.sku ?? "—"} · GTIN {detail.gtin ?? "—"} · Category {detail.category ?? "—"}
             <br />
             Canonical URL:{" "}
-            <a href={detail.canonicalUrl} rel="noopener noreferrer nofollow" target="_blank">
+            <a href={safeHref(detail.canonicalUrl)} rel="noopener noreferrer nofollow" target="_blank">
               {detail.canonicalUrl}
             </a>{" "}
             · observed {when(detail.observedAt)}
+            <br />
+            Official verification: <OfficialCell entityId={detail.productEntityId} status={detailEntity?.officialStatus} />
+            {detailEntity?.officialVerifiedAt && <> checked {when(detailEntity.officialVerifiedAt)}</>}
+            {detailEntity?.officialUrl && (
+              <>
+                {" "}
+                ·{" "}
+                <a href={safeHref(detailEntity.officialUrl)} rel="noopener noreferrer nofollow" target="_blank">
+                  official page
+                </a>
+              </>
+            )}
             <br />
             Identity: {detail.identityReason ?? "no reason recorded"}
             {detailEntity && (
@@ -161,9 +194,11 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
                   <th scope="col">Seller</th>
                   <th scope="col">URL</th>
                   <th scope="col" className="num">Price</th>
+                  <th scope="col" className="num">Previous price</th>
                   <th scope="col">Availability</th>
-                  <th scope="col">Observed</th>
+                  <th scope="col">Last checked</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Deal status</th>
                   <th scope="col">Provenance</th>
                 </tr>
               </thead>
@@ -175,24 +210,44 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
                       <div className="small muted">{o.sellerType}</div>
                     </td>
                     <td data-label="URL" className="small" style={{ wordBreak: "break-all" }}>
-                      <a href={o.destinationUrl} rel="noopener noreferrer nofollow" target="_blank">
+                      <a href={safeHref(o.destinationUrl)} rel="noopener noreferrer nofollow" target="_blank">
                         {o.destinationUrl}
                       </a>
                       {o.affiliateUrl && <div className="muted">affiliate ({o.affiliateProvider ?? "?"}, {o.affiliateStatus})</div>}
                     </td>
                     <td data-label="Price" className="num">
                       {money(o.price, o.currency)}
-                      {o.listPrice != null && o.listPrice !== o.price && <div className="small muted">list {money(o.listPrice, o.currency)}</div>}
+                    </td>
+                    <td data-label="Previous price" className="num">
+                      {o.listPrice != null ? (
+                        <>
+                          {money(o.listPrice, o.currency)}
+                          <div className="small muted">{parseDealReasons(o.dealStatusReasons).listPriceLabel ?? listPriceLabelFor(detail.data, o)}</div>
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td data-label="Availability" className="small">
                       {o.availability ?? "—"}
                       {o.shipping && <div className="muted">{o.shipping}</div>}
                     </td>
-                    <td data-label="Observed" className="small">
-                      {when(o.observedAt)}
+                    <td data-label="Last checked" className="small">
+                      price {when(o.observedAt)}
+                      <div>
+                        link <Badge value={o.linkStatus} tone={LINK_TONE[o.linkStatus] ?? "neutral"} /> {o.linkCheckedAt ? when(o.linkCheckedAt) : "not checked"}
+                      </div>
                     </td>
                     <td data-label="Status">
                       <Badge value={o.status} tone={TONE[o.status] ?? "neutral"} />
+                    </td>
+                    <td data-label="Deal status" className="small">
+                      <DealStatusCell status={o.dealStatus} at={o.dealStatusAt} />
+                      {parseDealReasons(o.dealStatusReasons).reasons.map((r, i) => (
+                        <div key={`${r.code}-${i}`} className="muted" title={r.message ?? undefined}>
+                          {r.label}
+                        </div>
+                      ))}
                     </td>
                     <td data-label="Provenance" className="small">
                       {o.sourceRawId ? <code>raw {o.sourceRawId}</code> : "—"}
@@ -201,7 +256,7 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
                 ))}
                 {!detail.offers.length && (
                   <tr>
-                    <td colSpan={7}>No offers recorded.</td>
+                    <td colSpan={9}>No offers recorded.</td>
                   </tr>
                 )}
               </tbody>
@@ -277,6 +332,10 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
               <th scope="col">Model / MPN / GTIN</th>
               <th scope="col">Identity</th>
               <th scope="col">Best fresh price</th>
+              <th scope="col">Previous price</th>
+              <th scope="col">Deal status</th>
+              <th scope="col">Last checked</th>
+              <th scope="col">Official</th>
               <th scope="col">Freshness</th>
               <th scope="col">Source / basis</th>
             </tr>
@@ -324,6 +383,30 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
                       <span className="muted">No offers</span>
                     )}
                   </td>
+                  <td data-label="Previous price" className="small">
+                    {shown?.listPrice != null ? (
+                      <>
+                        {money(shown.listPrice, shown.currency)}
+                        <div className="muted">{parseDealReasons(shown.dealStatusReasons).listPriceLabel ?? listPriceLabelFor(p.data, shown)}</div>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td data-label="Deal status">{shown ? <DealStatusCell status={shown.dealStatus} at={null} /> : "—"}</td>
+                  <td data-label="Last checked" className="small">
+                    {shown ? (
+                      <>
+                        {when(shown.observedAt)}
+                        <div className="muted">link {shown.linkCheckedAt ? `${shown.linkStatus} ${when(shown.linkCheckedAt)}` : "not checked"}</div>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td data-label="Official">
+                    <OfficialCell entityId={p.productEntityId} status={entity?.officialStatus} />
+                  </td>
                   <td data-label="Freshness">{fresh ? <Badge value={fresh} tone={TONE[fresh] ?? "neutral"} /> : "—"}</td>
                   <td data-label="Source / basis" className="small">
                     {host(p.canonicalUrl)}
@@ -334,7 +417,7 @@ export default async function CommerceProductsPage({ searchParams }: { searchPar
             })}
             {!rows.length && (
               <tr>
-                <td colSpan={7}>{qs ? "No products match these filters." : "No commerce products yet: they appear after the first collection run."}</td>
+                <td colSpan={11}>{qs ? "No products match these filters." : "No commerce products yet: they appear after the first collection run."}</td>
               </tr>
             )}
           </tbody>
