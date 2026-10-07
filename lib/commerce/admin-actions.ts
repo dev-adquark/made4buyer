@@ -1,3 +1,4 @@
+import { couponDealStatus, summarizeStatuses } from "./deal-status";
 import { HIDDEN_LINK_STATUSES } from "./link-check";
 import { commerceBudget, monthlyBudgetUsd } from "./pipeline";
 import { getSwitches, setSwitch, SWITCHES, type SwitchKey } from "@/lib/automation/settings";
@@ -5,7 +6,7 @@ import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { nextRun, scheduledEntries, type ScheduleOrigin } from "@/lib/ops/cron-schedule";
 import { checkByKey, lastDataAudit } from "@/lib/ops/data-audit";
-import { DEAL_CURRENCY, loadOfficialDeals } from "@/lib/public/deals";
+import { DEAL_CURRENCY, loadClassifiedOffers, loadOfficialDeals } from "@/lib/public/deals";
 import { freshOfferWhere, freshSince } from "@/lib/public/offers";
 import { audit, type AuditContext } from "@/lib/security/audit";
 
@@ -138,12 +139,36 @@ async function integrityCounts(now: Date): Promise<{ counts: Record<IntegrityKey
   }
 }
 
+/** At most this many offers / coupons are classified for the "Deals by status" counts (newest first). */
+export const DEAL_STATUS_SAMPLE = 5000;
+
+/**
+ * Offers and coupons counted by deal status (lib/commerce/deal-status.ts, the functions /deals uses),
+ * with the most common reasons per status. Bounded: the newest DEAL_STATUS_SAMPLE rows of each.
+ */
+export async function dealStatusCounts(now = new Date()) {
+  const [offers, coupons] = await Promise.all([
+    loadClassifiedOffers({ take: DEAL_STATUS_SAMPLE, now: now.getTime() }),
+    db.commerceCoupon.findMany({
+      select: { code: true, status: true, startsAt: true, expiresAt: true, lastVerifiedAt: true, sourceUrl: true, brand: { select: { name: true, officialDomain: true, officialStoreUrl: true } } },
+      orderBy: { observedAt: "desc" },
+      take: DEAL_STATUS_SAMPLE,
+    }),
+  ]);
+  return {
+    offers: summarizeStatuses(offers.map((o) => o.verdict)),
+    coupons: summarizeStatuses(coupons.map((c) => couponDealStatus(c, now))),
+    sampleLimit: DEAL_STATUS_SAMPLE,
+  };
+}
+
 /**
  * Every number on the Commerce engine overview, read from the database with the same rules the
  * jobs and the public site use:
  *  - budget: commerceBudget() (sum of CommerceRun.usageUsd since the 1st of the UTC month vs monthlyBudgetUsd());
  *  - public offers: freshOfferWhere() (FRESH, observed within the price window, link not hidden) + USD + price > 0;
  *  - price drops / promo codes: loadOfficialDeals() (what /deals renders, uncached);
+ *  - deals by status: dealStatusCounts() (offerDealStatus / couponDealStatus, the same functions);
  *  - duplicates / conflicts: the data-audit checks (lib/ops/data-audit.ts).
  */
 export async function commerceMetrics(now = new Date()) {
@@ -157,7 +182,7 @@ export async function commerceMetrics(now = new Date()) {
   const hidden = { linkStatus: { in: [...HIDDEN_LINK_STATUSES] } };
   const cutoff = freshSince(now.getTime());
 
-  const [budget, runs24, ok24, failed24, runsMonth, okMonth, failedMonth, lastOk, productsTotal, matched, rejected, unmatched, offersTotal, publicOffers, staleOffers, hiddenLinkOffers, priceRejected, couponsTotal, couponsVerifiedActive, deals, integrity] = await Promise.all([
+  const [budget, runs24, ok24, failed24, runsMonth, okMonth, failedMonth, lastOk, productsTotal, matched, rejected, unmatched, offersTotal, publicOffers, staleOffers, hiddenLinkOffers, priceRejected, couponsTotal, couponsVerifiedActive, deals, integrity, statuses] = await Promise.all([
     commerceBudget(now),
     db.commerceRun.count({ where: since24 }),
     db.commerceRun.count({ where: { ...since24, ...ok } }),
@@ -179,6 +204,7 @@ export async function commerceMetrics(now = new Date()) {
     db.commerceCoupon.count({ where: { status: "VERIFIED", AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }] } }),
     loadOfficialDeals(now.getTime()),
     integrityCounts(now),
+    dealStatusCounts(now),
   ]);
 
   const { spentUsd, budgetUsd, remainingUsd, exhausted } = budget;
@@ -201,6 +227,14 @@ export async function commerceMetrics(now = new Date()) {
     integrity: { source: integrity.source, at: integrity.at, lastAuditAt: integrity.lastAuditAt },
     coupons: { total: couponsTotal, verifiedActive: couponsVerifiedActive, publicCodes: deals.codes.length },
     deals: { priceDrops: deals.drops.length, checkedAt: deals.checkedAt ? new Date(deals.checkedAt) : null },
+    dealStatus: {
+      offers: { ...statuses.offers, stored: offersTotal, truncated: offersTotal > statuses.offers.total },
+      coupons: { ...statuses.coupons, stored: couponsTotal, truncated: couponsTotal > statuses.coupons.total },
+      publicPriceDrops: deals.drops.length,
+      publicPromoCodes: deals.codes.length,
+      brokenLinks: hiddenLinkOffers,
+      sampleLimit: statuses.sampleLimit,
+    },
   };
 }
 

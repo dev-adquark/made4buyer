@@ -12,6 +12,7 @@ import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline
 import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
+import { continueWeeklyRefresh, runWeeklyRefresh } from "@/lib/commerce/weekly-refresh";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfillWithCorrection } from "@/lib/images/hero-correction";
@@ -74,9 +75,13 @@ export const JOBS = {
   "commerce-discover": {
     lockTtlMs: 15 * 60_000,
     run: async (trigger: string) => {
+      const t0 = Date.now();
       const collected = await runCommerceCollect(trigger);
       const coupons = await collectCouponRuns(trigger);
-      return { ...(await runCommerceDiscover(trigger)), collected: { checked: collected.checked, collected: collected.collected, staleOffers: collected.staleOffers }, coupons: { checked: coupons.checked, collected: coupons.collected } };
+      const discover = await runCommerceDiscover(trigger);
+      // Carries an in-progress weekly deals sweep on with the time this invocation has left (≤ 90 s; one settings read when idle).
+      const weekly = await continueWeeklyRefresh(trigger, { budgetMs: Math.min(90_000, 250_000 - (Date.now() - t0)) });
+      return { ...discover, collected: { checked: collected.checked, collected: collected.collected, staleOffers: collected.staleOffers }, coupons: { checked: coupons.checked, collected: coupons.collected }, weekly: { status: weekly.status, ...(weekly.reason ? { reason: weekly.reason } : {}) } };
     },
     locked: true,
   },
@@ -87,6 +92,8 @@ export const JOBS = {
   "commerce-official-verify": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runOfficialVerify(trigger), locked: true },
   // Data-integrity audit (lib/ops/data-audit.ts): flags only, plus two safe audited status fixes.
   "data-audit": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runDataAudit(trigger), locked: true },
+  // Weekly deals refresh (lib/commerce/weekly-refresh.ts): called daily; sweeps once per configured weekly slot, resumable.
+  "deals-weekly-refresh": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runWeeklyRefresh(trigger), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -110,6 +117,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],
   "commerce-official-verify": ["commerce_engine"],
+  "deals-weekly-refresh": ["commerce_engine"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED", "BUDGET_EXHAUSTED"]);

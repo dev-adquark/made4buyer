@@ -237,9 +237,12 @@ export async function checkDestination(destinationUrl: string, opts: { robots?: 
 
 type DueOffer = Pick<CommerceOffer, "id" | "destinationUrl" | "status" | "linkStatus" | "linkHttpStatus" | "linkCheckedAt" | "linkFinalUrl"> & { product: { productEntityId: string | null } };
 
-/** Offers not checked in the last 24 h: FRESH first, then STALE; never-checked and oldest-checked first. */
-export async function dueOffers(now: Date, limit: number): Promise<DueOffer[]> {
-  const where = { OR: [{ linkCheckedAt: null }, { linkCheckedAt: { lt: new Date(now.getTime() - RECHECK_MS) } }] };
+/**
+ * Offers not checked in the last 24 h (or, with `checkedBefore`, not checked since that time — the
+ * weekly deals sweep checks every offer once): FRESH first, then STALE; never-checked and oldest-checked first.
+ */
+export async function dueOffers(now: Date, limit: number, checkedBefore?: Date): Promise<DueOffer[]> {
+  const where = { OR: [{ linkCheckedAt: null }, { linkCheckedAt: { lt: checkedBefore ?? new Date(now.getTime() - RECHECK_MS) } }] };
   const select = { id: true, destinationUrl: true, status: true, linkStatus: true, linkHttpStatus: true, linkCheckedAt: true, linkFinalUrl: true, product: { select: { productEntityId: true } } } as const;
   const orderBy = [{ linkCheckedAt: { sort: "asc" as const, nulls: "first" as const } }, { observedAt: "desc" as const }];
   const fresh = await db.commerceOffer.findMany({ where: { status: "FRESH", ...where }, select, orderBy, take: limit });
@@ -269,10 +272,12 @@ async function storeCheck(offer: DueOffer, next: NextLinkState, now: Date): Prom
   return { offerId: offer.id, host, from: offer.linkStatus, to: next.linkStatus, httpStatus: next.linkHttpStatus, reason: next.reason, changed };
 }
 
+export type LinkValidationOptions = { checkedBefore?: Date; budgetMs?: number; limit?: number };
+
 /** Job "commerce-validate-links": checks due offer destinations. Idempotent (24 h re-check window); run under a job lock. */
-export async function runLinkValidation(trigger: string, now = new Date()) {
+export async function runLinkValidation(trigger: string, now = new Date(), opts: LinkValidationOptions = {}) {
   const started = Date.now();
-  const offers = await dueOffers(now, linkChecksPerRun());
+  const offers = await dueOffers(now, opts.limit ?? linkChecksPerRun(), opts.checkedBefore);
   if (!offers.length) return { status: "OK", trigger, due: 0, checked: 0, changed: 0, results: [] as LinkCheckOutcome[] };
 
   const byHost = new Map<string, DueOffer[]>();
@@ -290,7 +295,7 @@ export async function runLinkValidation(trigger: string, now = new Date()) {
   const results: Array<LinkCheckOutcome & { changed: boolean }> = [];
   const touchedEntities = new Set<string>();
   const delay = sameHostDelayMs();
-  const budget = linkCheckBudgetMs();
+  const budget = Math.min(linkCheckBudgetMs(), opts.budgetMs ?? Infinity);
   let outOfTime = false;
 
   // Hosts run in parallel (bounded); requests to one host run one at a time with a pause between them.

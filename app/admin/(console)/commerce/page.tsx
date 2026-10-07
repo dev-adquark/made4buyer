@@ -4,8 +4,10 @@ import { ActionForm, Badge, Pager, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { commerceEngineOn, commerceMetrics, nextMonthStartUtc } from "@/lib/commerce/admin-actions";
+import { DEAL_REASON_LABEL, DEAL_STATUSES, type DealStatus } from "@/lib/commerce/deal-status";
 import { db } from "@/lib/db";
 import { isJobName } from "@/lib/jobs/registry";
+import WeeklyRefreshPanel from "./weekly-refresh-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Commerce engine" };
@@ -43,6 +45,17 @@ const money = (v: number) => `$${v.toFixed(2)}`;
 const percent = (ratio: number) => (Number.isFinite(ratio) ? `${(ratio * 100).toFixed(0)}%` : "—");
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
+const DEAL_TONE: Record<DealStatus, "ok" | "warn" | "error" | "info" | "neutral"> = { ACTIVE: "ok", VERIFIED: "info", EXPIRED: "neutral", INVALID: "error", BROKEN: "error", CONFLICTING: "warn", UNVERIFIED: "warn" };
+const DEAL_MEANING: Record<DealStatus, string> = {
+  ACTIVE: "shown on /deals",
+  VERIFIED: "valid, not a live drop (no list price, out of stock, not started, duplicate)",
+  EXPIRED: "stale (> price window), stated end passed, or not re-seen",
+  INVALID: "not USD, no price, list ≤ price, no identity, unknown site",
+  BROKEN: "link BROKEN / OFF_SITE / UNREACHABLE",
+  CONFLICTING: "official site contradicts it",
+  UNVERIFIED: "not confirmed by the official site",
+};
+
 /** Admin → Commerce engine: state, controls, health numbers, budget and every Apify run. */
 export default async function CommercePage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
@@ -76,7 +89,7 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
   const qs = new URLSearchParams({ ...(status ? { status } : {}), ...(purpose ? { purpose } : {}) }).toString();
   const base = `/admin/commerce${qs ? `?${qs}` : ""}`;
   const returnTo = base;
-  const { budget, runs: runStats, products, offers, coupons } = m;
+  const { budget, runs: runStats, products, offers, coupons, dealStatus } = m;
 
   return (
     <>
@@ -85,6 +98,8 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
       <p className="muted">
         Apify crawls official brand sites (and reviewed sources) for products, prices and first-party promo codes. Raw records are kept exactly as returned; a product is attached to a Made4Buyers product only after an exact identity match, and an offer is shown only while it is fresh.
       </p>
+
+      <WeeklyRefreshPanel returnTo={returnTo} />
 
       <section aria-labelledby="engine-h">
         <h2 id="engine-h">
@@ -185,6 +200,55 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
       <p className="small muted">
         Duplicates and conflicts: {m.integrity.source === "live" ? "computed live with the data-audit checks" : "from the stored data-audit result (live check failed)"}
         {m.integrity.at ? ` at ${when(m.integrity.at)}` : ""}. Last stored data audit: {m.integrity.lastAuditAt ? when(m.integrity.lastAuditAt) : "never run"} (<Link href="/admin/data-audit">Data audit</Link>). Public offers and price drops use the same rules as the public site.
+      </p>
+
+      <h2 id="deal-status-h">Deals by status</h2>
+      <div className="stats" aria-labelledby="deal-status-h">
+        <Stat label="Offers classified" value={dealStatus.offers.total} note={dealStatus.offers.truncated ? `newest ${dealStatus.sampleLimit} of ${dealStatus.offers.stored}` : "every stored offer"} />
+        <Stat label="Active price drops" value={dealStatus.offers.byStatus.ACTIVE} note={`${dealStatus.publicPriceDrops} on /deals`} />
+        <Stat label="Active promo codes" value={dealStatus.coupons.byStatus.ACTIVE} note={`${dealStatus.publicPromoCodes} on /deals · ${dealStatus.coupons.total} classified`} />
+        <Stat label="Broken links" value={dealStatus.brokenLinks} note="offers hidden: BROKEN / OFF_SITE / UNREACHABLE" />
+      </div>
+      <div className="table-wrap">
+        <table className="table responsive" aria-labelledby="deal-status-h">
+          <thead>
+            <tr>
+              <th scope="col">Status</th>
+              <th scope="col">Meaning</th>
+              <th scope="col" className="num">Offers</th>
+              <th scope="col">Top offer reasons</th>
+              <th scope="col" className="num">Coupons</th>
+              <th scope="col">Top coupon reasons</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DEAL_STATUSES.map((st) => (
+              <tr key={st}>
+                <td data-label="Status">
+                  <Badge value={st} tone={DEAL_TONE[st]} />
+                </td>
+                <td data-label="Meaning" className="small">
+                  {DEAL_MEANING[st]}
+                </td>
+                <td data-label="Offers" className="num">
+                  {dealStatus.offers.byStatus[st]}
+                </td>
+                <td data-label="Top offer reasons" className="small">
+                  {dealStatus.offers.topReasons[st].length ? dealStatus.offers.topReasons[st].map((r) => `${DEAL_REASON_LABEL[r.code]} (${r.count})`).join(" · ") : "—"}
+                </td>
+                <td data-label="Coupons" className="num">
+                  {dealStatus.coupons.byStatus[st]}
+                </td>
+                <td data-label="Top coupon reasons" className="small">
+                  {dealStatus.coupons.topReasons[st].length ? dealStatus.coupons.topReasons[st].map((r) => `${DEAL_REASON_LABEL[r.code]} (${r.count})`).join(" · ") : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small muted">
+        Computed with the same functions as /deals (lib/commerce/deal-status.ts): an offer is ACTIVE only when it is an official-site page (or a retailer page for a product confirmed on the official site) stating a list price above the price, USD, observed within the price window, link not hidden, in stock, its stated end not passed and not a duplicate.
       </p>
 
       <h2 id="runs-h">Apify runs</h2>

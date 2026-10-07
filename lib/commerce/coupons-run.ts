@@ -112,10 +112,12 @@ async function crawlableUrls(urls: string[], domain: string) {
   return { ok, skipped };
 }
 
-async function due(where: { brandId?: string; sourceId?: string }, frequencyHours: number, now: number): Promise<string | null> {
+async function due(where: { brandId?: string; sourceId?: string }, frequencyHours: number, now: number, since?: Date): Promise<string | null> {
   const last = await db.commerceRun.findFirst({ where: { ...where, purpose: COUPON_PURPOSE, apifyRunId: { not: null } }, orderBy: { startedAt: "desc" } });
   if (!last) return null;
   if ([...ACTIVE, "SUCCEEDED", "COLLECTING"].includes(last.status)) return `run ${last.apifyRunId} is still ${last.status}`;
+  // Weekly sweep: every promo brand once per sweep, whatever its normal frequency.
+  if (since) return last.startedAt >= since ? "already crawled in this sweep" : null;
   // 30 minutes of slack so a daily cron landing a little early does not skip a day.
   if (now - last.startedAt.getTime() < Math.max(1, frequencyHours) * 3_600_000 - 30 * 60_000) return "not due yet";
   return null;
@@ -144,8 +146,15 @@ async function startRun(target: { brandId?: string; sourceId?: string; name: str
   }
 }
 
+export type CouponCrawlOptions = {
+  /** Weekly sweep: a brand is due when its last coupon run started before this time (frequency ignored). */
+  since?: Date;
+  /** Stop starting runs after this time (ms epoch); the rest is reported in `remaining` for the next invocation. */
+  deadline?: number;
+};
+
 /** Starts one coupon run per due brand with promo URLs (and per approved+enabled coupon source, normally none). */
-export async function runCouponCrawl(trigger: string): Promise<{ status: string; started: number; reason?: string; results?: StartResult[] }> {
+export async function runCouponCrawl(trigger: string, opts: CouponCrawlOptions = {}): Promise<{ status: string; started: number; reason?: string; results?: StartResult[]; remaining?: number }> {
   const gate = await allowed("commerce_engine");
   if (!gate.ok) return { status: "PAUSED", started: 0, reason: gate.reason };
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", started: 0, reason: "APIFY_API_TOKEN not configured" };
@@ -157,8 +166,13 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
   const now = Date.now();
   const results: StartResult[] = [];
   const brands = await db.commerceBrand.findMany({ where: { enabled: true, promoUrls: { isEmpty: false } }, orderBy: [{ priority: "desc" }, { name: "asc" }] });
+  let remaining = 0;
   for (const b of brands) {
-    const wait = await due({ brandId: b.id }, b.crawlFrequencyHours, now);
+    if (opts.deadline && Date.now() > opts.deadline) {
+      remaining++;
+      continue;
+    }
+    const wait = await due({ brandId: b.id }, b.crawlFrequencyHours, now, opts.since);
     if (wait) {
       results.push({ target: b.slug, status: "NOT_DUE", reason: wait });
       continue;
@@ -169,6 +183,10 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
   const sources = await db.commerceSource.findMany({ where: { kind: "COUPON_SITE", enabled: true, termsStatus: "APPROVED", startUrls: { isEmpty: false } } });
   for (const s of sources) {
     if (!sourceRunnable(s)) continue;
+    if (opts.deadline && Date.now() > opts.deadline) {
+      remaining++;
+      continue;
+    }
     const wait = await due({ sourceId: s.id }, s.crawlFrequencyHours, now);
     if (wait) {
       results.push({ target: s.slug, status: "NOT_DUE", reason: wait });
@@ -178,7 +196,7 @@ export async function runCouponCrawl(trigger: string): Promise<{ status: string;
   }
   const started = results.filter((r) => r.status === "STARTED").length;
   log.info("coupon crawl", { trigger, brands: brands.length, started, notDue: results.filter((r) => r.status === "NOT_DUE").length, skipped: results.filter((r) => r.status !== "STARTED" && r.status !== "NOT_DUE").length });
-  return { status: "OK", started, results };
+  return { status: "OK", started, results, ...(remaining ? { remaining, reason: `time budget reached; ${remaining} target(s) left for the next invocation` } : {}) };
 }
 
 // ── Collect ──────────────────────────────────────────────────────────────

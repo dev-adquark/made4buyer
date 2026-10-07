@@ -41,7 +41,7 @@ function dealsJsonLd(deals: OfficialDeals, site: string) {
   return {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: "Official price drops",
+    name: "Verified price drops",
     url: new URL("/deals", site).toString(),
     itemListElement: deals.drops.slice(0, 50).map((d, i) => ({
       "@type": "ListItem",
@@ -91,7 +91,7 @@ export default async function Deals() {
             Deals.
             <span style={{ display: "block", fontSize: "0.4em", lineHeight: 0.95, marginTop: "0.14em", fontVariationSettings: "\"wdth\" 88", letterSpacing: "0.005em" }}>Official and verified, or not listed.</span>
           </h1>
-          <p className="lede">Price drops and promo codes read from brands’ own sites. A price drop is listed only when the seller’s page states both the current price and a higher regular price; the saving is worked out from those two numbers. Every offer says when we checked it, and nothing older than 48 hours is shown.</p>
+          <p className="lede">Price drops and promo codes read from brands’ own sites. A price drop is listed only when the seller’s page states both the current price and a higher regular price; the saving is worked out from those two numbers, rounded down. Every offer says when we checked it, and nothing older than 48 hours is shown.</p>
           {!nothing && <DealsFilter categories={categoryOptions} brands={brandOptions} />}
         </div>
       </section>
@@ -109,8 +109,8 @@ export default async function Deals() {
       {drops.length > 0 && (
         <section className="section" aria-labelledby="drops-title" data-deal-section="">
           <div className="wrap">
-            <SectionHeader id="drops-title" label={`${drops.length} verified`} title="Official price drops">
-              Current price and regular price as stated on the seller’s page, biggest saving first.
+            <SectionHeader id="drops-title" label={`${drops.length} verified`} title="Verified price drops">
+              The current price and the previous price exactly as the seller’s page states them, read from the brand’s official site (or a retailer, for a product confirmed on the official site), in stock and checked within 48 hours. Biggest saving first.
             </SectionHeader>
             <PriceDropGrid drops={drops} />
             <p className="muted" data-deal-empty="" hidden>
@@ -123,7 +123,7 @@ export default async function Deals() {
       {codes.length > 0 && (
         <section className="section" aria-labelledby="codes-title" data-deal-section="">
           <div className="wrap">
-            <SectionHeader id="codes-title" label={`${codes.length} verified`} title="Official promo codes">
+            <SectionHeader id="codes-title" label={`${codes.length} verified`} title="Verified promo codes">
               Codes published by the brand on its own site, still listed there at our last check and not expired. The discount is quoted exactly as the brand states it.
             </SectionHeader>
             <PromoCodeGrid codes={codes} />

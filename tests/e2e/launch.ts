@@ -27,6 +27,9 @@ async function main() {
   } catch {
     /* no build output yet */
   }
+  // Same for the data cache (unstable_cache, e.g. the "deals" tag): an aborted run that seeded
+  // commerce data (deals.spec.ts) must not leave cached deals for the next run.
+  rmSync(".next/cache/fetch-cache", { recursive: true, force: true });
   const stub = await startStubServer({ port: 4011 });
   const env = {
     ...process.env,

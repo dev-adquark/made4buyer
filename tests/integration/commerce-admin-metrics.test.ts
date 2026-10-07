@@ -108,6 +108,24 @@ describe("commerceMetrics", () => {
     expect(m.integrity.lastAuditAt).toBeNull();
     expect(m.coupons).toEqual({ total: 6, verifiedActive: 2, publicCodes: 1 });
     expect(m.deals.priceDrops).toBe(1);
+
+    // Deals by status (lib/commerce/deal-status.ts, the functions /deals uses), from the same seed:
+    // a ACTIVE · b, i UNVERIFIED (retailer, product not confirmed on the official site) · c INVALID (GBP)
+    // · d INVALID (no price) · e, f BROKEN · g EXPIRED (past 48 h) · h EXPIRED (STALE).
+    expect(m.dealStatus.offers.byStatus).toEqual({ ACTIVE: 1, VERIFIED: 0, EXPIRED: 2, INVALID: 2, BROKEN: 2, CONFLICTING: 0, UNVERIFIED: 2 });
+    expect(m.dealStatus.offers).toMatchObject({ total: 9, stored: 9, truncated: false });
+    expect(m.dealStatus.offers.topReasons.BROKEN).toEqual([{ code: "LINK_BROKEN", count: 2 }]);
+    expect(m.dealStatus.offers.topReasons.EXPIRED).toEqual([{ code: "NOT_FRESH", count: 1 }, { code: "STALE", count: 1 }]);
+    expect(m.dealStatus.offers.topReasons.INVALID).toEqual([{ code: "NO_PRICE", count: 1 }, { code: "NOT_USD", count: 1 }]);
+    expect(m.dealStatus.offers.topReasons.UNVERIFIED).toEqual([{ code: "NO_OFFICIAL_CONFIRMATION", count: 2 }]);
+    // Coupons: 1 ACTIVE · 2 EXPIRED (not re-seen in 30 days; stated expiry passed) · 1 VERIFIED (starts later) · 1 CONFLICTING · 1 UNVERIFIED.
+    expect(m.dealStatus.coupons.byStatus).toEqual({ ACTIVE: 1, VERIFIED: 1, EXPIRED: 2, INVALID: 0, BROKEN: 0, CONFLICTING: 1, UNVERIFIED: 1 });
+    expect(m.dealStatus.coupons.topReasons.EXPIRED).toEqual([{ code: "COUPON_EXPIRED", count: 1 }, { code: "COUPON_NOT_RESEEN", count: 1 }]);
+    expect(m.dealStatus.coupons.topReasons.VERIFIED).toEqual([{ code: "COUPON_NOT_STARTED", count: 1 }]);
+    expect(m.dealStatus).toMatchObject({ publicPriceDrops: 1, publicPromoCodes: 1, brokenLinks: 2 });
+    // The ACTIVE counts are exactly what /deals lists.
+    expect(m.dealStatus.offers.byStatus.ACTIVE).toBe(m.deals.priceDrops);
+    expect(m.dealStatus.coupons.byStatus.ACTIVE).toBe(m.coupons.publicCodes);
   });
 
   it("is all zeros on an empty database", async () => {
@@ -116,6 +134,7 @@ describe("commerceMetrics", () => {
     expect(m.budget.remainingUsd).toBe(30);
     expect(m.runs.lastSuccessAt).toBeNull();
     expect(m.products.total + m.offers.total + m.offers.public + m.coupons.total + m.deals.priceDrops + m.conflicts.total + m.offers.duplicateGroups).toBe(0);
+    expect(m.dealStatus.offers.total + m.dealStatus.coupons.total + m.dealStatus.brokenLinks).toBe(0);
   });
 
   it("warns at 80% of the budget and pauses until the next UTC month at 100%", async () => {

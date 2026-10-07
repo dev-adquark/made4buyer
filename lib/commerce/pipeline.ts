@@ -13,7 +13,8 @@ import type { Fact, FactSource, MatchResult, ProductIdentity } from "@/lib/produ
 import { sha256 } from "@/lib/util/text";
 import { commerceAudit, commerceAuditOnce } from "./audit";
 import { dueBrands, ensureBrandsSeeded } from "./brands";
-import { discoverProductUrls } from "./discovery";
+import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from "./discovery";
+import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { loadSummaryFacts } from "@/lib/products/current-facts";
 import { verifyOfficial } from "./official";
@@ -24,8 +25,9 @@ import { normalizeDestinationUrl, onDomain } from "./urls";
 /**
  * Commerce intelligence engine, product extraction (apify/web-scraper).
  *
- *   commerce-discover → for due brands: discovered product URLs → startProductRun (one run per brand,
- *                       depth 0: only those URLs, robots.txt respected, budget- and switch-gated)
+ *   commerce-discover → for due brands: offer pages due for a price re-check (lib/commerce/recheck.ts),
+ *                       then discovered product URLs → startProductRun (one run per brand, depth 0:
+ *                       only those URLs, robots.txt respected, budget- and switch-gated)
  *   commerce-collect  → poll RUNNING runs; for SUCCEEDED ones store every dataset item unchanged
  *                       (CommerceRawRecord), normalize, upsert CommerceProduct, match EXACTLY against
  *                       ProductEntity, and only then write ProductFacts + CommerceOffers with provenance.
@@ -542,24 +544,55 @@ export async function markStaleOffers(now = new Date()): Promise<number> {
 
 const STOP_CODES = new Set(["APIFY_NOT_CONFIGURED", "SWITCH_OFF", "BUDGET_EXHAUSTED"]);
 
-/** commerce-discover: discovered product URLs of due brands → one product run per brand. */
+export const isStopCode = (code: string | undefined) => !!code && STOP_CODES.has(code);
+
+export type BrandRunUrls = { urls: string[]; recheck: number; recheckDue: number; discovery: string; reason?: string };
+
+/**
+ * The URLs of one brand run: offer pages due for a price re-check first (lib/commerce/recheck.ts),
+ * then newly discovered product URLs up to maxProductsPerRun. Discovery is skipped when re-checks
+ * already fill the run. Never throws.
+ */
+export async function brandRunUrls(brand: CommerceBrand, now: Date, opts: { discovery?: DiscoveryOptions } = {}): Promise<BrandRunUrls> {
+  const cap = Math.max(1, brand.maxProductsPerRun);
+  let recheck: RecheckResult = { urls: [], due: 0, skipped: [] };
+  try {
+    recheck = await recheckCandidates(brand, now, cap);
+  } catch (error) {
+    log.warn("commerce re-check selection failed", { stage: "COMMERCE", brand: brand.slug, error: String(error).slice(0, 200) });
+  }
+  if (recheck.urls.length >= cap) return { urls: recheck.urls.slice(0, cap), recheck: Math.min(cap, recheck.urls.length), recheckDue: recheck.due, discovery: "NOT_NEEDED", reason: `${recheck.urls.length} offer page(s) due for a price re-check fill the run` };
+  let d: DiscoveryResult;
+  try {
+    d = await discoverProductUrls(brand, opts.discovery);
+  } catch (error) {
+    d = { status: "ERROR", urls: [], reason: String(error).slice(0, 300) };
+  }
+  const urls = [...new Set([...recheck.urls, ...(d.urls ?? [])])].slice(0, cap);
+  return { urls, recheck: recheck.urls.length, recheckDue: recheck.due, discovery: d.status, reason: d.reason ?? (d.status !== "OK" ? d.status : undefined) };
+}
+
+export type BrandRunResult = StartResult & { brand: string; urls: number; recheck: number; discovery: string };
+
+/** Builds one brand's run (re-checks first, then discovery) and starts it. Never throws. */
+export async function startBrandRun(brand: CommerceBrand, trigger: string, now: Date, opts: { discovery?: DiscoveryOptions } = {}): Promise<BrandRunResult> {
+  const b = await brandRunUrls(brand, now, opts);
+  const r = await startProductRun(brand, b.urls, trigger, b.reason);
+  if (r.code === "NO_URLS") await brandFailed(brand.id, `DISCOVERY_${b.discovery}`, r.reason ?? "no product URLs", now);
+  return { ...r, brand: brand.slug, urls: b.urls.length, recheck: b.recheck, discovery: b.discovery };
+}
+
+/** commerce-discover: offer pages due for a price re-check, then discovered product URLs, of due brands → one product run per brand. */
 export async function runCommerceDiscover(trigger: string, now = new Date()) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", started: 0 };
   await ensureBrandsSeeded();
   const limit = brandsPerRun();
   const brands = (await dueBrands(now, limit)).slice(0, limit);
-  const results: Array<{ brand: string; status: string; discovery?: string; reason?: string }> = [];
+  const results: Array<{ brand: string; status: string; discovery?: string; recheck?: number; reason?: string }> = [];
   for (const brand of brands) {
-    let d: Awaited<ReturnType<typeof discoverProductUrls>>;
-    try {
-      d = await discoverProductUrls(brand);
-    } catch (error) {
-      d = { status: "ERROR", urls: [], reason: String(error).slice(0, 300) };
-    }
-    const r = await startProductRun(brand, d.urls ?? [], trigger, d.reason ?? (d.status !== "OK" ? d.status : undefined));
-    results.push({ brand: brand.slug, status: r.status, discovery: d.status, reason: r.reason });
-    if (r.code === "NO_URLS") await brandFailed(brand.id, `DISCOVERY_${d.status}`, r.reason ?? "no product URLs", now);
-    if (r.code && STOP_CODES.has(r.code)) break; // the same reason applies to every remaining brand
+    const r = await startBrandRun(brand, trigger, now);
+    results.push({ brand: brand.slug, status: r.status, discovery: r.discovery, ...(r.recheck ? { recheck: r.recheck } : {}), reason: r.reason });
+    if (isStopCode(r.code)) break; // the same reason applies to every remaining brand
   }
   const started = results.filter((r) => r.status === "STARTED").length;
   const stopped = results.find((r) => r.status === "SKIPPED" && /budget|paused|not configured/i.test(r.reason ?? ""));

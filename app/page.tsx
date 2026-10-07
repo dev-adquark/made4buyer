@@ -63,7 +63,7 @@ export default async function Home() {
     categoryPhotos(CATEGORIES.map((c) => c.slug)).catch(() => ({}) as Record<string, null>),
     officialDeals().catch(() => ({ drops: [], codes: [], checkedAt: null })),
   ]);
-  // "Verified deals" rail: up to 6, official price drops first, then official promo codes.
+  // "Verified deals" rail: up to 6 ACTIVE deals (lib/commerce/deal-status.ts via officialDeals), price drops first, then promo codes; nothing when none.
   const railDrops = verified.drops.slice(0, 6);
   const railCodes = verified.codes.slice(0, 6 - railDrops.length);
   const site = config.siteUrl();
@@ -302,7 +302,7 @@ export default async function Home() {
         <section className="section tight" aria-labelledby="verified-deals-title">
           <div className="wrap">
             <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} verified`} title="Verified deals" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
-              Official price drops and promo codes, read from brands’ own sites and checked within the last 48 hours.
+              Active price drops and promo codes only: verified against the brand’s official site, in stock, unexpired and checked within the last 48 hours.
             </SectionHeader>
             <PriceDropGrid drops={railDrops} />
             {railCodes.length > 0 && <div style={{ marginTop: railDrops.length ? "var(--gutter)" : 0 }}><PromoCodeGrid codes={railCodes} /></div>}

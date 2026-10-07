@@ -313,7 +313,24 @@ function listOf(v: string): string[] {
     .filter(Boolean);
 }
 
-type OfferInfo = { price?: number; listPrice?: number; currency?: string; availability?: string; seller?: string };
+type OfferInfo = { price?: number; listPrice?: number; listPriceType?: "ListPrice" | "StrikethroughPrice"; priceValidUntil?: string; currency?: string; availability?: string; seller?: string };
+
+/**
+ * A stated end of the offer's price: schema.org priceValidUntil (Offer) or validThrough (its sale
+ * price specification), only when it is a real calendar date (YYYY-MM-DD, optionally with a time).
+ * Returned exactly as stated; never derived.
+ */
+function statedValidUntil(o: Record<string, unknown>): string | undefined {
+  const salesSpecs = asArray(o.priceSpecification)
+    .filter(isObj)
+    .filter((s) => ["", "saleprice"].includes(stripSchema(str(s.priceType) ?? "").toLowerCase()));
+  for (const c of [scalar(o.priceValidUntil), ...salesSpecs.map((s) => scalar(s.validThrough))]) {
+    const v = c?.trim();
+    if (v && STATED_DATE.test(v) && Number.isFinite(Date.parse(v))) return v;
+  }
+  return undefined;
+}
+const STATED_DATE = /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
 /**
  * The regular ("was") price, only as the page states it: a priceSpecification (typically a
@@ -321,7 +338,7 @@ type OfferInfo = { price?: number; listPrice?: number; currency?: string; availa
  * derived from anything else (not highPrice, not MSRP, not a sale-price difference). A list price
  * in a different currency from the offer is ignored.
  */
-function listPriceFromSpec(spec: unknown, offerCurrency?: string): number | undefined {
+function listPriceFromSpec(spec: unknown, offerCurrency?: string): { price: number; type: "ListPrice" | "StrikethroughPrice" } | undefined {
   for (const s of asArray(spec)) {
     if (!isObj(s)) continue;
     const t = stripSchema(str(s.priceType) ?? "").toLowerCase();
@@ -329,7 +346,7 @@ function listPriceFromSpec(spec: unknown, offerCurrency?: string): number | unde
     const cur = str(s.priceCurrency);
     if (cur && offerCurrency && cur.toUpperCase() !== offerCurrency.toUpperCase()) continue;
     const p = positive(s.price);
-    if (p) return p;
+    if (p) return { price: p, type: t === "listprice" ? "ListPrice" : "StrikethroughPrice" };
   }
   return undefined;
 }
@@ -372,7 +389,12 @@ function readOffer(o: Record<string, unknown>): OfferInfo {
     }
   }
   const lp = listPriceFromSpec(o.priceSpecification, str(o.priceCurrency) ?? info.currency);
-  if (lp != null && (info.price == null || lp >= info.price)) info.listPrice = lp;
+  if (lp != null && (info.price == null || lp.price >= info.price)) {
+    info.listPrice = lp.price;
+    info.listPriceType = lp.type;
+  }
+  const validUntil = statedValidUntil(o);
+  if (validUntil) info.priceValidUntil = validUntil;
   const cur = str(o.priceCurrency) ?? info.currency;
   if (cur && /^[a-z]{3}$/i.test(cur)) info.currency = cur.toUpperCase();
   else delete info.currency;
@@ -596,6 +618,10 @@ export type JsonLdOffer = {
   type: "Offer" | "AggregateOffer";
   price?: number;
   listPrice?: number;
+  /** How the page marked the list price: schema.org ListPrice ("Regular price") or StrikethroughPrice ("Was"). */
+  listPriceType?: "ListPrice" | "StrikethroughPrice";
+  /** The price's stated end (priceValidUntil / validThrough), exactly as stated. */
+  priceValidUntil?: string;
   /** AggregateOffer only: the dearest seller's price (never a list price). */
   highPrice?: number;
   currency?: string;
@@ -621,6 +647,8 @@ function offerList(nodes: Array<Record<string, unknown>>, pageUrl: string): Json
     const offer: JsonLdOffer = { type: aggregate ? "AggregateOffer" : "Offer" };
     if (info.price != null) offer.price = info.price;
     if (info.listPrice != null) offer.listPrice = info.listPrice;
+    if (info.listPrice != null && info.listPriceType) offer.listPriceType = info.listPriceType;
+    if (info.priceValidUntil) offer.priceValidUntil = info.priceValidUntil;
     const high = aggregate ? positive(o.highPrice) : undefined;
     if (high != null) offer.highPrice = high;
     if (info.currency) offer.currency = info.currency;

@@ -54,8 +54,9 @@ describe("commerce offers on public pages", () => {
     const model = await buildPageRenderModel(review.id);
     expect(model.offers.map((o) => o.price)).toEqual([999]);
     const json = JSON.stringify(model);
-    expect(json).not.toContain("899");
-    expect(json).not.toContain("799");
+    expect(json).not.toMatch(/"price":\s*899\b/);
+    // Match the price as a value, not any "799" (timestamps such as ".799Z" contain it).
+    expect(json).not.toMatch(/"price":\s*799\b|other\.test/);
     expect(json).not.toMatch(/sovrn|viglink|vglnk/i);
 
     expect(await runOfferStage(review.id)).toMatchObject({ status: "MATCHED", offers: 1 });

@@ -78,7 +78,7 @@ describe("normalizeCommerceRecord", () => {
     if (!n.ok) return;
     expect(n.canonicalUrl).toBe(EXPRESS_URL);
     expect(n.product).toMatchObject({ name: "Breville Barista Express", brand: "Breville", mpn: "BES870XL", gtin: "0021614062161", price: 599.95, listPrice: 749.95, currency: "USD", availability: "InStock" });
-    expect(n.offers).toEqual([{ type: "Offer", price: 599.95, listPrice: 749.95, currency: "USD", availability: "InStock", seller: "Breville USA", url: EXPRESS_URL, source: "json-ld" }]);
+    expect(n.offers).toEqual([{ type: "Offer", price: 599.95, listPrice: 749.95, listPriceType: "ListPrice", currency: "USD", availability: "InStock", seller: "Breville USA", url: EXPRESS_URL, source: "json-ld" }]);
     expect(n.specs.find((s) => s.name === "Pump Pressure")).toEqual({ name: "Pump Pressure", value: "15 bar", source: "json-ld" });
     expect(n.specs).toContainEqual({ name: "Bean Hopper Capacity", value: "250 g", source: "page-table" });
     expect(n.images).toEqual([{ src: "https://www.breville.com/img/bes870.jpg", alt: "Barista Express" }]);

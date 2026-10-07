@@ -5,6 +5,7 @@ import { validateOutboundUrl } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { sha256 } from "@/lib/util/text";
 import { isValidTimezone, zonedParts } from "@/lib/util/timezone";
+import { URGENT_MIN_INTERVAL_HOURS, urgentRecheckBrandIds } from "./recheck";
 
 /**
  * Commerce brands: the official brand sites the commerce engine reads products, prices and
@@ -364,18 +365,42 @@ export function windowLabel(b: WindowFields): string {
 }
 
 /**
- * Brands to crawl now: highest priority first, then the longest-waiting (never-scheduled first).
- * A brand is due when its next crawl time has come AND it is inside its crawl window (or has
- * waited longer than its crawl frequency, so a missed window never starves it).
+ * Deals never lapse because of a window: a brand whose oldest FRESH public offer would otherwise go
+ * stale (observed > URGENT_RECHECK_HOURS ago) is due now, inside or outside its window and before its
+ * normal next crawl time. A failure backoff is still respected, and an urgent re-check never starts a
+ * crawl of the same brand more often than every URGENT_MIN_INTERVAL_HOURS (cost guard).
+ */
+function urgentWhere(ids: string[], now: Date): Prisma.CommerceBrandWhereInput {
+  const minGap = new Date(now.getTime() - URGENT_MIN_INTERVAL_HOURS * 3_600_000);
+  return {
+    enabled: true,
+    id: { in: ids },
+    AND: [{ OR: [{ consecutiveFailures: 0 }, { nextCrawlAt: null }, { nextCrawlAt: { lte: now } }] }, { OR: [{ lastCrawlAt: null }, { lastCrawlAt: { lt: minGap } }] }],
+  };
+}
+
+/**
+ * Brands to crawl now: urgent re-checks first, then highest priority, then the longest-waiting
+ * (never-scheduled first). A brand is due when its next crawl time has come AND it is inside its
+ * crawl window (or has waited longer than its crawl frequency, so a missed window never starves it),
+ * or when a public offer of it is about to go stale (see urgentWhere).
  */
 export async function dueBrands(now = new Date(), limit = 10): Promise<CommerceBrand[]> {
   const take = Math.max(1, Math.min(500, Math.floor(limit) || 1));
+  const urgentIds = await urgentRecheckBrandIds(now);
   const candidates = await db.commerceBrand.findMany({
-    where: dueWhere(now),
+    where: urgentIds.length ? { OR: [dueWhere(now), urgentWhere(urgentIds, now)] } : dueWhere(now),
     orderBy: [{ priority: "desc" }, { nextCrawlAt: { sort: "asc", nulls: "first" } }, { name: "asc" }],
     take: 1000,
   });
-  return candidates.filter((b) => inCrawlWindow(b, now) || windowOverdue(b, now)).slice(0, take);
+  const minGap = now.getTime() - URGENT_MIN_INTERVAL_HOURS * 3_600_000;
+  const urgent = new Set(
+    candidates
+      .filter((b) => urgentIds.includes(b.id) && (b.consecutiveFailures === 0 || !b.nextCrawlAt || b.nextCrawlAt <= now) && (!b.lastCrawlAt || b.lastCrawlAt.getTime() < minGap))
+      .map((b) => b.id),
+  );
+  const due = candidates.filter((b) => urgent.has(b.id) || inCrawlWindow(b, now) || windowOverdue(b, now));
+  return [...due.filter((b) => urgent.has(b.id)), ...due.filter((b) => !urgent.has(b.id))].slice(0, take);
 }
 
 /** First run on a fresh database: load the configured brand seed (idempotent; admin edits win). */

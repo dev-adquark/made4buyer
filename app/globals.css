@@ -889,7 +889,20 @@ details summary { cursor: pointer; font-weight: 600; }
 .deal-card .dc-main .label { display: block; margin-top: 6px; }
 .deal-card .dc-was { display: block; margin-top: 6px; font: 14px var(--f-ui); color: var(--muted); }
 .deal-card .dc-save { display: block; margin-top: 4px; font: 700 15px var(--f-ui); color: var(--ok); }
-.deal-card .dc-code { display: block; margin-top: 10px; }
-.deal-card .dc-code code { display: inline-block; font: 800 20px/1.1 var(--f-mono); letter-spacing: 0.06em; padding: 6px 10px; border: 1px dashed var(--ink); overflow-wrap: anywhere; }
+.deal-card .dc-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.deal-card .dc-code code { display: inline-block; max-width: 100%; font: 800 20px/1.1 var(--f-mono); letter-spacing: 0.06em; padding: 6px 10px; border: 1px dashed var(--ink); overflow-wrap: anywhere; user-select: all; }
+.deal-card .dc-copy { flex: none; min-height: 36px; }
+.deal-card .dc-avail { display: block; margin-top: 4px; color: var(--ink); }
+/* Always visible (unlike .dc-more): what was verified and when. */
+.deal-card .dc-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; padding: 0 16px 14px; font: 12.5px/1.45 var(--f-mono); }
+.deal-card .dc-facts dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.deal-card .dc-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.deal-card .dc-facts .dc-offer { font-weight: 700; color: var(--ok); }
+@media (max-width: 480px) {
+  .deal-card .dc-price { font-size: 36px; }
+  .deal-card .dc-top, .deal-card .dc-cta { flex-wrap: wrap; }
+  .deal-card .dc-facts { grid-template-columns: minmax(0, 1fr); gap: 0 12px; }
+  .deal-card .dc-facts dd { margin-bottom: 6px; }
+}
 .deals-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .deals-filter select { flex: 0 1 240px; min-height: 40px; max-width: 100%; }

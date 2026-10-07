@@ -637,9 +637,12 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     const d = await deals();
     const drops = section(d.markup, "drops-title");
     const dropsText = visibleText(drops);
-    expect(d.text).toContain("Official price drops");
+    expect(d.text).toContain("Verified price drops");
     expect(cards(drops)).toBe(2);
     expect(dropsText).toContain("Official Framework store price");
+    // The previous price is labelled as each page marked it (schema.org ListPrice / StrikethroughPrice).
+    expect(dropsText).toContain("Regular price $999.00");
+    expect(dropsText).toContain("Was $1,449.00");
     expect(dropsText).toContain("You save $200.00 (20%)");
     expect(dropsText).toContain("You save $150.00 (10%)");
     expect(dropsText.indexOf("$200.00")).toBeLessThan(dropsText.indexOf("$150.00")); // biggest saving first
@@ -667,7 +670,7 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
 
     const d = await deals();
     const codes = section(d.markup, "codes-title");
-    expect(d.text).toContain("Official promo codes");
+    expect(d.text).toContain("Verified promo codes");
     expect(cards(codes)).toBe(1);
     expect(visibleText(codes)).toContain("SAVE10");
     expect(visibleText(codes)).toContain("Official promo code from Framework");
