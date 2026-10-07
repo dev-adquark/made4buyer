@@ -12,6 +12,39 @@ Accept: application/json
 Authorization: Bearer $CONTENT_API_KEY        # or  $CONTENT_API_AUTH_HEADER: $CONTENT_API_KEY
 ```
 
+Configuration (server-side env, set in Vercel → Production):
+
+| Variable | Required | Default | Meaning |
+|---|---|---|---|
+| `CONTENT_API_URL` | yes | — | First page URL (https). Without it the `ingest` job is SKIPPED and Admin → Integrations shows BLOCKED_BY_ENVIRONMENT |
+| `CONTENT_API_KEY` | if the feed needs auth | — | Sent only server-side |
+| `CONTENT_API_AUTH_HEADER` | no | `Authorization` | Any header name, e.g. `X-API-Key` (then the raw key is sent) |
+| `CONTENT_API_AUTH_SCHEME` | no | `Bearer` | Prefix used only when the header is `Authorization` |
+| `CONTENT_API_SOURCE_NAME` | no | API host | Stable source id stored with every item |
+| `CONTENT_API_SCHEMA_VERSION` | no | `1` | Contract major version the feed must declare (when it declares one) |
+| `CONTENT_API_MAX_PAGES` / `CONTENT_API_TIMEOUT_MS` / `CONTENT_API_MAX_RETRIES` | no | 5 / 15000 / 3 | Pagination and retry bounds |
+
+Verify a feed before (or after) enabling it: `npx tsx scripts/verify-content-api.ts` fetches one
+page, validates it and prints counts only.
+
+## Versioning (contract v1)
+
+The adapter implements contract **version 1**. A feed MAY declare its version in the body
+(`schemaVersion`, `schema_version`, `apiVersion`, `version`, or `meta.schemaVersion`) or in a
+header (`X-Schema-Version`, `Api-Version`, `X-Api-Version`); a leading `v` is ignored and only
+the major number is compared. Minor versions (`1.x`) may add fields and are accepted.
+
+The whole run is rejected with `CONTENT_API_SCHEMA_MISMATCH` (not retried; shown in Admin →
+Ingestion runs, Admin → Failures and Admin → Integrations) when:
+
+- the declared major version differs from `CONTENT_API_SCHEMA_VERSION` (default `1`), or
+- a page has items but **none** of them has an id and a title under any accepted alias (the
+  error lists the field names received, never their values).
+
+Individual malformed items on an otherwise valid page are isolated as `CONTENT_SCHEMA_INVALID`
+and never abort the batch. A response without an item array is `CONTENT_API_RESPONSE_INVALID`
+(the error lists the top-level keys received).
+
 ## Response
 
 Either an array of items, or an object containing one of `items`, `results`, `data`,

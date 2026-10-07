@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SafeImg from "./safe-img";
 import TrustLabel from "./trust-label";
+import { ILLUSTRATIVE_CAPTION } from "@/lib/images/provenance";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { cardImage, type ReviewCard as Card } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
@@ -48,6 +49,16 @@ function Meta({ r }: { r: Card }) {
   );
 }
 
+/** Visible "Illustrative" tag on a card photo that is not the reviewed product (the full wording for screen readers and on hover). */
+export function IllustrativeTag() {
+  return (
+    <span className="illus-tag" title={ILLUSTRATIVE_CAPTION} data-illustrative="">
+      Illustrative
+      <span className="visually-hidden">{ILLUSTRATIVE_CAPTION.replace(/^Illustrative/, "")}</span>
+    </span>
+  );
+}
+
 /** `sizes` for a card image in a .grid (auto-fill, min 280px columns inside a 1440px container). */
 export const CARD_SIZES = "(max-width: 600px) 100vw, (max-width: 1000px) 50vw, 400px";
 const ROW_IMAGE = { sizes: "112px", responsive: { maxWidth: 224, boxAspect: 1 } } as const;
@@ -73,11 +84,7 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
           <span className="kind">
             <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
           </span>
-          {img.illustrative && (
-            <span className="illus-tag" title="Illustrative image — not the reviewed product">
-              Illustrative
-            </span>
-          )}
+          {img.illustrative && <IllustrativeTag />}
         </div>
         <div className="body">
           <div className="meta-row">
@@ -100,11 +107,7 @@ export function FeatureStory({ review }: { review: Card }) {
       <Link href={`/review/${review.slug}`} data-cursor="Read">
         <div className="media">
           <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
-          {img.illustrative && (
-            <span className="illus-tag" title="Illustrative image — not the reviewed product">
-              Illustrative
-            </span>
-          )}
+          {img.illustrative && <IllustrativeTag />}
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
           {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}

@@ -2,6 +2,9 @@ import "@/app/deals/deals.css";
 import Link from "next/link";
 import BrandLogo from "@/components/brand-logo";
 import CopyCodeButton from "@/components/copy-code-button";
+import SafeImg from "@/components/safe-img";
+import type { DealCardImage } from "@/lib/images/deal-card-image";
+import { placeholderPath } from "@/lib/pipeline/images";
 import type { CurrentPrice, PriceDrop, PromoCode } from "@/lib/public/deals";
 import { relativeTime } from "@/lib/public/display";
 import { categoryName } from "@/lib/taxonomy/definitions";
@@ -54,6 +57,50 @@ function Checked({ iso }: { iso: string }) {
 }
 
 /**
+ * The card's product image (never empty: lib/images/deal-card-image.ts resolves exact → illustrative → category).
+ * An exact photo is shown whole (contain); an illustrative one fills the box and is labelled below.
+ */
+export function DealCardMedia({ image, category }: { image: DealCardImage; category: string | null | undefined }) {
+  return (
+    <SafeImg
+      src={image.src}
+      fallback={placeholderPath(category)}
+      alt={image.alt}
+      width={84}
+      height={84}
+      sizes="84px"
+      responsive={{ maxWidth: 168, boxAspect: 1 }}
+      fit={image.exact ? "contain" : "cover"}
+      loading="lazy"
+      decoding="async"
+      data-image-kind={image.kind}
+    />
+  );
+}
+
+/** The visible label of an illustrative photo (with its credit), or nothing. */
+export function IllustrativeNote({ image }: { image: DealCardImage }) {
+  if (!image.caption) return null;
+  return (
+    <span className="small muted dc-illus" data-illustrative="">
+      {image.caption}
+      {image.attribution ? (
+        <>
+          {" · "}
+          {image.attributionUrl ? (
+            <a href={image.attributionUrl} rel="noopener nofollow" target="_blank">
+              {image.attribution}
+            </a>
+          ) : (
+            image.attribution
+          )}
+        </>
+      ) : null}
+    </span>
+  );
+}
+
+/**
  * One verified price drop: the product, its brand, the current price, the previous price labelled as
  * the page labels it, the saving worked out from those two, what we verified, when we last checked,
  * and a link straight to the seller's page (sponsored only when a provider affiliated it).
@@ -64,12 +111,13 @@ export function PriceDropCard({ d, headingLevel = 3 }: { d: PriceDrop; headingLe
   const linkChecked = d.linkCheckedAt ? relativeTime(d.linkCheckedAt) : null;
   const sellerName = d.official ? (d.brandName ?? d.seller) : d.seller;
   return (
-    <article className="deal-card no-media" style={themeStyle(d.categories[0]) as React.CSSProperties}>
+    <article className={`deal-card${d.image ? "" : " no-media"}`} style={themeStyle(d.categories[0]) as React.CSSProperties}>
       <div className="dc-top">
         {category ? <span className="cat-tag">{category}</span> : <span />}
         <span className="trust verified">Verified</span>
       </div>
       <div className="dc-main">
+        {d.image && <DealCardMedia image={d.image} category={d.categories[0]} />}
         <div>
           <H style={{ font: "inherit", margin: 0 }}>
             {d.review ? (
@@ -93,6 +141,7 @@ export function PriceDropCard({ d, headingLevel = 3 }: { d: PriceDrop; headingLe
             {d.savingPercent >= 1 ? ` (${d.savingPercent}%)` : ""}
           </span>
           {d.availability && <span className="dc-avail small">{d.availability}</span>}
+          {d.image && <IllustrativeNote image={d.image} />}
         </div>
       </div>
       <dl className="dc-facts">
@@ -222,12 +271,13 @@ export function CurrentPriceCard({ p, headingLevel = 3 }: { p: CurrentPrice; hea
   const category = p.categories.map((c) => categoryName(c)).find(Boolean);
   const sellerName = p.official ? (p.brandName ?? p.seller) : p.seller;
   return (
-    <article className="deal-card no-media price-card" style={themeStyle(p.categories[0]) as React.CSSProperties}>
+    <article className={`deal-card${p.image ? "" : " no-media"} price-card`} style={themeStyle(p.categories[0]) as React.CSSProperties}>
       <div className="dc-top">
         {category ? <span className="cat-tag">{category}</span> : <span />}
         <span className="trust checked">Current price</span>
       </div>
       <div className="dc-main">
+        {p.image && <DealCardMedia image={p.image} category={p.categories[0]} />}
         <div>
           <H style={{ font: "inherit", margin: 0 }}>
             {p.review ? (
@@ -245,6 +295,7 @@ export function CurrentPriceCard({ p, headingLevel = 3 }: { p: CurrentPrice; hea
           </span>
           <span className="small muted">No previous price stated: not a discount.</span>
           {p.availability && <span className="dc-avail small">{p.availability}</span>}
+          {p.image && <IllustrativeNote image={p.image} />}
         </div>
       </div>
       <dl className="dc-facts">

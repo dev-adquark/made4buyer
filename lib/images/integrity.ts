@@ -7,7 +7,13 @@ import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { audit, SYSTEM_ACTOR, type AuditContext } from "@/lib/security/audit";
 import { commonsFileTitle, fileTitleMatches, namesSeveralProducts } from "./commons-search";
-import { extractOfficialProductImages } from "./deal-image";
+import { revalidateCommerce } from "@/lib/commerce/revalidate";
+import { CATEGORIES } from "@/lib/taxonomy/definitions";
+import { revalidateTag } from "next/cache";
+import { CATEGORY_PHOTOS_TAG, cachedCategoryPhotosForCheck } from "@/lib/public/category-images";
+import { storedCardImage } from "./deal-card-image";
+import { clearCardImage, dealCardImageContext, liveCommerceProducts, resolveDealCardImage, runDealCardImages, type DealCardImagesResult } from "./deal-card-images";
+import { brokenImageSrcs, extractOfficialProductImages } from "./deal-image";
 
 /**
  * image-integrity: re-checks that every live hero image still loads, so a broken photo falls back to
@@ -221,6 +227,144 @@ export async function backfillCommerceProductImages(limit = 40): Promise<Product
   return out;
 }
 
+// ── Deal cards and category features ───────────────────────────────────────
+
+export type DealImageIntegrity = {
+  /** Live commerce products (fresh offer) whose card image was considered. */
+  live: number;
+  checked: number;
+  ok: number;
+  broken: number;
+  restored: number;
+  transient: number;
+  /** Stored illustrative photos no longer valid for their product (another product's, or its type changed): removed. */
+  mismatched: number;
+  skippedRecent: number;
+  categoryChecked: number;
+  categoryBroken: number;
+  /** The repair pass (labelled product-type photos for cards left with the category image). */
+  repair: DealCardImagesResult | null;
+  items: Array<{ productId: string; name: string; outcome: string; src?: string; reason?: string }>;
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+
+async function setBroken(productId: string, src: string, broken: boolean, now: Date): Promise<void> {
+  const p = await db.commerceProduct.findUnique({ where: { id: productId }, select: { data: true } });
+  if (!p) return;
+  const data = isRecord(p.data) ? { ...p.data } : {};
+  const map = isRecord(data.brokenImages) ? { ...data.brokenImages } : {};
+  if (broken) map[src] = now.toISOString();
+  else delete map[src];
+  if (Object.keys(map).length) data.brokenImages = map;
+  else delete data.brokenImages;
+  await db.commerceProduct.update({ where: { id: productId }, data: { data: data as Prisma.InputJsonValue } });
+}
+
+/**
+ * Deal-card images of every live commerce product: the image the card shows now (exact or illustrative)
+ * must load; a broken one is recorded in data.brokenImages (the card falls to the next priority at once),
+ * a recorded one that loads again is restored, a stored illustrative photo that is not this product's
+ * (or no longer its type) is removed. Then the repair pass attaches a labelled product-type photo to
+ * every card left with the category image. Category feature photos (home issue panels) are checked too.
+ */
+export async function checkDealCardImages(trigger: string, state: IntegrityState, opts: { now: Date; limit: number; pauseMs: number; deadline: number; repair?: boolean }): Promise<DealImageIntegrity> {
+  const out: DealImageIntegrity = { live: 0, checked: 0, ok: 0, broken: 0, restored: 0, transient: 0, mismatched: 0, skippedRecent: 0, categoryChecked: 0, categoryBroken: 0, repair: null, items: [] };
+  const now = opts.now;
+  const rows = await liveCommerceProducts(now.getTime());
+  out.live = rows.length;
+  const ctx = await dealCardImageContext([...new Set(rows.map((r) => r.productEntityId).filter((x): x is string => Boolean(x)))]);
+  let changed = false;
+  const pause = async () => {
+    if (out.checked > 0 && opts.pauseMs > 0) await new Promise((r) => setTimeout(r, opts.pauseMs));
+  };
+  for (const r of rows) {
+    if (out.checked >= opts.limit || Date.now() > opts.deadline) break;
+    const data = isRecord(r.data) ? r.data : {};
+    // Wrong-image prevention: a stored photo that is not valid for THIS product is removed (never shown: storedCardImage refuses it).
+    if (isRecord(data.cardImage) && !storedCardImage(r, r.brand?.categories ?? []) && !brokenImageSrcs(r.data).has(String(data.cardImage.src))) {
+      await clearCardImage(r.id);
+      out.mismatched++;
+      changed = true;
+      out.items.push({ productId: r.id, name: r.name, outcome: "mismatched: stored illustrative photo removed", src: String(data.cardImage.src) });
+    }
+    // Restore: a photo recorded broken more than 20 h ago is re-checked.
+    for (const [src, at] of Object.entries(isRecord(data.brokenImages) ? data.brokenImages : {})) {
+      if (now.getTime() - (Date.parse(String(at)) || 0) < RECHECK_AFTER_MS || out.checked >= opts.limit) continue;
+      await pause();
+      out.checked++;
+      const v = await checkImageUrl(src);
+      if (v.kind === "OK") {
+        await setBroken(r.id, src, false, now);
+        out.restored++;
+        changed = true;
+        out.items.push({ productId: r.id, name: r.name, outcome: "restored", src });
+      }
+    }
+    const img = resolveDealCardImage(r, ctx);
+    if (img.kind === "category" || !/^https?:\/\//.test(img.src)) continue;
+    const key = `deal:${img.src}`;
+    if (now.getTime() - (Date.parse(state.assets[key]?.at ?? "") || 0) < RECHECK_AFTER_MS) {
+      out.skippedRecent++;
+      continue;
+    }
+    await pause();
+    out.checked++;
+    const v = await checkImageUrl(img.src);
+    if (v.kind === "OK") {
+      state.assets[key] = { at: now.toISOString(), last: "ok" };
+      out.ok++;
+      continue;
+    }
+    if (v.kind === "RATE_LIMITED") continue;
+    const transient = v.kind === "TRANSIENT" ? (state.assets[key]?.transient ?? 0) + 1 : 0;
+    state.assets[key] = { at: now.toISOString(), last: v.kind.toLowerCase(), ...(transient ? { transient } : {}) };
+    if (v.kind === "TRANSIENT" && transient < 2) {
+      out.transient++;
+      continue;
+    }
+    await setBroken(r.id, img.src, true, now);
+    out.broken++;
+    changed = true;
+    out.items.push({ productId: r.id, name: r.name, outcome: `broken ${img.kind} image`, src: img.src, reason: v.reason });
+    await audit(SYSTEM_ACTOR, { action: "image.integrity.deal_broken", entityType: "commerce_product", entityId: r.id, metadata: { src: img.src, kind: img.kind, reason: v.reason } }).catch(() => undefined);
+  }
+
+  // Category features: each category photo must load (a broken one is re-fetched by purging the cache).
+  try {
+    const photos = await cachedCategoryPhotosForCheck(CATEGORIES.map((c) => c.slug));
+    for (const [slug, photo] of Object.entries(photos)) {
+      if (!photo || Date.now() > opts.deadline) continue;
+      const key = `category:${slug}`;
+      if (now.getTime() - (Date.parse(state.assets[key]?.at ?? "") || 0) < RECHECK_AFTER_MS) continue;
+      await pause();
+      out.categoryChecked++;
+      const v = await checkImageUrl(photo.url);
+      state.assets[key] = { at: now.toISOString(), last: v.kind === "OK" ? "ok" : v.kind.toLowerCase() };
+      if (v.kind === "BROKEN") out.categoryBroken++;
+    }
+    if (out.categoryBroken) {
+      try {
+        revalidateTag(CATEGORY_PHOTOS_TAG, { expire: 0 });
+      } catch {
+        /* no request context: the daily cache refresh replaces it */
+      }
+    }
+  } catch (error) {
+    log.warn("category photo check failed", { stage: "IMAGE_ENRICHMENT", error: String(error).slice(0, 200) });
+  }
+
+  if (opts.repair !== false && Date.now() < opts.deadline) {
+    out.repair = await runDealCardImages(trigger, { limit: 40, now: now.getTime() }).catch((error: unknown) => {
+      log.error("deal card image repair failed", { stage: "IMAGE_ENRICHMENT", error: String(error) });
+      return null;
+    });
+    if (out.repair?.attached) changed = true;
+  }
+  if (changed) await revalidateCommerce().catch(() => undefined);
+  return out;
+}
+
 // ── The job ─────────────────────────────────────────────────────────────────
 
 export type ImageIntegrityResult = {
@@ -239,10 +383,12 @@ export type ImageIntegrityResult = {
   /** Due images left for the next run (per-run cap or time budget reached). */
   remaining: number;
   productImages: ProductImageBackfill;
+  /** Deal cards (live commerce products) and category features. */
+  deals: DealImageIntegrity | null;
   items: Array<{ assetId: string; slug: string; outcome: AssetOutcome; reason?: string }>;
 };
 
-export async function runImageIntegrity(trigger: string, opts: { limit?: number; pauseMs?: number; now?: Date; productImageLimit?: number; budgetMs?: number } = {}): Promise<ImageIntegrityResult> {
+export async function runImageIntegrity(trigger: string, opts: { limit?: number; pauseMs?: number; now?: Date; productImageLimit?: number; budgetMs?: number; dealLimit?: number; dealRepair?: boolean } = {}): Promise<ImageIntegrityResult> {
   const t0 = Date.now();
   // Stays well inside the cron route's 300 s (a slow host can take IMAGE_TIMEOUT_MS per request).
   const budgetMs = opts.budgetMs ?? 200_000;
@@ -250,7 +396,7 @@ export async function runImageIntegrity(trigger: string, opts: { limit?: number;
   const limit = opts.limit ?? integrityPerRun();
   const pauseMs = opts.pauseMs ?? 400;
   const state = await readIntegrityState();
-  const out: ImageIntegrityResult = { status: "OK", trigger, candidates: 0, checked: 0, ok: 0, restored: 0, failed: 0, transient: 0, notExact: 0, skippedRecent: 0, skippedRateLimited: 0, rateLimitedHosts: [], remaining: 0, productImages: { checked: 0, filled: 0, none: 0, noRaw: 0 }, items: [] };
+  const out: ImageIntegrityResult = { status: "OK", trigger, candidates: 0, checked: 0, ok: 0, restored: 0, failed: 0, transient: 0, notExact: 0, skippedRecent: 0, skippedRateLimited: 0, rateLimitedHosts: [], remaining: 0, productImages: { checked: 0, filled: 0, none: 0, noRaw: 0 }, deals: null, items: [] };
 
   const all = await db.imageAsset.findMany({ where: checkableWhere, select: assetSelect, orderBy: { createdAt: "asc" } });
   out.candidates = all.length;
@@ -294,12 +440,16 @@ export async function runImageIntegrity(trigger: string, opts: { limit?: number;
   out.rateLimitedHosts = [...skipHosts];
   // Everything due that did not get a definitive result (cap/budget reached, or its host rate-limited us).
   out.remaining = Math.max(0, due.length - (out.checked - out.items.filter((i) => i.outcome === "rate-limited").length));
-  await writeIntegrityState(state, `job:${trigger}`, now);
-
   out.productImages = await backfillCommerceProductImages(opts.productImageLimit ?? 40).catch((error: unknown) => {
     log.error("commerce product image backfill failed", { stage: "IMAGE_ENRICHMENT", error: String(error) });
     return out.productImages;
   });
+  // Deal cards and category features: detect missing / broken / mismatched and repair via the priority chain.
+  out.deals = await checkDealCardImages(trigger, state, { now, limit: opts.dealLimit ?? 120, pauseMs, deadline: t0 + budgetMs + 60_000, repair: opts.dealRepair }).catch((error: unknown) => {
+    log.error("deal card image integrity failed", { stage: "IMAGE_ENRICHMENT", error: String(error) });
+    return null;
+  });
+  await writeIntegrityState(state, `job:${trigger}`, now);
   if (out.failed || out.restored || out.notExact) log.info("image integrity changes", { stage: "IMAGE_ENRICHMENT", trigger, failed: out.failed, restored: out.restored, notExact: out.notExact });
   return out;
 }

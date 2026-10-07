@@ -144,7 +144,8 @@ describe("search products and the search page", () => {
 
   it("the rendered /search page lists the drop, the public code, the brand's deals and the product", async () => {
     await seed();
-    const { default: SearchPage } = await import("@/app/search/page");
+    // `/search?q=` is served by the per-request route (proxy.ts rewrites it to /search/q).
+    const { default: SearchPage } = await import("@/app/search/q/page");
     const markup = await html(SearchPage({ searchParams: Promise.resolve({ q: "framework" }) }));
     const text = visibleText(markup);
     expect(text).toContain("Framework Laptop 13");

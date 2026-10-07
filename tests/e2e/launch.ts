@@ -21,11 +21,13 @@ async function main() {
   }
   // Each run starts from an empty ISR cache so pages cached by an earlier run (possibly
   // against a different database) can't leak into this one. The route template dir stays.
-  const isr = ".next/server/app/review";
-  try {
-    for (const f of readdirSync(isr)) if (f !== "[slug]") rmSync(`${isr}/${f}`, { recursive: true, force: true });
-  } catch {
-    /* no build output yet */
+  // Listing pages render on demand per filter state (category/<slug>, …/v/<state>): same reset.
+  for (const isr of [".next/server/app/review", ".next/server/app/category", ".next/server/app/reviews/v", ".next/server/app/guides/v", ".next/server/app/match/v"]) {
+    try {
+      for (const f of readdirSync(isr)) if (!f.startsWith("[")) rmSync(`${isr}/${f}`, { recursive: true, force: true });
+    } catch {
+      /* no build output yet */
+    }
   }
   // Same for the data cache (unstable_cache, e.g. the "deals" tag): an aborted run that seeded
   // commerce data (deals.spec.ts) must not leave cached deals for the next run.

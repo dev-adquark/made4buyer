@@ -176,6 +176,30 @@ export function storedDealImages(data: unknown): StoredDealImage[] {
   });
 }
 
+/** Image URLs of this product the image-integrity job found broken (data.brokenImages: src → when). */
+export function brokenImageSrcs(data: unknown): Set<string> {
+  const b = isObj(data) && isObj(data.brokenImages) ? data.brokenImages : {};
+  return new Set(Object.keys(b));
+}
+
+/**
+ * A retailer page's own photo of the exact product (priority 2): the product must be identity-matched
+ * to a Made4Buyers product (MATCHED), the page must not be on the brand's own domain, and the photo must
+ * be on the retailer page's own registrable domain (validated at extraction and again here). Null otherwise.
+ */
+export function retailerDealImage(product: (DealImageProduct & { identityStatus?: string | null }) | null | undefined): DealImage | null {
+  if (!product || product.identityStatus !== "MATCHED") return null;
+  const domain = domainOf(product.canonicalUrl);
+  if (!domain || !product.canonicalUrl.toLowerCase().startsWith("https://")) return null;
+  if (product.brand?.officialDomain && registrableDomain(product.brand.officialDomain.toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")) === domain) return null;
+  const broken = brokenImageSrcs(product.data);
+  for (const img of storedDealImages(product.data)) {
+    if (broken.has(img.src) || onDomainImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
+    return img;
+  }
+  return null;
+}
+
 export type DealImageProduct = {
   canonicalUrl: string;
   data: unknown;
@@ -195,7 +219,9 @@ export function dealImage(product: DealImageProduct | null | undefined): DealIma
     const official = registrableDomain(product.brand.officialDomain.toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""));
     if (official !== domain) return null; // a retailer's page: not the brand's own photo
   }
+  const broken = brokenImageSrcs(product.data);
   for (const img of storedDealImages(product.data)) {
+    if (broken.has(img.src)) continue; // the image-integrity job found it no longer loads
     if (onDomainImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
     // On the brand's own official domain (checked above): loads directly from that domain.
     if (!onOfficialImageDomain(img.src)) continue;

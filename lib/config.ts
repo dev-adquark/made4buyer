@@ -83,8 +83,8 @@ export const config = {
   },
 
   /**
-   * Affiliate provider for retailer links (lib/affiliate/provider.ts). Only "none" is implemented:
-   * links stay plain retailer URLs and no tracking parameter is ever added.
+   * Affiliate provider(s) for retailer links (lib/affiliate/provider.ts): none (default; links stay
+   * plain), amazon, skimlinks, impact, or a comma list tried in order.
    */
   affiliate: {
     provider: () => (str("AFFILIATE_PROVIDER") ?? "none").toLowerCase(),

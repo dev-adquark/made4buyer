@@ -49,6 +49,9 @@ const QUERIES: Record<string, string> = {
   "luggage-travel": "suitcase travel airport",
 };
 
+/** Cache tag of the category photos (purged by the image-integrity job when one no longer loads). */
+export const CATEGORY_PHOTOS_TAG = "category-photos";
+
 export type CategoryPhoto = { url: string; alt: string; photographer: string; photographerUrl: string; pexelsUrl: string };
 
 async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
@@ -82,5 +85,17 @@ export const categoryPhotos = unstable_cache(
     return out;
   },
   ["category-photos-v2"],
-  { revalidate: 86_400 },
+  { revalidate: 86_400, tags: [CATEGORY_PHOTOS_TAG] },
 );
+
+/**
+ * The cached category photos for the image-integrity job (no extra Pexels requests). Outside a
+ * Next.js request context (tests, scripts) the cache is unavailable: no photos are returned.
+ */
+export async function cachedCategoryPhotosForCheck(slugs: string[]): Promise<Record<string, CategoryPhoto | null>> {
+  try {
+    return await categoryPhotos(slugs);
+  } catch {
+    return {};
+  }
+}

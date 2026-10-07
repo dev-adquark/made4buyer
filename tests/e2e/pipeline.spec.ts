@@ -460,7 +460,8 @@ test("go-live checks run read-only probes and report honestly", async () => {
   await expect(page.getByRole("heading", { name: /Last run/ })).toBeVisible();
   const row = (name: string) => page.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
   await expect(row("contentApi")).toContainText("OK");
-  await expect(row("affiliateProvider")).toContainText("OK");
+  // No affiliate provider is configured in E2E: the row honestly reports it as blocked (links stay plain).
+  await expect(row("affiliateProvider")).toContainText("BLOCKED_BY_ENVIRONMENT");
   await expect(row("sovrn")).toHaveCount(0);
   await expect(row("database")).toContainText("OK");
   // The test-only loopback flag is flagged, and unconfigured GSC is blocked, not "failed".

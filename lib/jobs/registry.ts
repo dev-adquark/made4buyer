@@ -20,6 +20,8 @@ import { allowed, type SwitchKey } from "@/lib/automation/settings";
 import { runDailyArticle } from "@/lib/automation/daily-article";
 import { runImageBackfillWithCorrection } from "@/lib/images/hero-correction";
 import { runImageIntegrity } from "@/lib/images/integrity";
+import { runAffiliateLinks } from "@/lib/affiliate/apply";
+import { runGscMaintenance } from "@/lib/gsc";
 import { runReclassify } from "./reclassify";
 import { runStaleContentDetection } from "./stale-content";
 import { runTitleYearFix } from "./title-years";
@@ -82,7 +84,16 @@ export const JOBS = {
   // Image integrity (lib/images/integrity.ts): broken hero images fall back to the placeholder, recovered ones are restored; never deletes.
   "image-integrity": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runImageIntegrity(trigger), locked: true },
   "detect-stale": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runStaleContentDetection(trigger), locked: true },
-  "inspect-index": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runIndexInspection(trigger), locked: true },
+  // URL inspection, then sitemap submission (when due) and a search-analytics snapshot (lib/gsc.ts).
+  "inspect-index": {
+    lockTtlMs: 20 * 60_000,
+    run: async (trigger: string) => {
+      const inspection = await runIndexInspection(trigger);
+      if (inspection.status !== "OK") return inspection;
+      return { ...inspection, maintenance: await runGscMaintenance().catch((error: unknown) => ({ status: "ERROR", error: String(error).slice(0, 200) })) };
+    },
+    locked: true,
+  },
   "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
   // Commerce intelligence engine (Apify, budget-capped): discover → start runs; collect → match → offers; first-party coupons.
   // Each discover pass first collects finished product and coupon runs, so the every-2-hours
@@ -100,7 +111,19 @@ export const JOBS = {
     },
     locked: true,
   },
-  "commerce-collect": { lockTtlMs: 20 * 60_000, run: async (trigger: string) => ({ ...(await runCommerceCollect(trigger)), coupons: await collectCouponRuns(trigger) }), locked: true },
+  // Also applies the configured affiliate provider to offers (lib/affiliate/apply.ts; a no-op revert-to-plain when none is configured).
+  "commerce-collect": {
+    lockTtlMs: 20 * 60_000,
+    run: async (trigger: string) => {
+      const collected = await runCommerceCollect(trigger);
+      const coupons = await collectCouponRuns(trigger);
+      const affiliate = await runAffiliateLinks(trigger).catch((error: unknown) => ({ status: "ERROR", error: String(error).slice(0, 200) }));
+      return { ...collected, coupons, affiliate };
+    },
+    locked: true,
+  },
+  // Affiliate links on demand (Admin → Jobs / `npm run job -- affiliate-links`).
+  "affiliate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runAffiliateLinks(trigger), locked: true },
   "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
   "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },
@@ -133,6 +156,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "enrich-products": ["product_enrichment"],
   "commerce-discover": ["commerce_engine"],
   "commerce-collect": ["commerce_engine"],
+  "affiliate-links": ["commerce_engine"],
   "commerce-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],
   "commerce-official-verify": ["commerce_engine"],

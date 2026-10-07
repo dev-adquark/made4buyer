@@ -45,6 +45,10 @@
 @font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 100 749; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 76.7%; ascent-override: 103.7%; descent-override: 31.3%; line-gap-override: 0%; }
 @font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 750 849; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 64.3%; ascent-override: 123.6%; descent-override: 37.3%; line-gap-override: 0%; }
 @font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 69.9%; font-weight: 850 1000; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 71.4%; ascent-override: 111.3%; descent-override: 33.6%; line-gap-override: 0%; }
+/* Anybody 900 at wdth 50–57 (footer statement, category issue numbers; both set a matching
+   font-stretch): 0.586 of Arial Bold's advance, 0.606 of Roboto Bold's. Vertical metrics as above. */
+@font-face { font-family: "M4B Display Fallback"; font-stretch: 50% 57.9%; font-weight: 850 1000; src: local("Arial Bold"), local("Arial-BoldMT"), local("Helvetica Neue Bold"), local("HelveticaNeue-Bold"); size-adjust: 58.6%; ascent-override: 135.7%; descent-override: 41%; line-gap-override: 0%; }
+@font-face { font-family: "M4B Display Fallback Roboto"; font-stretch: 50% 57.9%; font-weight: 850 1000; src: local("Roboto Bold"), local("Roboto-Bold"), local("Roboto"); size-adjust: 60.6%; ascent-override: 131.2%; descent-override: 39.6%; line-gap-override: 0%; }
 @font-face { font-family: "M4B Read Fallback"; src: local("Times New Roman"), local("TimesNewRomanPSMT"); size-adjust: 103.7%; ascent-override: 70.9%; descent-override: 25.6%; line-gap-override: 0%; }
 @font-face { font-family: "M4B Read Fallback"; font-style: italic; src: local("Times New Roman Italic"), local("TimesNewRomanPS-ItalicMT"); size-adjust: 103.7%; ascent-override: 70.9%; descent-override: 25.6%; line-gap-override: 0%; }
 @font-face { font-family: "M4B Read Fallback Noto"; src: local("Noto Serif"), local("NotoSerif-Regular"), local("Droid Serif"); size-adjust: 88.6%; ascent-override: 83%; descent-override: 29.9%; line-gap-override: 0%; }
@@ -603,7 +607,7 @@ legend { font-weight: 700; padding: 0 6px; }
    picks the matching metric fallback face (see "Metric-matched fallbacks" at the top). */
 .page-hero h1 .deals-sub { font-stretch: 72%; }
 .page-hero .lede { max-width: 31.7em; }
-.page-hero .issue-no { font: 900 clamp(64px, 12vw, 200px)/0.82 var(--f-display); font-variation-settings: "wdth" 50; color: var(--cat); -webkit-text-stroke: 0; }
+.page-hero .issue-no { font: 900 clamp(64px, 12vw, 200px)/0.82 var(--f-display); font-stretch: 50%; font-variation-settings: "wdth" 50; color: var(--cat); -webkit-text-stroke: 0; }
 .page-hero.has-issue .ph-title { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 clamp(14px, 2vw, 32px); align-items: end; }
 .page-hero.on-ink, .page-hero.dark { background: var(--black); color: var(--on-dark); border-color: var(--black); }
 .page-hero.on-ink .lede { color: var(--on-dark-muted); }
@@ -810,7 +814,7 @@ details summary { cursor: pointer; font-weight: 600; }
 /* ── footer: the colophon ─────────────────────────────────────────────── */
 .site-footer { background: var(--black); color: var(--on-dark-muted); margin-top: 0; }
 .colophon-statement { padding: clamp(48px, 7vw, 110px) 0 clamp(28px, 4vw, 56px); border-bottom: 1px solid var(--rule-dark); }
-.colophon-statement p.big { margin: 0; max-width: none; color: var(--on-dark); font: 900 clamp(60px, 13vw, 230px)/0.8 var(--f-display); font-variation-settings: "wdth" 56; text-transform: uppercase; letter-spacing: -0.01em; }
+.colophon-statement p.big { margin: 0; max-width: none; color: var(--on-dark); font: 900 clamp(60px, 13vw, 230px)/0.8 var(--f-display); font-stretch: 56%; font-variation-settings: "wdth" 56; text-transform: uppercase; letter-spacing: -0.01em; }
 .colophon-statement p.big span { color: transparent; -webkit-text-stroke: 1.5px var(--on-dark); }
 .footer-grid { display: grid; grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr)); gap: 28px var(--gutter); padding: 40px 0 28px; }
 .site-footer h2 { font: 500 11.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--on-dark-muted); margin: 0 0 12px; }

@@ -37,3 +37,11 @@ export function inferImageType(a: { sourceType: string; subject?: string | null 
       return null;
   }
 }
+
+/** Below this, a photo claiming to be the exact product is "low confidence" (Admin → Images) and never used on a deal card. */
+export const LOW_CONFIDENCE = 0.85;
+
+/** Visible label on any image that is not the exact reviewed product (review hero, review cards). Kept equal to components/review-chrome.tsx. */
+export const ILLUSTRATIVE_CAPTION = "Illustrative image — not the reviewed product";
+/** Visible label on an illustrative deal / price card photo (same wording pattern). */
+export const ILLUSTRATIVE_DEAL_CAPTION = "Illustrative image — not the exact product";

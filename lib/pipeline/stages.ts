@@ -253,6 +253,8 @@ export async function runImageStage(review: NormalizedReview, content: Validated
         categorySlug: current.categorySlug,
         subcategorySlug: current.subcategorySlug,
         title: current.canonicalTitle,
+        // The review's own words, for reading the product type when its name and title don't state it.
+        prose: [content.subcategory, content.summary, content.body?.slice(0, 1200)].filter(Boolean).join(" \n "),
         kind: current.kind,
         singleProduct,
         productImages: product.images,

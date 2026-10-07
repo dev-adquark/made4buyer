@@ -6,6 +6,7 @@ import { config, integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import { classifyImage, imageFilterWhere, loadImageCounts, LOW_CONFIDENCE, matchBasisFor } from "@/lib/images/admin-stats";
 import { INTEGRITY_PREFIX, integrityCheckTimes } from "@/lib/images/integrity";
+import { loadImageSlotCounts, type SlotBuckets } from "@/lib/images/slot-counts";
 import { publicImageUrl } from "@/lib/pipeline/images";
 
 export const dynamic = "force-dynamic";
@@ -21,14 +22,27 @@ const FILTERS: Array<{ key: string; label: string }> = [
   { key: "placeholder", label: "Placeholder" },
 ];
 
+const SLOT_COLUMNS: Array<[keyof SlotBuckets, string]> = [
+  ["required", "Required"],
+  ["exactOfficial", "Exact official"],
+  ["retailer", "Retailer exact"],
+  ["internal", "Verified internal"],
+  ["pexels", "Pexels illustrative"],
+  ["categoryFallback", "Category fallback"],
+  ["missing", "Missing"],
+  ["broken", "Broken"],
+  ["mismatched", "Mismatched"],
+];
+
 const CLASS_TONE: Record<string, "ok" | "warn" | "error" | "neutral"> = { verifiedExact: "ok", lowConfidence: "warn", failed: "error", illustrative: "neutral", placeholder: "neutral", other: "warn" };
 
 export default async function ImagesPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
   const sp = await searchParams;
   const filter = param(sp, "filter") ?? "";
-  const [counts, assets, checks] = await Promise.all([
+  const [counts, slots, assets, checks] = await Promise.all([
     loadImageCounts(),
+    loadImageSlotCounts().catch(() => null),
     db.imageAsset.findMany({
       where: { isPrimary: true, review: { status: "PUBLISHED" }, ...imageFilterWhere(filter) },
       orderBy: { updatedAt: "desc" },
@@ -48,6 +62,48 @@ export default async function ImagesPage({ searchParams }: { searchParams: Searc
       <p className="muted">
         Hero images of published pages. Single-product pages show the exact product (licensed, identity-matched) or a neutral category image; category pages may show a labelled illustrative photo. The <code>image-integrity</code> job re-checks live images daily: a broken one falls back to the category image at once and is restored when it loads again. CDN: {integrations.imageCdn}. Unverified-licence images are {config.images.requireLicense() ? "withheld (category image shown)" : "shown publicly"}.
       </p>
+      <h2>Image slots on the public site</h2>
+      <p className="small muted">
+        Every image slot the design gives (review and guide cards/heroes, deal and price cards, category features), per item. Priority: exact official photo → retailer&rsquo;s exact photo → our verified exact photo → labelled Pexels photo of the product&rsquo;s type → neutral category image. Missing = a placeholder or nothing on a review/guide; broken and mismatched images already show the next fallback.
+      </p>
+      {slots ? (
+        <div className="table-wrap">
+          <table className="table" data-testid="image-slot-counts">
+            <thead>
+              <tr>
+                <th scope="col">Slots</th>
+                {SLOT_COLUMNS.map(([, label]) => (
+                  <th key={label} scope="col">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ["Reviews & guides", slots.reviews],
+                  ["Deal & price cards", slots.deals],
+                  ["Category features", slots.categoryFeatures],
+                  ["Total", slots.total],
+                ] as Array<[string, SlotBuckets]>
+              ).map(([name, b]) => (
+                <tr key={name}>
+                  <th scope="row">{name}</th>
+                  {SLOT_COLUMNS.map(([k, label]) => (
+                    <td key={k} data-label={label} data-slot={k}>
+                      {b[k]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="small muted">Slot counts unavailable.</p>
+      )}
+      <h2>Review hero images</h2>
       <div className="stats">
         <Stat label="Published pages" value={counts.published} />
         <Stat label="Missing" value={counts.missing} note="no image row" />

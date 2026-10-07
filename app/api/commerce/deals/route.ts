@@ -35,6 +35,8 @@ const publicDrop = (d: PriceDrop) => ({
   url: d.url,
   affiliated: d.affiliated,
   review: d.review ? { slug: d.review.slug, title: d.review.title, url: `/review/${d.review.slug}` } : null,
+  // The card's image: exact product photo, a labelled illustrative photo of its type, or our category image.
+  image: d.image ? { src: d.image.src, alt: d.image.alt, kind: d.image.kind, exact: d.image.exact, caption: d.image.caption, attribution: d.image.attribution, attributionUrl: d.image.attributionUrl } : null,
 });
 
 const publicCode = (c: PromoCode) => ({

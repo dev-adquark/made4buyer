@@ -5,7 +5,7 @@ import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import type { ImageType } from "@/lib/images/provenance";
 import { isCommonsFileUrl, isFreeLicence, type CommonsImage } from "@/lib/products/commons-image";
 import { findPexelsImage, type PexelsSearchResult, type PexelsSearchStatus } from "./pexels";
-import { productTypeTopic } from "@/lib/images/product-type";
+import { productTypeTopic, productTypeTopicForQuery, productTypeTopicFromContent } from "@/lib/images/product-type";
 import { imageTopic, photoMatchesTopic, type ImageTopic } from "./image-topics";
 import { commonsFileTitle, namesSeveralProducts, searchCommonsProductPhoto } from "@/lib/images/commons-search";
 
@@ -16,7 +16,10 @@ import { commonsFileTitle, namesSeveralProducts, searchCommonsProductPhoto } fro
  *   (1) a licensed photo of the exact product (Wikimedia Commons via a Wikidata "image" fact,
  *       identity-matched; see lib/products/commons-image.ts),
  *   (2) the review source's own image when explicitly licensed (Content API),
- *   (3) our neutral category placeholder. Never a keyword-matched stock photo (Pexels/service).
+ *   (3) a Commons photo whose file title names this exact product,
+ *   (4) a labelled ILLUSTRATIVE Pexels photo of the product's TYPE (read from its name / title, else
+ *       its subcategory or the first type its own text names), whose own description names that type,
+ *   (5) our neutral category placeholder. Never a keyword-matched "product" stock photo.
  * Category-level content (comparisons, buying guides, AI guides):
  *   (1) the source's licensed image, (2) a labelled ILLUSTRATIVE topic photo whose own
  *   description is about the topic (Pexels), (3) the neutral category placeholder.
@@ -91,6 +94,8 @@ export type ImageInput = {
   categorySlug?: string | null;
   subcategorySlug?: string | null;
   title?: string;
+  /** The content's own words (subcategory, summary, opening of the body): read for the product type when the name and title state none. */
+  prose?: string;
   /** Content kind: only a single-product REVIEW may get a "product" photo. */
   kind?: string | null;
   /**
@@ -243,10 +248,12 @@ async function fromProductImages(images: CommonsImage[], issues: ImageDecision["
 
 /**
  * True when a stored stock photo still passes today's relevance rule for this content: its own
- * description must name the product type (single product) or the topic (category content).
+ * description must name the product type (read from the name / title; when they state none, the
+ * type the photo was searched for, recovered from its stored query), or the topic for category content.
  */
-export function stockPhotoStillRelevant(altText: string | null | undefined, input: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean }): boolean {
-  const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? (input.singleProduct ? null : imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug }));
+export function stockPhotoStillRelevant(altText: string | null | undefined, input: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean; searchQuery?: string | null }): boolean {
+  const typeTopic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug });
+  const topic = typeTopic ?? (input.singleProduct ? productTypeTopicForQuery(input.searchQuery) : imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug }));
   return Boolean(topic && altText && photoMatchesTopic(altText, topic));
 }
 
@@ -255,13 +262,13 @@ export function stockPhotoStillRelevant(altText: string | null | undefined, inpu
  * relevance rule is dropped (the caller then shows the neutral category image). Licensed product
  * photos (Commons, the source's licensed image) and our placeholders pass unchanged.
  */
-export function relevantImage<T extends { sourceType: string; altText?: string | null }>(
+export function relevantImage<T extends { sourceType: string; altText?: string | null; searchQuery?: string | null }>(
   asset: T | null | undefined,
   ctx: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean },
 ): T | null {
   if (!asset) return null;
   if (asset.sourceType !== "ENRICHMENT_SERVICE") return asset;
-  return stockPhotoStillRelevant(asset.altText, ctx) ? asset : null;
+  return stockPhotoStillRelevant(asset.altText, { ...ctx, searchQuery: asset.searchQuery }) ? asset : null;
 }
 
 export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
@@ -312,9 +319,10 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
       if (found) return found;
     }
     // 3. A labelled illustrative photo of this KIND of product (its type read from the product
-    // name, never the category), accepted only if the photo's own description names that type.
-    const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug });
-    if (!topic) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this product, and its product type can't be read from its name");
+    // name / title, else its subcategory or the first type its own text names; never the category),
+    // accepted only if the photo's own description names that type.
+    const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? productTypeTopicFromContent({ subcategorySlug: input.subcategorySlug, prose: input.prose });
+    if (!topic) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this product, and neither its name, title, subcategory nor text states its product type");
     const typed = await fromService(input, topic);
     if (typed.image && typed.image.subject === "ILLUSTRATIVE") {
       const probe = await probeImage(typed.image.url);

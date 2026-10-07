@@ -39,6 +39,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   serverExternalPackages: ["@prisma/client", "embedded-postgres"],
+  experimental: {
+    // The stylesheet (~18 KB gzipped) is inlined into the HTML: the first paint no longer waits for a
+    // separate render-blocking CSS request, so the hero text paints from the document alone.
+    inlineCss: true,
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

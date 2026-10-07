@@ -4,6 +4,8 @@ import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
 import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
 import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { db } from "@/lib/db";
+import { categoryCardImage, type DealCardImage } from "@/lib/images/deal-card-image";
+import { loadDealCardImages } from "@/lib/images/deal-card-images";
 import { log } from "@/lib/log";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
@@ -85,6 +87,11 @@ export type PriceDrop = {
   /** Where the price was read, e.g. "acme.com (official site)". */
   source: string;
   review: { slug: string; title: string } | null;
+  /**
+   * The card's image (lib/images/deal-card-image.ts): the exact product (official, retailer or our verified
+   * photo), else a labelled illustrative photo of its type, else the neutral category image. Never empty.
+   */
+  image: DealCardImage;
 };
 
 export type PromoCode = {
@@ -213,7 +220,7 @@ export async function loadClassifiedOffers(opts: { where?: Prisma.CommerceOfferW
 }
 
 /** Pure: classified offers → displayable price drops (ACTIVE only; best saving first, then most recent). */
-export function toPriceDrops(items: ClassifiedOffer[], reviews: Map<string, { slug: string; title: string }>): PriceDrop[] {
+export function toPriceDrops(items: ClassifiedOffer[], reviews: Map<string, { slug: string; title: string }>, images: Map<string, DealCardImage> = new Map()): PriceDrop[] {
   const out: PriceDrop[] = [];
   for (const { offer: r, verdict: v } of items) {
     if (v.status !== "ACTIVE" || !v.saving) continue;
@@ -260,6 +267,7 @@ export function toPriceDrops(items: ClassifiedOffer[], reviews: Map<string, { sl
       affiliated: link.affiliated,
       source: v.officialSite ? `${where} (official site)` : `${where} (retailer page)`,
       review: r.product.productEntityId ? (reviews.get(r.product.productEntityId) ?? null) : null,
+      image: images.get(r.productId) ?? categoryCardImage(brand?.categories?.[0]),
     });
   }
   return out.sort((a, b) => b.savingPercent - a.savingPercent || Date.parse(b.observedAt) - Date.parse(a.observedAt)).slice(0, MAX_PRICE_DROPS);
@@ -286,8 +294,16 @@ export function dropCandidateWhere(now = Date.now()): Prisma.CommerceOfferWhereI
 export async function loadPriceDrops(now = Date.now()): Promise<PriceDrop[]> {
   const items = await loadClassifiedOffers({ where: dropCandidateWhere(now), take: 2000, now });
   const active = items.filter((x) => x.verdict.status === "ACTIVE");
-  const reviews = await reviewsFor([...new Set(active.map((x) => x.product.productEntityId).filter((x): x is string => Boolean(x)))]);
-  return toPriceDrops(active, reviews);
+  const [reviews, images] = await Promise.all([reviewsFor([...new Set(active.map((x) => x.product.productEntityId).filter((x): x is string => Boolean(x)))]), cardImagesFor(active)]);
+  return toPriceDrops(active, reviews, images);
+}
+
+/** Card images for the offers' products (stored data only; on any error every card keeps its category image). */
+async function cardImagesFor(items: ClassifiedOffer[]): Promise<Map<string, DealCardImage>> {
+  return loadDealCardImages(items.map((x) => x.offer.productId)).catch((error: unknown) => {
+    log.warn("deal card images unavailable; category images shown", { error: String(error) });
+    return new Map<string, DealCardImage>();
+  });
 }
 
 export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
@@ -333,7 +349,7 @@ export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
 }
 
 /** Pure: classified offers → current prices (every price-drop rule passed except a stated previous price), one per product and seller, newest first. */
-export function toCurrentPrices(items: ClassifiedOffer[], reviews: Map<string, { slug: string; title: string }>): CurrentPrice[] {
+export function toCurrentPrices(items: ClassifiedOffer[], reviews: Map<string, { slug: string; title: string }>, images: Map<string, DealCardImage> = new Map()): CurrentPrice[] {
   const out: CurrentPrice[] = [];
   const seen = new Set<string>();
   const sorted = [...items].sort((a, b) => b.offer.observedAt.getTime() - a.offer.observedAt.getTime());
@@ -377,6 +393,7 @@ export function toCurrentPrices(items: ClassifiedOffer[], reviews: Map<string, {
       affiliated: link.affiliated,
       source: v.officialSite ? `${where} (official site)` : `${where} (retailer page)`,
       review: r.product.productEntityId ? (reviews.get(r.product.productEntityId) ?? null) : null,
+      image: images.get(r.productId) ?? categoryCardImage(brand?.categories?.[0]),
     });
     if (out.length >= MAX_CURRENT_PRICES) break;
   }
@@ -387,10 +404,15 @@ export async function loadCurrentPrices(now = Date.now()): Promise<CurrentPrice[
   const items = await loadClassifiedOffers({ where: { ...freshOfferWhere(now), currency: DEAL_CURRENCY, price: { gt: 0 }, listPrice: null }, take: 1000, now });
   const shown = items.filter((x) => x.verdict.status === "VERIFIED");
   const reviews = await reviewsFor([...new Set(shown.map((x) => x.product.productEntityId).filter((x): x is string => Boolean(x)))]);
-  return toCurrentPrices(shown, reviews);
+  const prices = toCurrentPrices(shown, reviews);
+  // Images only for the products actually shown (bounded by MAX_CURRENT_PRICES).
+  const shownIds = new Set(prices.map((p) => p.id));
+  const images = await cardImagesFor(shown.filter((x) => shownIds.has(x.offer.id)));
+  const productOf = new Map(shown.map((x) => [x.offer.id, x.offer.productId]));
+  return prices.map((p) => ({ ...p, image: images.get(productOf.get(p.id) ?? "") ?? p.image }));
 }
 
-const cachedCurrentPrices = unstable_cache(() => loadCurrentPrices(), ["current-prices-v1"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
+const cachedCurrentPrices = unstable_cache(() => loadCurrentPrices(), ["current-prices-v2"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
 
 /** Cached "Recently verified" prices for /deals (same tag and lifetime as the deals; the price window re-applied on read). */
 export async function recentlyVerifiedPrices(now = Date.now()): Promise<CurrentPrice[]> {
@@ -412,7 +434,7 @@ export async function loadOfficialDeals(now = Date.now()): Promise<OfficialDeals
   return { drops, codes, checkedAt: times.length ? new Date(Math.max(...times)).toISOString() : null };
 }
 
-const cachedDeals = unstable_cache(() => loadOfficialDeals(), ["official-deals-v3"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
+const cachedDeals = unstable_cache(() => loadOfficialDeals(), ["official-deals-v4"], { revalidate: DEALS_REVALIDATE_SECONDS, tags: [DEALS_TAG] });
 
 /**
  * Cached for pages (data cache, tag "deals", 5 minutes). The cache stores JSON, so time-based rules

@@ -36,6 +36,7 @@ const LINKS: Array<[string, string]> = [
   ["/admin/data-audit", "Data audit"],
   ["/admin/audit", "Audit log"],
   ["/admin/gsc", "Search Console"],
+  ["/admin/integrations", "Integrations"],
   ["/admin/go-live", "Go-live checks"],
 ];
 

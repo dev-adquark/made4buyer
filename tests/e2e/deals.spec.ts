@@ -208,6 +208,31 @@ test("homepage: Verified deals rail shows the drop and the code and links to /de
   await expect(drops(page)).toContainText(FIX.valid.product);
 });
 
+test("deals and homepage: every deal card shows a loaded image (no empty slot)", async ({ page }) => {
+  for (const [path, selector] of [["/deals", "article.deal-card"], ["/", "article.hd-card"]] as const) {
+    await page.goto(path);
+    await settle(page);
+    const cards = page.locator(selector);
+    expect(await cards.count(), `${path}: deal cards`).toBeGreaterThan(0);
+    const slots = await cards.evaluateAll((els) =>
+      els.map((el) => {
+        const img = el.querySelector("img[data-image-kind]") as HTMLImageElement | null;
+        return { kind: img?.dataset.imageKind ?? null, empty: el.classList.contains("no-media") || Boolean(el.querySelector(".hd-mono")), illustrative: Boolean(el.querySelector("[data-illustrative]")) };
+      }),
+    );
+    for (const s of slots) {
+      expect(s.kind, `${path}: every card has an image`).not.toBeNull();
+      expect(s.empty, `${path}: no empty media slot`).toBe(false);
+      // A photo that is not the exact product is labelled on the card.
+      expect(s.illustrative).toBe(s.kind === "illustrative");
+    }
+    for (const img of await cards.locator("img[data-image-kind]").all()) {
+      await img.scrollIntoViewIfNeeded();
+      await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth > 0), { message: `${path}: card image loads` }).toBe(true);
+    }
+  }
+});
+
 test("deals: every link is internal and live, or external with nofollow noopener", async ({ page }) => {
   await page.goto("/deals");
   const links = await page.locator("a[href]").evaluateAll((as) => as.map((a) => ({ href: (a as HTMLAnchorElement).href, raw: a.getAttribute("href") ?? "", rel: a.getAttribute("rel") ?? "", text: (a.textContent ?? "").trim().slice(0, 60) })));

@@ -9,6 +9,7 @@ import SiteHeader from "@/components/site-header";
 import EditorialCursor from "@/components/editorial-cursor";
 import { CategoryNamesProvider } from "@/components/category-names";
 import { config } from "@/lib/config";
+import { gscVerificationMetadata } from "@/lib/gsc";
 import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 
 // Every face uses a hand-measured local fallback (app/globals.css, "M4B … Fallback", Arial/Times
@@ -16,9 +17,12 @@ import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 // one, which assumes the default width and weight: with the condensed Anybody, bold Schibsted and
 // Plex Mono that reflowed the page on swap (review page CLS 0.28).
 const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"], adjustFontFallback: false, fallback: ["M4B Display Fallback", "M4B Display Fallback Roboto", "Arial", "sans-serif"] });
-// Only the display and UI faces are preloaded: they paint the masthead and hero (LCP).
+// Only the display face is preloaded (masthead wordmark and page titles). The reading face (ledes,
+// the LCP text on most pages) and the UI face are not: with display "swap" the LCP text paints at
+// once in its measured fallback, and every preload competes with the document, CSS and scripts on
+// the critical path (Lighthouse counts it into the LCP). The fallbacks keep the swap shift-free.
 const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"], preload: false, adjustFontFallback: false, fallback: ["M4B Read Fallback", "M4B Read Fallback Noto", "Georgia", "serif"] });
-const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap", adjustFontFallback: false, fallback: ["M4B UI Fallback", "M4B UI Fallback Roboto", "Arial", "sans-serif"] });
+const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap", preload: false, adjustFontFallback: false, fallback: ["M4B UI Fallback", "M4B UI Fallback Roboto", "Arial", "sans-serif"] });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"], preload: false, adjustFontFallback: false, fallback: ["M4B Mono Fallback", "ui-monospace", "monospace"] });
 
 export const metadata: Metadata = {
@@ -27,6 +31,7 @@ export const metadata: Metadata = {
   description: "A universal buying guide: reviews filed by what you need, comparisons built from facts, and offers checked before they are shown.",
   openGraph: { siteName: "Made4Buyers", type: "website" },
   twitter: { card: "summary_large_image" },
+  ...gscVerificationMetadata(),
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#eeebe3" };

@@ -5,6 +5,8 @@ import { runImageBackfill, type ImageBackfillResult } from "@/lib/jobs/image-bac
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
 import { loadSourceContent, runImageStage } from "@/lib/pipeline/stages";
+import { revalidateCommerce } from "@/lib/commerce/revalidate";
+import { runDealCardImages, type DealCardImagesResult } from "./deal-card-images";
 import { NOT_EXACT_REASON } from "./integrity";
 
 /**
@@ -83,13 +85,22 @@ export async function runHeroCorrection(trigger: string, opts: { limit?: number 
   return out;
 }
 
-/** The enrich-images job: hero correction first, then the regular image backfill. */
-export async function runImageBackfillWithCorrection(trigger: string, opts: { limit?: number; pauseMs?: number } = {}): Promise<ImageBackfillResult & { heroCorrection: HeroCorrectionResult }> {
+/** The enrich-images job: hero correction first, then the regular image backfill, then deal-card photos. */
+export async function runImageBackfillWithCorrection(trigger: string, opts: { limit?: number; pauseMs?: number } = {}): Promise<ImageBackfillResult & { heroCorrection: HeroCorrectionResult; dealCards: DealCardImagesResult | null }> {
   const heroCorrection = await runHeroCorrection(trigger);
   const backfill = await runImageBackfill(trigger, opts);
+  // Deal / price cards without an exact photo get a labelled photo of their product type (skipped after a Pexels stop).
+  const stopped = backfill.status === "RATE_LIMITED" || backfill.status === "AUTH_FAILED";
+  const dealCards = stopped
+    ? null
+    : await runDealCardImages(trigger, { limit: 60 }).catch((error: unknown) => {
+        log.error("deal card images failed", { stage: "IMAGE_ENRICHMENT", trigger, error: String(error) });
+        return null;
+      });
+  if (dealCards?.attached) await revalidateCommerce().catch(() => undefined);
   // Without Pexels the backfill has nothing to do, but corrections still count as work done.
   if (backfill.status === "NOT_CONFIGURED" && heroCorrection.checked > 0) {
-    return { ...backfill, status: "OK", reason: `${backfill.reason ?? "stock photos not configured"}; corrected ${heroCorrection.checked} single-product hero image(s)`, heroCorrection };
+    return { ...backfill, status: "OK", reason: `${backfill.reason ?? "stock photos not configured"}; corrected ${heroCorrection.checked} single-product hero image(s)`, heroCorrection, dealCards };
   }
-  return { ...backfill, heroCorrection };
+  return { ...backfill, heroCorrection, dealCards };
 }

@@ -8,6 +8,7 @@ export const ERROR_CODES = {
   CONTENT_API_TIMEOUT: { retryable: true, message: "Content API request timed out" },
   CONTENT_API_HTTP_ERROR: { retryable: true, message: "Content API returned an error status" },
   CONTENT_API_RESPONSE_INVALID: { retryable: false, message: "Content API response shape is invalid" },
+  CONTENT_API_SCHEMA_MISMATCH: { retryable: false, message: "Content API response does not match the supported contract version (see docs/CONTENT_API_CONTRACT.md)" },
   CONTENT_SCHEMA_INVALID: { retryable: false, message: "Content item failed schema validation" },
   PUBLICATION_DATE_INVALID: { retryable: false, message: "Publication date could not be parsed" },
   PUBLICATION_DATE_FUTURE: { retryable: false, message: "Publication date is more than 24 hours in the future" },

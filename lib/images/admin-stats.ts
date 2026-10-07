@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { config } from "@/lib/config";
-import { PRODUCT_IMAGE_TYPES } from "./provenance";
+import { LOW_CONFIDENCE, PRODUCT_IMAGE_TYPES } from "./provenance";
+
+export { LOW_CONFIDENCE };
 
 /**
  * Admin → Images: what every published page's hero image is, in buyer-facing terms.
@@ -14,7 +16,6 @@ import { PRODUCT_IMAGE_TYPES } from "./provenance";
  *  lowConfidence      claims the exact product with confidence < LOW_CONFIDENCE (or none recorded)
  *  illustrative       a labelled illustrative photo (product type or topic)
  */
-export const LOW_CONFIDENCE = 0.85;
 
 export type ImageRow = { sourceType: string; imageType: string | null; licenseState: string; enrichmentStatus: string; matchConfidence: number | null };
 export type ImageClass = "failed" | "placeholder" | "verifiedExact" | "lowConfidence" | "illustrative" | "other";

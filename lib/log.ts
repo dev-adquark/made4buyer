@@ -22,6 +22,8 @@ const SECRET_ENV = [
   "GSC_SERVICE_ACCOUNT_JSON",
   "DATABASE_URL",
   "DIRECT_URL",
+  "SKIMLINKS_CLIENT_SECRET",
+  "IMPACT_AUTH_TOKEN",
 ];
 
 function secretValues(): string[] {

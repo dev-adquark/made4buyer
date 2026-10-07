@@ -15,7 +15,8 @@ const MOBILE = { viewport: { width: 412, height: 823 }, deviceScaleFactor: 2.625
 test("homepage SSR HTML: hero and lede are not hidden by an entrance or reveal state", async ({ request }) => {
   const html = await (await request.get("/")).text();
   expect(html).not.toMatch(/class="[^"]*\bpage-enter\b/);
-  expect(html).not.toMatch(/\brv-pending\b/);
+  // Class attributes only: the stylesheet is inlined (experimental.inlineCss) and defines .rv-pending.
+  expect(html).not.toMatch(/class="[^"]*\brv-pending\b/);
   const hero = html.slice(html.indexOf('<section class="tear-hero"'), html.indexOf("</section>", html.indexOf('<section class="tear-hero"')));
   expect(hero).toContain('id="hero-title"');
   expect(hero).toContain('class="lede"');

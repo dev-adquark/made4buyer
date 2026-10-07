@@ -33,7 +33,7 @@ export const cardSelect = {
   author: true,
   generationMeta: true,
   entities: { select: { source: true } },
-  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true, subject: true } },
+  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true, subject: true, searchQuery: true } },
 } satisfies Prisma.NormalizedReviewSelect;
 
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;

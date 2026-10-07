@@ -302,6 +302,9 @@ async function upsertProduct(brand: CommerceBrand, n: NormalizedCommerceRecord &
     images: keepImages ? prev.images : n.images,
     // The official photo of this exact product/variant (deal cards); kept when the page stops stating one.
     productImages: n.productImages?.length ? n.productImages : Array.isArray(prev.productImages) ? prev.productImages : [],
+    // Deal-card image state written by the image jobs (lib/images/deal-card-images.ts, integrity.ts): kept across re-reads.
+    ...(prev.cardImage ? { cardImage: prev.cardImage } : {}),
+    ...(prev.brokenImages ? { brokenImages: prev.brokenImages } : {}),
     offers: n.offers,
     breadcrumbs: n.breadcrumbs,
     lang: n.lang ?? (prev.lang as string | undefined) ?? null,
