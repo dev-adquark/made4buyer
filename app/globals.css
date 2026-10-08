@@ -1007,3 +1007,28 @@ details summary { cursor: pointer; font-weight: 600; }
 
 /* Large decorative issue number: the category's ink shade keeps ≥ 3:1 contrast on the paper background. */
 .page-hero .issue-no { color: var(--cat-ink, var(--cat)); }
+
+/* ── Layout QA (presentation only) ─────────────────────────────────────── */
+/* Photo note: never wider than its image. On small row thumbnails it spans the image width. */
+.rep-tag { max-width: calc(100% - 12px); white-space: normal; text-align: right; }
+.review-card.row .rep-tag { left: 0; right: 0; bottom: 0; max-width: none; border-radius: 0; text-align: center; letter-spacing: 0; padding: 1px 2px; }
+/* Ticker links: 24px touch target, same row height. */
+.ticker-item { padding-block: 13px; }
+.ticker-item a { display: inline-flex; align-items: center; min-height: 24px; }
+/* Category issue panels: the title is sized to its panel (long words pushed panels into each other). */
+.issue-rail > li { container-type: inline-size; min-width: 0; }
+.issue-panel { min-width: 0; }
+.issue-panel h3 { font-size: clamp(30px, min(4.6vw, 13cqi), 72px); overflow-wrap: break-word; hyphens: auto; }
+/* Hero collage: the third category tag sits on the photo, not on the latest review's title; card padding reaches every line. */
+.collage > .clip.label ~ .clip.label ~ .clip.label { top: 26% !important; left: 8% !important; }
+.clip .clip-body { display: block; }
+/* Search palette: the input may shrink, so "Close" stays inside the panel on phones. */
+.palette-input input { min-width: 0; }
+.palette-input .btn { flex: none; }
+@media (max-width: 480px) {
+  .palette-input { padding-left: 14px; }
+  .palette-input input { font-size: 21px; }
+  /* Wide search forms: the button goes under the input so the placeholder is not cut off. */
+  form.searchbox.wide, .searchbox.is-wide form { flex-wrap: wrap; }
+  form.searchbox.wide input, .searchbox.is-wide form input, form.searchbox.wide .btn, .searchbox.is-wide form .btn { flex: 1 1 100%; }
+}

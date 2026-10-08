@@ -137,3 +137,9 @@
   .home .home-issues .issue-panel dt { font-size: 9.5px; }
   .home .home-issues .issue-panel dd { font-size: 18px; }
 }
+
+/* ── Layout QA ── */
+/* The rail contains its cards' visually-hidden labels (they widened the page by ~2,500px). */
+.home .hr-track { position: relative; }
+/* Collage: enough height that the spec sheet does not cover the latest review's title. */
+@media (min-width: 721px) and (max-width: 1279px) { .home .collage { min-height: clamp(460px, 46vw, 540px); } }
