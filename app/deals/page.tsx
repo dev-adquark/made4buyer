@@ -19,7 +19,8 @@ import "./deals.css";
  * Deals, in three sections, every item verified (lib/public/deals.ts; the rules live in
  * lib/commerce/deal-status.ts):
  *   - Verified price drops: the page states a current and a higher previous price, checked within 48 h.
- *   - Latest verified coupons: codes on the brand's own site, verified within the last 7 days.
+ *   - Latest coupons: codes on the brand's own site verified within the last 7 days, and codes the
+ *     Feedico affiliate feed listed within the last 14 days (labelled "Via Feedico").
  *   - Recently verified: current prices checked within 48 h whose page states no previous price
  *     (labelled as prices, never as deals).
  * Cached (ISR, 5 minutes; the data is tagged "deals" so the commerce engine refreshes it on demand).
@@ -32,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const { drops, codes } = await officialDeals();
   return {
     title: "Deals",
-    description: "Verified price drops, coupons verified in the last 7 days, and recently checked prices from brands’ own sites and confirmed retailers. Only verified, current offers are listed.",
+    description: "Verified price drops, current coupons (from brands’ own sites and the Feedico affiliate feed), and recently checked prices from brands’ own sites and confirmed retailers.",
     alternates: { canonical: "/deals" },
     // An empty deals page is not a useful search result.
     robots: drops.length + codes.length === 0 ? { index: false, follow: true } : undefined,
@@ -97,9 +98,9 @@ export default async function Deals() {
           </div>
           <h1>
             Deals.
-            <span className="deals-sub">Official and verified, or not listed.</span>
+            <span className="deals-sub">Checked and current, or not listed. Every item says where it comes from.</span>
           </h1>
-          <p className="lede">Price drops, coupons and current prices read from brands’ own sites and confirmed retailers. A price drop is listed only when the seller’s page states both the current price and a higher previous price; a coupon only when the brand’s own site published it within the last {windowDays} days. Every item says when we checked it.</p>
+          <p className="lede">Price drops, coupons and current prices read from brands’ own sites and confirmed retailers. A price drop is listed only when the seller’s page states both the current price and a higher previous price; a coupon when the brand’s own site published it within the last {windowDays} days, or when the Feedico affiliate feed listed it within the last 14 days (labelled “Via Feedico”). Every item says when we checked it.</p>
           {!noDeals && (
             <nav className="deals-jump" aria-label="Deal sections">
               <a href="#drops">Price drops ({drops.length})</a>
@@ -137,10 +138,10 @@ export default async function Deals() {
 
           <section id="coupons" className="section deals-section" aria-labelledby="codes-title" data-deal-section="">
             <div className="wrap">
-              <SectionHeader id="codes-title" label={`${codes.length} verified in the last ${windowDays} days`} title="Latest verified coupons">
-                Codes published by the brand on its own site, verified there within the last {windowDays} days, started and not expired. The offer, terms and expiry are quoted exactly as the brand states them, and left out when it states none.
+              <SectionHeader id="codes-title" label={`${codes.length} current`} title="Latest coupons">
+                Codes published by the brand on its own site and verified there within the last {windowDays} days (marked Verified), and codes listed by the Feedico affiliate feed within the last 14 days (marked Via Feedico, not checked on the brand’s site). All started and not expired. The offer, terms and expiry are quoted exactly as stated, and left out when none is stated.
               </SectionHeader>
-              {codes.length ? <PromoCodeGrid codes={codes} /> : <p className="deals-empty">No coupon was verified on a brand’s own site in the last {windowDays} days. Older codes are not listed.</p>}
+              {codes.length ? <PromoCodeGrid codes={codes} /> : <p className="deals-empty">No current coupon: none was verified on a brand’s own site in the last {windowDays} days or listed by the Feedico feed in the last 14 days. Older codes are not listed.</p>}
               <p className="deals-empty" data-deal-empty="" hidden>
                 No coupon matches these filters.
               </p>

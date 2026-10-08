@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
 import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
 import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
+import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { categoryCardImage, type DealCardImage } from "@/lib/images/deal-card-image";
 import { loadDealCardImages } from "@/lib/images/deal-card-images";
@@ -45,7 +46,7 @@ export const DEALS_TAG = "deals";
 export const DEALS_REVALIDATE_SECONDS = 300;
 export const DEAL_CURRENCY = "USD";
 export const MAX_PRICE_DROPS = 120;
-export const MAX_PROMO_CODES = 60;
+export const MAX_PROMO_CODES = 200;
 export const MAX_CURRENT_PRICES = 60;
 
 export type PriceDrop = {
@@ -108,11 +109,15 @@ export type PromoCode = {
   expiresAt: string | null;
   lastVerifiedAt: string | null;
   sourceUrl: string | null;
-  /** "View offer" destination: the brand's official promotions page where the code is published. */
+  /** "View offer" destination: the brand's official promotions page (a feed code: the brand's own website). */
   useUrl: string | null;
   source: string;
-  /** "Official brand site" (tier 1) or "Official brand store" (tier 2). */
+  /** "Official brand site" (tier 1), "Official brand store" (tier 2) or "Affiliate feed (Feedico)" (tier 5). */
   verifiedVia: string;
+  /** A code from the Feedico affiliate feed: listed by Feedico, not verified on the brand's own page. */
+  viaFeed?: boolean;
+  /** When we last confirmed it: lastVerifiedAt (official) or the Feedico sync that listed it (feed). */
+  checkedAt?: string | null;
   /** Registrable domain of the page that publishes the code (the seller filter). */
   sellerDomain: string | null;
 };
@@ -311,26 +316,30 @@ async function cardImagesFor(items: ClassifiedOffer[]): Promise<Map<string, Deal
 export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, select: { id: true, name: true, slug: true, categories: true, officialDomain: true, officialStoreUrl: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
   // One query for every brand (a query per brand exhausted the connection pool with 100 brands); the rows are already public (publicCoupons).
-  const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, 6);
+  const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, 20);
   const out: PromoCode[] = [];
   for (const b of brands) for (const c of byBrand.get(b.id) ?? []) {
     const code = toPromoCode(c, b);
     if (code) out.push(code);
   }
-  return out.sort((a, b) => Date.parse(b.lastVerifiedAt ?? "0") - Date.parse(a.lastVerifiedAt ?? "0")).slice(0, MAX_PROMO_CODES);
+  return out.sort((a, b) => Number(Boolean(a.viaFeed)) - Number(Boolean(b.viaFeed)) || Date.parse(b.checkedAt ?? "0") - Date.parse(a.checkedAt ?? "0")).slice(0, MAX_PROMO_CODES);
 }
 
 type PromoBrand = { name: string; slug: string; categories: string[]; officialDomain: string; officialStoreUrl: string | null };
-type PromoRow = { id: string; code: string; discount: string | null; eligibility: string | null; restrictions: string | null; expiresAt: Date | null; lastVerifiedAt: Date | null; sourceUrl: string };
+type PromoRow = { id: string; code: string; discount: string | null; eligibility: string | null; restrictions: string | null; expiresAt: Date | null; lastVerifiedAt: Date | null; sourceUrl: string; merchantUrl?: string | null; observedAt?: Date | null };
 
 /** Pure: a public coupon row (already passed publicCoupons) → the display shape. Null when a required field is unusable. */
 export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
   const brandName = displayText(b.name);
   const code = displayText(c.code);
   const tier = couponSourceTier(c.sourceUrl, b);
-  if (!brandName || !code || (tier !== 1 && tier !== 2)) return null;
-  const sourceUrl = displayUrl(c.sourceUrl);
-  const useUrl = sourceUrl && validateOutboundUrl(sourceUrl, { standardPortsOnly: true }).url && onOfficialDomain(sourceUrl, b) ? sourceUrl : null;
+  const feed = tier === 5;
+  if (!brandName || !code || (tier !== 1 && tier !== 2 && !feed)) return null;
+  // A feed code's stored source is the Feedico API: never shown or linked; "View offer" goes to the brand's own website.
+  const sourceUrl = feed ? null : displayUrl(c.sourceUrl);
+  const target = feed ? displayUrl(c.merchantUrl ?? null) : sourceUrl;
+  const useUrl = target && validateOutboundUrl(target, { standardPortsOnly: true }).url && onOfficialDomain(target, b) ? target : null;
+  const lastVerifiedAt = feed ? null : (displayDate(c.lastVerifiedAt)?.toISOString() ?? null);
   return {
     id: c.id,
     brandName,
@@ -341,12 +350,14 @@ export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
     eligibility: displayText(c.eligibility),
     restrictions: displayText(c.restrictions),
     expiresAt: displayDate(c.expiresAt)?.toISOString() ?? null,
-    lastVerifiedAt: displayDate(c.lastVerifiedAt)?.toISOString() ?? null,
+    lastVerifiedAt,
     sourceUrl,
     useUrl,
-    source: `${domainOf(sourceUrl) ?? b.officialDomain} (official site)`,
+    source: feed ? "Feedico (affiliate network)" : `${domainOf(sourceUrl) ?? b.officialDomain} (official site)`,
     verifiedVia: COUPON_TIER_LABEL[tier],
-    sellerDomain: domainOf(sourceUrl),
+    sellerDomain: domainOf(feed ? useUrl : sourceUrl),
+    ...(feed ? { viaFeed: true } : {}),
+    checkedAt: feed ? (displayDate(c.observedAt ?? null)?.toISOString() ?? null) : lastVerifiedAt,
   };
 }
 
@@ -432,7 +443,7 @@ export async function recentlyVerifiedPrices(now = Date.now()): Promise<CurrentP
 /** Price drops and promo codes, uncached (tests, admin). */
 export async function loadOfficialDeals(now = Date.now()): Promise<OfficialDeals> {
   const [drops, codes] = await Promise.all([loadPriceDrops(now), loadPromoCodes(new Date(now))]);
-  const times = [...drops.map((d) => Date.parse(d.observedAt)), ...codes.map((c) => Date.parse(c.lastVerifiedAt ?? ""))].filter(Number.isFinite);
+  const times = [...drops.map((d) => Date.parse(d.observedAt)), ...codes.map((c) => Date.parse(c.checkedAt ?? c.lastVerifiedAt ?? ""))].filter(Number.isFinite);
   return { drops, codes, checkedAt: times.length ? new Date(Math.max(...times)).toISOString() : null };
 }
 
@@ -454,10 +465,15 @@ export async function officialDeals(now = Date.now()): Promise<OfficialDeals> {
   }
   const maxAge = priceMaxAgeMs();
   const couponWindow = couponMaxAgeDays() * 86_400_000;
+  const feedWindow = config.feedico.maxFeedAgeDays() * 86_400_000;
   return {
     ...deals,
     drops: deals.drops.filter((d) => now - Date.parse(d.observedAt) <= maxAge && (!d.validUntil || validUntilMs(d.validUntil) >= now)),
-    codes: deals.codes.filter((c) => (!c.expiresAt || Date.parse(c.expiresAt) > now) && c.lastVerifiedAt !== null && now - Date.parse(c.lastVerifiedAt) <= couponWindow),
+    codes: deals.codes.filter((c) => {
+      if (c.expiresAt && Date.parse(c.expiresAt) <= now) return false;
+      const checked = c.viaFeed ? c.checkedAt : c.lastVerifiedAt;
+      return Boolean(checked) && now - Date.parse(checked!) <= (c.viaFeed ? feedWindow : couponWindow);
+    }),
   };
 }
 

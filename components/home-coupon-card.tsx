@@ -13,7 +13,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { mon
  */
 export default function HomeCouponCard({ c }: { c: PromoCode }) {
   const codeId = `home-code-${c.id}`;
-  const checked = c.lastVerifiedAt ? relativeTime(c.lastVerifiedAt) : null;
+  const when = c.viaFeed ? (c.checkedAt ?? null) : c.lastVerifiedAt;
+  const checked = when ? relativeTime(when) : null;
   return (
     <article className="hc-card" style={themeStyle(c.categories[0]) as React.CSSProperties}>
       <span className="hd-brand">
@@ -27,11 +28,11 @@ export default function HomeCouponCard({ c }: { c: PromoCode }) {
       </span>
       {c.expiresAt && <span className="hc-exp">Ends {fmtDate(c.expiresAt)} (as stated)</span>}
       <p className="hd-verify">
-        <span className="trust verified">Verified</span>
-        {checked && c.lastVerifiedAt && (
+        {c.viaFeed ? <span className="trust checked">Via Feedico</span> : <span className="trust verified">Verified</span>}
+        {checked && when && (
           <span>
             Checked{" "}
-            <time dateTime={c.lastVerifiedAt} title={c.lastVerifiedAt}>
+            <time dateTime={when} title={when}>
               {checked}
             </time>
           </span>
@@ -43,7 +44,7 @@ export default function HomeCouponCard({ c }: { c: PromoCode }) {
             View offer
             <span className="visually-hidden">
               {" "}
-              for code {c.code} on {c.brandName}&rsquo;s official site (opens in a new tab)
+              for code {c.code} on {c.brandName}&rsquo;s {c.viaFeed ? "website" : "official site"} (opens in a new tab)
             </span>
           </a>
         </div>

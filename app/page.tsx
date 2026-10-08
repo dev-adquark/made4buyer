@@ -85,7 +85,7 @@ export default async function Home() {
     allCategoryPhotos(),
     officialDeals().catch(() => ({ drops: [], codes: [], checkedAt: null })),
   ]);
-  // Verified deals and coupons: ACTIVE drops and VERIFIED codes from officialDeals(), the same list /deals shows; nothing when none.
+  // Deals and coupons: ACTIVE drops and public codes (official, or the Feedico feed) from officialDeals(), the same list /deals shows; nothing when none.
   const railDrops = verified.drops.slice(0, RAIL_SIZE);
   const railCodes = verified.codes.slice(0, RAIL_SIZE);
   const dealImages = await dealImagesFor(railDrops.map((d) => d.id)).catch(() => new Map<string, DealImage>());
@@ -264,8 +264,8 @@ export default async function Home() {
       {railDrops.length + railCodes.length > 0 && (
         <section className="section home-deals" aria-labelledby="verified-deals-title">
           <div className="wrap">
-            <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} verified`} title="Verified deals" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
-              Checked on the brand’s official site within the last 48 hours: in stock, unexpired, with the saving worked out from the page’s own prices.
+            <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} current`} title="Deals and coupons" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
+              Price drops checked on the brand’s official site within the last 48 hours: in stock, unexpired, with the saving worked out from the page’s own prices. Coupons from brands’ own sites, or listed by the Feedico affiliate feed (marked “Via Feedico”).
             </SectionHeader>
             {railDrops.length > 0 && (
               <HomeRail id="home-price-drops" label="Price drops" title={`Price drops (${verified.drops.length})`}>

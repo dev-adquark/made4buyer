@@ -205,6 +205,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
   const H = headingLevel === 2 ? "h2" : "h3";
   const codeId = `code-${c.id}`;
   const verified = c.lastVerifiedAt ? relativeTime(c.lastVerifiedAt) : null;
+  const listed = c.viaFeed && c.checkedAt ? relativeTime(c.checkedAt) : null;
   const terms = [c.eligibility, c.restrictions].filter((x): x is string => Boolean(x));
   return (
     <article className="coupon-card" style={themeStyle(c.categories[0]) as React.CSSProperties}>
@@ -214,13 +215,27 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
           {c.brandName}
           <span className="visually-hidden"> promo code</span>
         </H>
-        <span className="trust verified">Verified</span>
+        {c.viaFeed ? <span className="trust checked">Via Feedico</span> : <span className="trust verified">Verified</span>}
       </div>
       {c.discount && <p className="cc-offer">{c.discount}</p>}
       <div className="cc-code">
         <span className="cc-code-label">Code</span>
         <code id={codeId}>{c.code}</code>
       </div>
+      {c.viaFeed ? (
+        <p className="cc-meta">
+          Listed by Feedico (affiliate network)
+          {c.checkedAt && (
+            <>
+              {" "}· checked{" "}
+              <time dateTime={c.checkedAt} title={fmtDateTime(c.checkedAt)}>
+                {listed ?? fmtDateTime(c.checkedAt)}
+              </time>
+            </>
+          )}
+          . Not verified on {c.brandName}&rsquo;s own site.
+        </p>
+      ) : (
       <p className="cc-meta">
         <span className="cc-check" aria-hidden="true">
           ✓
@@ -237,6 +252,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
         )}{" "}
         on {c.verifiedVia.toLowerCase()} · {c.source.replace(/ \(official site\)$/, "")}
       </p>
+      )}
       {terms.length > 0 && (
         <p className="cc-terms">
           <span className="cc-label">Terms</span> {terms.join(" ")}
@@ -254,7 +270,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
             View offer
             <span className="visually-hidden">
               {" "}
-              for {c.code} on {c.brandName}&rsquo;s official site (opens in a new tab)
+              for {c.code} on {c.brandName}&rsquo;s {c.viaFeed ? "website" : "official site"} (opens in a new tab)
             </span>
           </a>
         )}
@@ -339,7 +355,7 @@ export function PromoCodeGrid({ codes, headingLevel = 3 }: { codes: PromoCode[];
   return (
     <ul className="deal-grid coupon-grid" data-deal-list="">
       {codes.map((c) => (
-        <li key={c.id} {...filterAttrs({ categories: c.categories, brandSlug: c.brandSlug, seller: c.sellerDomain, kind: "official", savingPercent: statedPercent(c.discount), checked: c.lastVerifiedAt })}>
+        <li key={c.id} {...filterAttrs({ categories: c.categories, brandSlug: c.brandSlug, seller: c.sellerDomain, kind: "official", savingPercent: statedPercent(c.discount), checked: c.checkedAt ?? c.lastVerifiedAt })}>
           <PromoCodeCard c={c} headingLevel={headingLevel} />
         </li>
       ))}

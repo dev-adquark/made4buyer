@@ -74,7 +74,7 @@ describe("Feedico coupon feed", () => {
     expect(stub.requests).toHaveLength(0);
   });
 
-  it("stores the brand's codes as Admin candidates (UNVERIFIED), never public, with the raw response and the source", async () => {
+  it("stores the brand's codes (UNVERIFIED: not checked on the brand's page) and publishes them, with the raw response and the source", async () => {
     const brand = await addBrand();
     stub.rows.Acme = [row(), row({ id: "c2", code: "TOOLS10", merchantWebsiteUrl: "https://acmetools.example" }), row({ id: "c3", code: "FREESHIP", title: "Free shipping on orders" })];
     const r = await runFeedicoSync("test");
@@ -83,7 +83,7 @@ describe("Feedico coupon feed", () => {
     const rows = await feedRows(brand.id);
     expect(rows.map((c) => [c.code, c.status, c.discount])).toEqual([["FREESHIP", "UNVERIFIED", "Free shipping"], ["SAVE20", "UNVERIFIED", "20% off"]]);
     expect(rows.every((c) => c.sourceUrl === feedicoSourceUrl(brand) && c.merchant === "Acme")).toBe(true);
-    expect(await verifiedCouponsFor({ brandId: brand.id })).toEqual([]); // never public on its own
+    expect((await verifiedCouponsFor({ brandId: brand.id })).map((c) => c.code).sort()).toEqual(["FREESHIP", "SAVE20"]); // public as feed codes
     const raw = await db.commerceRawRecord.findFirst({ where: { url: feedicoSourceUrl(brand) } });
     expect(JSON.stringify(raw?.payload)).not.toContain(KEY);
     expect(JSON.stringify(raw?.payload)).not.toContain("TOOLS10"); // another merchant's row is not kept
@@ -159,6 +159,7 @@ describe("Feedico coupon feed", () => {
     expect(r).toMatchObject({ coupons: 0, dropped: 1, deactivated: 1 });
     const [gone] = await feedRows(brand.id);
     expect(gone.status).toBe("INVALID");
+    expect(await verifiedCouponsFor({ brandId: brand.id }, at(15))).toEqual([]); // deactivated: off the site
     expect(gone.verificationEvidence).toMatch(/last confirmed it on .*more than 14 days ago/);
     stub.rows.Acme = [row({ fetchedAt: at(16).toISOString() })];
     await runFeedicoSync("test", { now: at(16) });

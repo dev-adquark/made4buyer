@@ -28,7 +28,7 @@ test.afterAll(async () => {
 });
 
 const drops = (page: Page) => page.getByRole("region", { name: "Verified price drops" });
-const codes = (page: Page) => page.getByRole("region", { name: "Latest verified coupons" });
+const codes = (page: Page) => page.getByRole("region", { name: "Latest coupons" });
 const viewDeal = (scope: Locator | Page) => scope.getByRole("link", { name: /^View deal\b/ });
 const codeLinkOf = (scope: Locator | Page) => scope.getByRole("link", { name: /^View offer\b/ });
 const copyButton = (scope: Locator | Page) => scope.getByRole("button", { name: /^Cop(y|ied)\b/ });
@@ -190,9 +190,9 @@ test("deals: responsive at phone, tablet and desktop widths", async ({ browser }
   }
 });
 
-test("homepage: Verified deals rail shows the drop and the code and links to /deals", async ({ page }) => {
+test("homepage: Deals and coupons rail shows the drop and the code and links to /deals", async ({ page }) => {
   await page.goto("/");
-  const rail = page.getByRole("region", { name: "Verified deals" });
+  const rail = page.getByRole("region", { name: "Deals and coupons" });
   await expect(rail).toBeVisible();
   await expect(rail).toContainText(FIX.valid.product);
   await expect(rail).toContainText(FIX.valid.priceText);
@@ -275,5 +275,5 @@ test("cleanup restores the empty state for the rest of the suite", async ({ page
   await expect(page.locator("[data-deal]")).toHaveCount(0);
   expect((await page.locator('script[type="application/ld+json"]').allTextContents()).join("")).not.toContain('"Offer"');
   await page.goto("/");
-  await expect(page.getByRole("region", { name: "Verified deals" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Deals and coupons" })).toHaveCount(0);
 });

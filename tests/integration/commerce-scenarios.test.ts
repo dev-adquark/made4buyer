@@ -671,7 +671,7 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
 
     const d = await deals();
     const codes = section(d.markup, "codes-title");
-    expect(d.text).toContain("Latest verified coupons");
+    expect(d.text).toContain("Latest coupons");
     expect(cards(codes)).toBe(1);
     expect(visibleText(codes)).toContain("SAVE10");
     expect(visibleText(codes)).toContain("Framework promo code");

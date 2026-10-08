@@ -7,6 +7,7 @@ import { registrableDomain } from "@/lib/net/ip";
 import { sha256 } from "@/lib/util/text";
 import { commerceAudit } from "./audit";
 import { ensureBrandsSeeded } from "./brands";
+import { revalidateCommerce } from "./revalidate";
 import { markExpiredCoupons, notACodeReason, recordDisappearances, statedDiscount, upsertCoupons, type NormalizedCoupon } from "./coupons";
 import { officialDomainsOf } from "./deal-status";
 import { sourceRunnable } from "./sources";
@@ -19,10 +20,11 @@ import { recordVerification, type VerificationEventInput } from "./verification-
  * What it adds: promo codes that merchants publish through affiliate networks (CJ, Impact, Awin, …),
  * for the brands in our registry only, matched by the merchant's exact website domain.
  *
- * What it never does: make a code public on its own. A Feedico row's source is the Feedico API, not
- * the brand's site, so the existing public rule (lib/commerce/deal-status.ts couponDealStatus: a code
- * is public only from the brand's official site/store, verified within 7 days) keeps it an Admin
- * candidate (UNVERIFIED) unless the brand's own promotions page also publishes the code.
+ * Public (owner decision, 2026-10-09): a Feedico code is shown on the site in its own right (tier 5,
+ * lib/commerce/deal-status.ts), labelled "Via Feedico", while it is stored UNVERIFIED (not seen on the
+ * brand's own page), listed in a sync within 14 days, started and unexpired. The brand's own page still
+ * outranks it: the same code verified there is shown once, as the official one. Every sync purges the
+ * deals cache so the site shows the latest feed.
  *
  * Schedule: the feedico-coupons job runs once a week (vercel.json, Friday 09:50 UTC) and fetches
  * every enabled brand. A re-run within FEEDICO_MIN_REFETCH_HOURS (12) skips brands already fetched.
@@ -46,6 +48,8 @@ const STATE_KEY = "feedico:state";
 const COUPON_PURPOSE = "COUPON";
 const ACTOR = "feedico:catalog/coupons";
 const PAGE_SIZE = 200;
+const FEEDICO_SOURCE_NOTES = "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Public, labelled \"Via Feedico\", while listed within 14 days; a code verified on the brand's own page is shown as the official one.";
+const OLD_SOURCE_NOTES_PREFIX = "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Admin candidates only";
 
 export function feedicoConfigured(): boolean {
   return Boolean(config.feedico.apiKey());
@@ -260,9 +264,11 @@ export async function feedicoUsage(now = new Date()): Promise<{ month: string; r
   return { month: s.month, requests: s.requests, budget: config.feedico.monthlyRequestBudget(), quotaExceeded: Boolean(s.quotaExceeded), brandsRefreshed: Object.values(s.brands).filter((b) => b.ok).length };
 }
 
-/** The Feedico source row (created once, approved and enabled; an admin may disable it later in Admin → Sources). */
+/** The Feedico source row (created once, approved and enabled; an admin may disable it later in Admin → Commerce → Coupons → Sources). */
 export async function ensureFeedicoSource() {
   const existing = await db.commerceSource.findUnique({ where: { slug: FEEDICO_SOURCE_SLUG } });
+  // The notes describe what the source does; refresh the original wording only (an admin's own notes are kept).
+  if (existing?.notes?.startsWith(OLD_SOURCE_NOTES_PREFIX)) return db.commerceSource.update({ where: { id: existing.id }, data: { notes: FEEDICO_SOURCE_NOTES } });
   if (existing) return existing;
   return db.commerceSource.create({
     data: {
@@ -273,7 +279,7 @@ export async function ensureFeedicoSource() {
       enabled: true,
       termsStatus: "APPROVED",
       crawlFrequencyHours: 7 * 24,
-      notes: "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Admin candidates only: a Feedico code is public only when the brand's own official page also publishes it.",
+      notes: FEEDICO_SOURCE_NOTES,
     },
   });
 }
@@ -314,6 +320,8 @@ export async function runFeedicoSync(trigger: string, opts: FeedicoSyncOptions =
   const result = await fetchAndStore(trigger, { ...opts, now });
   result.deactivated = await deactivateStaleFeedicoCoupons(now);
   if (result.deactivated) log.info("feedico stale coupons deactivated", { stage: "COMMERCE", deactivated: result.deactivated, maxAgeDays: config.feedico.maxFeedAgeDays() });
+  // Feed codes are public: the homepage, /deals, search and review pages show this sync's result now.
+  if (result.brandsChecked || result.deactivated || result.expired) await revalidateCommerce().catch((error: unknown) => log.warn("feedico revalidation failed", { stage: "COMMERCE", error: String(error).slice(0, 200) }));
   return result;
 }
 

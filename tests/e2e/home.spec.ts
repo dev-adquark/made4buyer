@@ -183,7 +183,7 @@ async function overflow(page: Page) {
 test("home: the price-drop and coupon rails list every verified item and nothing else", async ({ page }) => {
   const res = await page.goto("/");
   expect(res?.status()).toBe(200);
-  const section = page.getByRole("region", { name: "Verified deals" });
+  const section = page.getByRole("region", { name: "Deals and coupons" });
   await expect(section).toBeVisible();
 
   const drops = dropsRail(page);
@@ -357,7 +357,7 @@ test("home: no serious or critical axe violations (desktop and phone)", async ({
 test("home: with nothing verified the deal and coupon rails are absent", async ({ page }) => {
   await removeHomeExtras();
   await page.goto("/");
-  await expect(page.getByRole("region", { name: "Verified deals" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Deals and coupons" })).toHaveCount(0);
   await expect(dropsRail(page)).toHaveCount(0);
   await expect(codesRail(page)).toHaveCount(0);
   await expect(page.locator(".hr-track")).toHaveCount(0);

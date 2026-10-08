@@ -304,7 +304,7 @@ export async function integrationReadiness(now = new Date()): Promise<Integratio
     const ok = await jobRun("feedico-coupons", "SUCCEEDED");
     const src = await q(() => db.commerceSource.findUnique({ where: { slug: "feedico" }, select: { lastError: true, crawlStatus: true, lastCrawlAt: true } }), null);
     const err = src?.lastError && src.lastCrawlAt && src.crawlStatus !== "OK" ? { at: src.lastCrawlAt, message: `${src.crawlStatus}: ${src.lastError}` } : null;
-    rows.push(row({ key: "feedico", name: "Feedico coupon feed", missingEnv: need("FEEDICO_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: err, note: "Admin coupon candidates only (public only when the brand's own page shows the code). Verify with `npx tsx scripts/verify-feedico.ts`." }));
+    rows.push(row({ key: "feedico", name: "Feedico coupon feed", missingEnv: need("FEEDICO_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: err, note: "Feed codes are public (labelled Via Feedico) while listed within 14 days. Verify with `npx tsx scripts/verify-feedico.ts`." }));
   }
   // Keyword-to-Blog
   {

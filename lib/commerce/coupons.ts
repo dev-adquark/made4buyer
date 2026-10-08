@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
 import { commerceAudit } from "./audit";
 import { recordVerification, type VerificationEventInput } from "./verification-events";
-import { couponVerifiedSince, publicCoupons } from "./deal-status";
+import { config } from "@/lib/config";
+import { couponVerifiedSince, feedCouponPrefix, publicCoupons } from "./deal-status";
 import { CODE_SHAPE, findCodesInText } from "./page-functions/coupon";
 
 /**
@@ -469,21 +470,24 @@ const PUBLIC_BRAND_SELECT = { id: true, name: true, slug: true, categories: true
 
 /**
  * Database prefilter for public coupons (a superset; publicCoupons() decides): VERIFIED rows verified
- * within the window, started and unexpired, plus recently observed CONFLICTING rows so a code that
- * another official page contradicts is withheld.
+ * within the window and fresh Feedico feed rows, started and unexpired, plus recently observed
+ * CONFLICTING rows so a code that another official page contradicts is withheld.
  */
 function publicCouponWhere(now: Date): Prisma.CommerceCouponWhereInput {
   const since = couponVerifiedSince(now);
+  const current = [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }];
   return {
     OR: [
-      { status: "VERIFIED", lastVerifiedAt: { gte: since }, AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, { OR: [{ startsAt: null }, { startsAt: { lte: now } }] }] },
+      { status: "VERIFIED", lastVerifiedAt: { gte: since }, AND: current },
+      // Feedico feed codes (stored UNVERIFIED), listed in a sync within the feed's 14-day window.
+      { status: "UNVERIFIED", sourceUrl: { startsWith: `${feedCouponPrefix()}?` }, observedAt: { gte: new Date(now.getTime() - config.feedico.maxFeedAgeDays() * 86_400_000) }, AND: current },
       { status: "CONFLICTING", observedAt: { gte: since } },
     ],
   };
 }
 
 const loadCandidates = (where: Prisma.CommerceCouponWhereInput, now: Date, take: number) =>
-  db.commerceCoupon.findMany({ where: { AND: [publicCouponWhere(now), where] }, include: { brand: { select: PUBLIC_BRAND_SELECT } }, orderBy: [{ lastVerifiedAt: { sort: "desc", nulls: "last" } }, { id: "asc" }], take });
+  db.commerceCoupon.findMany({ where: { AND: [publicCouponWhere(now), where] }, include: { brand: { select: PUBLIC_BRAND_SELECT } }, orderBy: [{ lastVerifiedAt: { sort: "desc", nulls: "last" } }, { observedAt: "desc" }, { id: "asc" }], take });
 
 export type PublicCouponRow = Awaited<ReturnType<typeof loadCandidates>>[number];
 

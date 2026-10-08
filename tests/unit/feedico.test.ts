@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { feedicoDate, feedicoSourceUrl, normalizeFeedicoRows, parseFeedicoPage, type FeedicoCouponRow } from "@/lib/commerce/feedico";
-import { couponDealStatus } from "@/lib/commerce/deal-status";
+import { couponDealStatus, publicCoupons } from "@/lib/commerce/deal-status";
+import { toPromoCode } from "@/lib/public/deals";
 
 // SAMPLE rows shaped like POST /api/v1/catalog/coupons (feedico.io/openapi-customer.yaml v1.4).
 const NOW = new Date("2026-10-08T12:00:00Z");
@@ -67,9 +68,29 @@ describe("normalizeFeedicoRows", () => {
     expect(clash.coupons[0].conflict).toMatch(/disagree/);
   });
 
-  it("a Feedico row can never be public on its own: its source is not the brand's site", () => {
-    const verdict = couponDealStatus({ code: "SAVE20", status: "VERIFIED", startsAt: null, expiresAt: null, lastVerifiedAt: NOW, sourceUrl: feedicoSourceUrl(brand), brand }, NOW);
-    expect(verdict.status).not.toBe("ACTIVE");
-    expect(verdict.reasons.map((r) => r.code)).toContain("COUPON_NOT_FIRST_PARTY");
+  it("a fresh Feedico code is public in its own right (tier 5); stale, expired, invalid or conflicting ones are not", () => {
+    const base = { code: "SAVE20", status: "UNVERIFIED", startsAt: null, expiresAt: null, lastVerifiedAt: null, observedAt: NOW, sourceUrl: feedicoSourceUrl(brand), brand };
+    expect(couponDealStatus(base, NOW)).toEqual({ status: "ACTIVE", reasons: [] });
+    expect(couponDealStatus({ ...base, observedAt: new Date(NOW.getTime() - 15 * 86_400_000) }, NOW).reasons.map((r) => r.code)).toContain("COUPON_NOT_RESEEN");
+    expect(couponDealStatus({ ...base, expiresAt: new Date(NOW.getTime() - 1000) }, NOW).status).toBe("EXPIRED");
+    expect(couponDealStatus({ ...base, startsAt: new Date(NOW.getTime() + 86_400_000) }, NOW).status).not.toBe("ACTIVE");
+    for (const status of ["INVALID", "EXPIRED", "CONFLICTING", "UNKNOWN"]) expect(couponDealStatus({ ...base, status }, NOW).status, status).not.toBe("ACTIVE");
+    expect(couponDealStatus({ ...base, brand: undefined }, NOW).status).not.toBe("ACTIVE");
+    // Any other third-party page still never makes a code public on its own.
+    expect(couponDealStatus({ ...base, sourceUrl: "https://coupons.example.com/acme" }, NOW).status).not.toBe("ACTIVE");
+  });
+
+  it("the brand's own page outranks the feed: the same code is listed once, as the official one, never a conflict", () => {
+    const official = { id: "o", code: "SAVE20", discount: "20% off", status: "VERIFIED", startsAt: null, expiresAt: null, lastVerifiedAt: NOW, observedAt: NOW, sourceUrl: "https://acme.com/promotions", brand };
+    const feed = { id: "f", code: "SAVE20", discount: "25% off", status: "UNVERIFIED", startsAt: null, expiresAt: null, lastVerifiedAt: null, observedAt: NOW, sourceUrl: feedicoSourceUrl(brand), brand };
+    expect(publicCoupons([feed, official], NOW).map((c) => c.id)).toEqual(["o"]);
+    expect(publicCoupons([feed], NOW).map((c) => c.id)).toEqual(["f"]);
+  });
+
+  it("a feed code is shown as 'Via Feedico', links to the brand's own website, never to the Feedico API", () => {
+    const p = toPromoCode({ id: "f", code: "SAVE20", discount: "20% off", eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://www.acme.com", observedAt: NOW }, { name: "Acme", slug: "acme", categories: ["audio"], officialDomain: "acme.com", officialStoreUrl: null });
+    expect(p).toMatchObject({ viaFeed: true, sourceUrl: null, useUrl: "https://www.acme.com/", source: "Feedico (affiliate network)", verifiedVia: "Affiliate feed (Feedico)", lastVerifiedAt: null, checkedAt: NOW.toISOString() });
+    const offsite = toPromoCode({ id: "g", code: "SAVE20", discount: null, eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://elsewhere.example", observedAt: NOW }, { name: "Acme", slug: "acme", categories: [], officialDomain: "acme.com", officialStoreUrl: null });
+    expect(offsite?.useUrl).toBeNull();
   });
 });

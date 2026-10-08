@@ -198,7 +198,7 @@ describe("/deals: only official, verified, fresh offers", () => {
     const markup = await html(DealsPage());
     const text = visibleText(markup);
     expect(text).toContain("Verified price drops");
-    expect(text).toContain("Latest verified coupons");
+    expect(text).toContain("Latest coupons");
     expect(text).toContain("Recently verified");
     expect(text).toContain("Official Framework store price");
     expect(text).toContain("Framework promo code");

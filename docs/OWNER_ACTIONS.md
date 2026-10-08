@@ -171,16 +171,19 @@ last 14 days; a row with no `fetchedAt` is rejected (age unknown). Every run dea
 deleted) each stored Feedico code whose latest Feedico confirmation is older than 14 days, even when the
 fetch itself could not run. A code Feedico confirms again later is reactivated as a candidate.
 
-**What it never does.** Make a code public on its own. Feedico codes are stored as **UNVERIFIED**
-candidates (Admin → Commerce → Coupons, source "Feedico coupon feed"); the existing rule still applies:
-only verified codes are public, i.e. published on the brand's own official page and verified within 7
-days. A code missing from two consecutive successful fetches becomes INVALID; a stated end date that
-has passed makes it EXPIRED; duplicates across networks are merged and disagreements marked CONFLICTING. A failed, malformed or quota-refused response changes nothing. Turn the feed off
-in Admin → Commerce → Coupons → Sources (Feedico coupon feed → Disable).
+**What gets published.** Every current Feedico code is shown on the site (homepage coupons, /deals,
+/search, the brand's review pages), labelled **"Via Feedico"**, not "Verified": it is listed by an
+affiliate feed, not checked on the brand's own page (owner decision, 2026-10-09). Shown only while it is
+stored as a current candidate, listed in a sync within 14 days, started and unexpired; a code missing
+from two consecutive successful fetches becomes INVALID, a passed end date EXPIRED, disagreeing network
+rows CONFLICTING. When the brand's own page publishes the same code, it is shown once, as the official
+verified code. "View offer" goes to the brand's own website (Feedico gives no offer link). Every sync
+refreshes the site's deals cache. Turn the feed off in Admin → Commerce → Coupons → Sources (Feedico
+coupon feed → Disable).
 
-**Terms.** Feedico's catalogue pools codes from programmes across all Feedico customers. Before
-showing any of these codes publicly (a separate decision, not implemented), confirm your own approval
-in each affiliate programme.
+**Terms.** Feedico's catalogue pools codes from programmes across all Feedico customers; networks and
+advertisers often allow a code to be published only by approved publishers. Confirm your own approval
+in each affiliate programme whose codes appear.
 
 ## 7. Other integrations shown in Admin → Integrations
 

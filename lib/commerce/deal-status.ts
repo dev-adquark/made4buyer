@@ -455,11 +455,22 @@ export function couponVerifiedSince(now: number | Date = Date.now(), maxAgeDays 
  * null: anywhere else. Tiers 3–4 are known but never make a code public on their own: a code is
  * VERIFIED only from the brand's own pages, and a third-party listing is not that evidence.
  */
-export type CouponSourceTier = 1 | 2 | 3 | 4;
+export type CouponSourceTier = 1 | 2 | 3 | 4 | 5;
 export type ApprovedCouponSource = { domain: string; kind: string };
-export const COUPON_TIER_LABEL: Record<CouponSourceTier, string> = { 1: "Official brand site", 2: "Official brand store", 3: "Approved retailer", 4: "Approved coupon site" };
+export const COUPON_TIER_LABEL: Record<CouponSourceTier, string> = { 1: "Official brand site", 2: "Official brand store", 3: "Approved retailer", 4: "Approved coupon site", 5: "Affiliate feed (Feedico)" };
+
+/** The stored source URL prefix of codes from the Feedico feed (lib/commerce/feedico.ts feedicoSourceUrl). */
+export function feedCouponPrefix(): string {
+  return `${config.feedico.baseUrl()}/api/v1/catalog/coupons`;
+}
+
+/** A code from the approved Feedico affiliate feed (tier 5): public on its own when fresh (owner decision, 2026-10-09). */
+export function isFeedCoupon(sourceUrl: string | null | undefined): boolean {
+  return Boolean(sourceUrl?.startsWith(`${feedCouponPrefix()}?`));
+}
 
 export function couponSourceTier(sourceUrl: string | null | undefined, brand: DealBrandInput, approved: readonly ApprovedCouponSource[] = []): CouponSourceTier | null {
+  if (isFeedCoupon(sourceUrl)) return 5;
   const host = sourceUrl ? hostOf(sourceUrl) : null;
   if (!host) return null;
   const reg = registrableDomain(host.replace(/^www\./, ""));
@@ -519,11 +530,21 @@ export function couponDealStatus(coupon: DealCouponInput, now: number | Date = D
   if (coupon.status === "EXPIRED") add("COUPON_EXPIRED", "marked EXPIRED");
   else if (Number.isFinite(expires) && expires <= nowMs) add("COUPON_EXPIRED", `stated expiry ${new Date(expires).toISOString()} has passed`);
   if (coupon.status === "CONFLICTING") add("COUPON_CONFLICTING", "first-party observations disagree");
-  if (!["VERIFIED", "INVALID", "EXPIRED", "CONFLICTING"].includes(coupon.status)) add("COUPON_UNVERIFIED", `status ${coupon.status}`);
   const tier = couponSourceTier(coupon.sourceUrl, coupon.brand, opts.approvedSources);
-  if (!coupon.brand) add("COUPON_NOT_FIRST_PARTY", "no brand to check the source page against");
+  // Feedico feed codes are stored UNVERIFIED (not seen on the brand's own page) and are public in their own right.
+  const feed = tier === 5;
+  if (!["VERIFIED", "INVALID", "EXPIRED", "CONFLICTING"].includes(coupon.status) && !(feed && coupon.status === "UNVERIFIED")) add("COUPON_UNVERIFIED", `status ${coupon.status}`);
+  if (!coupon.brand) add("COUPON_NOT_FIRST_PARTY", feed ? "no brand to attribute the feed code to" : "no brand to check the source page against");
   else if (tier === null) add("COUPON_NOT_FIRST_PARTY", "the source page is not on the brand's official domain");
-  else if (tier >= 3) add("COUPON_NOT_FIRST_PARTY", `${COUPON_TIER_LABEL[tier].toLowerCase()}: a third-party listing never verifies a code on its own`);
+  else if (tier === 3 || tier === 4) add("COUPON_NOT_FIRST_PARTY", `${COUPON_TIER_LABEL[tier].toLowerCase()}: a third-party listing never verifies a code on its own`);
+  if (feed && coupon.status === "UNVERIFIED") {
+    // Fresh: observed in a Feedico sync within FEEDICO_MAX_FEED_AGE_DAYS (14); the feed's own 14-day rule runs at every sync.
+    const maxAge = config.feedico.maxFeedAgeDays() * DAY_MS;
+    const seen = time(coupon.observedAt);
+    if (!Number.isFinite(seen) || nowMs - seen > maxAge) add("COUPON_NOT_RESEEN", Number.isFinite(seen) ? `last listed by Feedico ${Math.floor((nowMs - seen) / DAY_MS)} days ago` : "never listed");
+    const starts = time(coupon.startsAt);
+    if (Number.isFinite(starts) && starts > nowMs) add("COUPON_NOT_STARTED", `starts ${new Date(starts).toISOString()}`);
+  }
   if (coupon.status === "VERIFIED") {
     const maxAge = (opts.maxAgeDays ?? couponMaxAgeDays()) * DAY_MS;
     const seen = time(coupon.lastVerifiedAt);
@@ -553,9 +574,14 @@ export function classifyCoupons<C extends DealCouponInput>(rows: readonly C[], n
   for (const group of groups.values()) {
     const active = group.filter((x) => x.verdict.status === "ACTIVE");
     if (!active.length) continue;
-    const storedConflict = group.some((x) => x.coupon.status === "CONFLICTING" && nowMs - time(x.coupon.observedAt ?? x.coupon.lastVerifiedAt) <= maxAge);
-    const offers = new Set(active.map((x) => displayText(x.coupon.discount)?.toLowerCase()).filter(Boolean));
-    const ends = new Set(active.map((x) => time(x.coupon.expiresAt)).filter(Number.isFinite));
+    // The brand's own page outranks the feed: when an official row is active, terms are judged among
+    // official rows only and a feed row of the same code is a duplicate, never a conflict.
+    const isFeed = (x: (typeof out)[number]) => isFeedCoupon(x.coupon.sourceUrl);
+    const official = active.filter((x) => !isFeed(x));
+    const judged = official.length ? official : active;
+    const storedConflict = group.some((x) => x.coupon.status === "CONFLICTING" && (!official.length || !isFeed(x)) && nowMs - time(x.coupon.observedAt ?? x.coupon.lastVerifiedAt) <= maxAge);
+    const offers = new Set(judged.map((x) => displayText(x.coupon.discount)?.toLowerCase()).filter(Boolean));
+    const ends = new Set(judged.map((x) => time(x.coupon.expiresAt)).filter(Number.isFinite));
     if (storedConflict || offers.size > 1 || ends.size > 1) {
       const message = storedConflict ? "another official page's observation of this code conflicts" : "official pages state different terms for this code";
       for (const x of active) x.verdict = { status: "CONFLICTING", reasons: [{ code: "COUPON_CONFLICTING", message }] };
