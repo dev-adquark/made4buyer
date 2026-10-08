@@ -158,7 +158,7 @@ export const config = {
     baseUrl: () => (str("FEEDICO_API_BASE_URL") ?? "https://api.feedico.io").replace(/\/+$/, ""),
     monthlyRequestBudget: () => num("FEEDICO_MONTHLY_REQUEST_BUDGET", 600, 1, 1_000_000),
     /** A brand fetched successfully within this many hours is not fetched again (a re-run of the weekly sync is a no-op). */
-    minRefetchHours: () => num("FEEDICO_MIN_REFETCH_HOURS", 20, 1, 144),
+    minRefetchHours: () => num("FEEDICO_MIN_REFETCH_HOURS", 12, 1, 144),
     brandsPerRun: () => num("FEEDICO_BRANDS_PER_RUN", 200, 1, 500),
     maxPagesPerBrand: () => num("FEEDICO_MAX_PAGES_PER_BRAND", 2, 1, 5),
     /** Freshness: a code Feedico has not confirmed (fetchedAt) within this many days is rejected and deactivated. At most 14. */

@@ -24,8 +24,8 @@ import { recordVerification, type VerificationEventInput } from "./verification-
  * is public only from the brand's official site/store, verified within 7 days) keeps it an Admin
  * candidate (UNVERIFIED) unless the brand's own promotions page also publishes the code.
  *
- * Schedule: the feedico-coupons job runs once a week (vercel.json, Sunday 09:50 UTC) and fetches
- * every enabled brand. A re-run within FEEDICO_MIN_REFETCH_HOURS (20) skips brands already fetched.
+ * Schedule: the feedico-coupons job runs once a week (vercel.json, Friday 09:50 UTC) and fetches
+ * every enabled brand. A re-run within FEEDICO_MIN_REFETCH_HOURS (12) skips brands already fetched.
  * Requests: one per brand (a second page only when a brand has more than 200 matches) ≈ 100/week,
  * capped by FEEDICO_MONTHLY_REQUEST_BUDGET (600) under the Free plan's 1,000/month; the cap is counted
  * per UTC month before each request (attempts, not just successes), and a 429 from Feedico ends the month.
@@ -304,7 +304,7 @@ export type FeedicoSyncOptions = { now?: Date; deadlineMs?: number; brandLimit?:
 
 /**
  * The weekly sync: fetches every enabled brand not fetched successfully within FEEDICO_MIN_REFETCH_HOURS
- * (so a re-run only retries failures), up to FEEDICO_BRANDS_PER_RUN and the time budget, then deactivates
+ * (12; so a same-day re-run only retries failures), up to FEEDICO_BRANDS_PER_RUN and the time budget, then deactivates
  * every stored Feedico code older than 14 days. The sweep runs even when nothing could be fetched (no
  * key, source disabled, quota reached): stale codes are deactivated either way. Progress is saved after
  * every brand, so an interrupted run resumes where it stopped.
@@ -334,7 +334,7 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   await ensureBrandsSeeded();
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, orderBy: [{ priority: "desc" }, { name: "asc" }], select: { id: true, slug: true, name: true, officialDomain: true, officialStoreUrl: true } });
   const refetchMs = config.feedico.minRefetchHours() * 3_600_000;
-  // Due: every brand not fetched successfully within the last 20 h (never fetched and failed first).
+  // Due: every brand not fetched successfully within the last 12 h (never fetched and failed first).
   const due = brands
     .filter((b) => {
       const st = state.brands[b.slug];

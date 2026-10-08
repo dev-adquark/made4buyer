@@ -93,7 +93,7 @@ describe("Feedico coupon feed", () => {
     expect(run).toMatchObject({ purpose: "COUPON", status: "COLLECTED", apifyRunId: null, accepted: 2 });
   });
 
-  it("is idempotent: a second run within 20 hours makes no request and changes nothing", async () => {
+  it("is idempotent: a second run within 12 hours makes no request and changes nothing", async () => {
     await addBrand();
     stub.rows.Acme = [row()];
     await runFeedicoSync("test");

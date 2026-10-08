@@ -40,12 +40,12 @@ describe("next / previous run (UTC)", () => {
     }
   });
 
-  it("runs the Feedico coupon sync once a week, Sunday 09:50 UTC", () => {
+  it("runs the Feedico coupon sync once a week, Friday 09:50 UTC", () => {
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     const feedico = crons.filter((c) => c.path === "/api/cron/feedico-coupons");
-    expect(feedico.map((c) => c.schedule)).toEqual(["50 9 * * 0"]);
-    expect(iso(nextRun("50 9 * * 0", NOW))).toBe("2026-10-11T09:50:00.000Z");
-    expect(iso(previousRun("50 9 * * 0", NOW))).toBe("2026-10-04T09:50:00.000Z");
+    expect(feedico.map((c) => c.schedule)).toEqual(["50 9 * * 5"]);
+    expect(iso(nextRun("50 9 * * 5", NOW))).toBe("2026-10-09T09:50:00.000Z");
+    expect(iso(previousRun("50 9 * * 5", NOW))).toBe("2026-10-02T09:50:00.000Z");
   });
 
   it("matches hand-checked values for the current schedules", () => {

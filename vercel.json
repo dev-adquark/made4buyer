@@ -67,7 +67,7 @@
     },
     {
       "path": "/api/cron/feedico-coupons",
-      "schedule": "50 9 * * 0"
+      "schedule": "50 9 * * 5"
     },
     {
       "path": "/api/cron/data-audit",

@@ -161,10 +161,10 @@ in the registry only (matched by the merchant's exact website domain). Code: `li
 3. Check it (one request, prints counts only): `FEEDICO_API_KEY=… npx tsx scripts/verify-feedico.ts`,
    or Admin → Jobs → `feedico-coupons` → Run now.
 
-**What it does.** The `feedico-coupons` job runs **once a week** (Sunday 09:50 UTC) and fetches every
+**What it does.** The `feedico-coupons` job runs **once a week** (Friday 09:50 UTC) and fetches every
 enabled brand: one request per brand (a second page only above 200 codes), ≈ 100 requests/week, ≈ 430
 /month. It stops at `FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429, well inside the Free
-plan's 1,000. A re-run within 20 hours only retries brands whose fetch failed.
+plan's 1,000. A re-run within 12 hours only retries brands whose fetch failed.
 
 **14-day freshness.** A code is accepted only when Feedico confirmed it (its `fetchedAt`) within the
 last 14 days; a row with no `fetchedAt` is rejected (age unknown). Every run deactivates (INVALID, never
