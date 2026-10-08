@@ -42,10 +42,20 @@ describe("normalizeFeedicoRows", () => {
     expect(noOffer.discount).toBeNull();
   });
 
-  it("drops non-codes and rows Feedico has not seen for over 30 days; upper-cases codes", () => {
-    const n = normalizeFeedicoRows([row({ id: "a", code: "the" }), row({ id: "b", code: "OLD10", fetchedAt: "2026-07-01T00:00:00Z" }), row({ id: "c", code: "save5now" })], brand, NOW);
-    expect(n.coupons.map((c) => c.code)).toEqual(["SAVE5NOW"]);
-    expect(n.dropped.map((d) => d.id).sort()).toEqual(["a", "b"]);
+  it("drops non-codes, rows Feedico has not confirmed within 14 days, and rows with no confirmation date; upper-cases codes", () => {
+    const n = normalizeFeedicoRows(
+      [
+        row({ id: "a", code: "the" }),
+        row({ id: "b", code: "OLD10", fetchedAt: "2026-09-24T11:59:00Z" }), // 14 days + 1 minute
+        row({ id: "d", code: "NODATE5", fetchedAt: null }),
+        row({ id: "e", code: "EDGE13", fetchedAt: "2026-09-25T12:00:00Z" }), // 13 days
+        row({ id: "c", code: "save5now" }),
+      ],
+      brand,
+      NOW,
+    );
+    expect(n.coupons.map((c) => c.code)).toEqual(["EDGE13", "SAVE5NOW"]);
+    expect(Object.fromEntries(n.dropped.map((d) => [d.id, d.reason]))).toMatchObject({ a: expect.stringMatching(/^code:/), b: expect.stringMatching(/^stale:.*14 days/), d: "no fetchedAt: age unknown" });
   });
 
   it("merges one code listed by several networks, and marks it conflicting when they disagree", () => {

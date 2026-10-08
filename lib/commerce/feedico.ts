@@ -10,6 +10,7 @@ import { ensureBrandsSeeded } from "./brands";
 import { markExpiredCoupons, notACodeReason, recordDisappearances, statedDiscount, upsertCoupons, type NormalizedCoupon } from "./coupons";
 import { officialDomainsOf } from "./deal-status";
 import { sourceRunnable } from "./sources";
+import { recordVerification, type VerificationEventInput } from "./verification-events";
 
 /**
  * Feedico (https://feedico.io): an approved external coupon FEED, read through its catalogue API
@@ -23,11 +24,16 @@ import { sourceRunnable } from "./sources";
  * is public only from the brand's official site/store, verified within 7 days) keeps it an Admin
  * candidate (UNVERIFIED) unless the brand's own promotions page also publishes the code.
  *
- * Schedule: the feedico-coupons job runs daily and refreshes each brand once per FEEDICO_REFRESH_DAYS
- * (7), so every brand is refreshed weekly; a brand whose fetch failed is retried the next day.
- * Requests: one per brand (a second page only when a brand has more than 200 matches), capped by
- * FEEDICO_MONTHLY_REQUEST_BUDGET (600) under the Free plan's 1,000/month; the cap is counted per UTC
- * month before each request (attempts, not just successes), and a 429 from Feedico ends the month.
+ * Schedule: the feedico-coupons job runs once a week (vercel.json, Sunday 09:50 UTC) and fetches
+ * every enabled brand. A re-run within FEEDICO_MIN_REFETCH_HOURS (20) skips brands already fetched.
+ * Requests: one per brand (a second page only when a brand has more than 200 matches) ≈ 100/week,
+ * capped by FEEDICO_MONTHLY_REQUEST_BUDGET (600) under the Free plan's 1,000/month; the cap is counted
+ * per UTC month before each request (attempts, not just successes), and a 429 from Feedico ends the month.
+ *
+ * Freshness (14 days): a row is accepted only when Feedico's own fetchedAt is within
+ * FEEDICO_MAX_FEED_AGE_DAYS (14; no fetchedAt = age unknown = rejected). Every run then deactivates
+ * (INVALID, never deleted) each stored Feedico code whose latest Feedico confirmation is older than
+ * 14 days, read from the raw response it was stored from. A code Feedico confirms again is reactivated.
  *
  * Data safety: a failed, malformed or quota-refused response changes nothing (the last good data
  * stays). A code disappears only after two consecutive successful fetches without it (INVALID), and a
@@ -148,8 +154,8 @@ export type FeedicoNormalized = { coupons: NormalizedCoupon[]; dropped: Array<{ 
 
 /**
  * Feedico rows → coupon records for ONE brand, using only what the row states. A row is kept only
- * when its merchant website is the brand's own domain, the code is a real code, and Feedico saw it
- * within FEEDICO_MAX_FEED_AGE_DAYS. Duplicates of one code (several networks) are merged; rows that
+ * when its merchant website is the brand's own domain, the code is a real code, and Feedico confirmed
+ * it (fetchedAt) within FEEDICO_MAX_FEED_AGE_DAYS (14). Duplicates of one code (several networks) are merged; rows that
  * disagree on the stated offer or end date mark the code CONFLICTING.
  */
 export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBrand, now = new Date()): FeedicoNormalized {
@@ -168,8 +174,12 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
       continue;
     }
     const seen = feedicoDate(r.fetchedAt);
-    if (seen && now.getTime() - seen.getTime() > maxAge) {
-      dropped.push({ id: r.id, reason: `stale: Feedico last saw it ${seen.toISOString().slice(0, 10)}` });
+    if (!seen) {
+      dropped.push({ id: r.id, reason: "no fetchedAt: age unknown" });
+      continue;
+    }
+    if (now.getTime() - seen.getTime() > maxAge) {
+      dropped.push({ id: r.id, reason: `stale: Feedico last confirmed it ${seen.toISOString().slice(0, 10)}, over ${config.feedico.maxFeedAgeDays()} days ago` });
       continue;
     }
     const expiresAt = feedicoDate(r.endsAt);
@@ -198,7 +208,7 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
       evidence: "MARKED",
       sufficient: true,
       conflict: null,
-      seen: seen?.getTime() ?? 0,
+      seen: seen.getTime(),
     };
     const prev = byCode.get(code);
     if (!prev) {
@@ -262,7 +272,7 @@ export async function ensureFeedicoSource() {
       domain: "api.feedico.io",
       enabled: true,
       termsStatus: "APPROVED",
-      crawlFrequencyHours: config.feedico.refreshDays() * 24,
+      crawlFrequencyHours: 7 * 24,
       notes: "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Admin candidates only: a Feedico code is public only when the brand's own official page also publishes it.",
     },
   });
@@ -285,21 +295,33 @@ export type FeedicoSyncResult = {
   invalidated: number;
   expired: number;
   remaining: number;
+  /** Stored Feedico codes deactivated because Feedico's latest confirmation is older than 14 days. */
+  deactivated: number;
   failures?: Array<{ brand: string; error: string }>;
 };
 
 export type FeedicoSyncOptions = { now?: Date; deadlineMs?: number; brandLimit?: number; force?: boolean };
 
 /**
- * One invocation: refreshes the brands that are due (never fetched, last fetch failed, or older than
- * FEEDICO_REFRESH_DAYS), up to FEEDICO_BRANDS_PER_RUN and the time budget. Idempotent: running it again
- * the same day only retries brands whose fetch failed. Resumable: progress is saved after every brand.
+ * The weekly sync: fetches every enabled brand not fetched successfully within FEEDICO_MIN_REFETCH_HOURS
+ * (so a re-run only retries failures), up to FEEDICO_BRANDS_PER_RUN and the time budget, then deactivates
+ * every stored Feedico code older than 14 days. The sweep runs even when nothing could be fetched (no
+ * key, source disabled, quota reached): stale codes are deactivated either way. Progress is saved after
+ * every brand, so an interrupted run resumes where it stopped.
  */
 export async function runFeedicoSync(trigger: string, opts: FeedicoSyncOptions = {}): Promise<FeedicoSyncResult> {
   const now = opts.now ?? new Date();
+  const result = await fetchAndStore(trigger, { ...opts, now });
+  result.deactivated = await deactivateStaleFeedicoCoupons(now);
+  if (result.deactivated) log.info("feedico stale coupons deactivated", { stage: "COMMERCE", deactivated: result.deactivated, maxAgeDays: config.feedico.maxFeedAgeDays() });
+  return result;
+}
+
+async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: Date }): Promise<FeedicoSyncResult> {
+  const now = opts.now;
   const deadline = Date.now() + (opts.deadlineMs ?? 240_000);
   const budget = config.feedico.monthlyRequestBudget();
-  const base: FeedicoSyncResult = { status: "OK", brandsChecked: 0, brandsFailed: 0, requests: 0, requestsThisMonth: 0, budget, coupons: 0, created: 0, changed: 0, dropped: 0, invalidated: 0, expired: 0, remaining: 0 };
+  const base: FeedicoSyncResult = { status: "OK", brandsChecked: 0, brandsFailed: 0, requests: 0, requestsThisMonth: 0, budget, coupons: 0, created: 0, changed: 0, dropped: 0, invalidated: 0, expired: 0, remaining: 0, deactivated: 0 };
   if (!feedicoConfigured()) return { ...base, status: "BLOCKED_BY_ENVIRONMENT", reason: "FEEDICO_API_KEY not configured" };
 
   const source = await ensureFeedicoSource();
@@ -311,15 +333,15 @@ export async function runFeedicoSync(trigger: string, opts: FeedicoSyncOptions =
 
   await ensureBrandsSeeded();
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, orderBy: [{ priority: "desc" }, { name: "asc" }], select: { id: true, slug: true, name: true, officialDomain: true, officialStoreUrl: true } });
-  const refreshMs = config.feedico.refreshDays() * 86_400_000;
-  // Due: never fetched first, then failed, then the oldest successful fetch.
+  const refetchMs = config.feedico.minRefetchHours() * 3_600_000;
+  // Due: every brand not fetched successfully within the last 20 h (never fetched and failed first).
   const due = brands
     .filter((b) => {
       const st = state.brands[b.slug];
-      return opts.force || !st || !st.ok || now.getTime() - Date.parse(st.at) >= refreshMs - 3_600_000;
+      return opts.force || !st || !st.ok || now.getTime() - Date.parse(st.at) >= refetchMs;
     })
     .sort((a, b) => (Date.parse(state.brands[a.slug]?.at ?? "") || 0) - (Date.parse(state.brands[b.slug]?.at ?? "") || 0));
-  if (!due.length) return { ...base, status: "NOT_DUE", reason: `Every brand was refreshed within ${config.feedico.refreshDays()} days` };
+  if (!due.length) return { ...base, status: "NOT_DUE", reason: `Every brand was fetched within the last ${config.feedico.minRefetchHours()} hours` };
 
   const run = await db.commerceRun.create({ data: { purpose: COUPON_PURPOSE, sourceId: source.id, actorId: ACTOR, trigger, status: "RUNNING", startUrls: 0 } });
   const limit = Math.min(opts.brandLimit ?? config.feedico.brandsPerRun(), due.length);
@@ -414,9 +436,59 @@ export async function runFeedicoSync(trigger: string, opts: FeedicoSyncOptions =
     where: { id: source.id },
     data: failed
       ? { crawlStatus: out.status, consecutiveFailures: { increment: 1 }, lastError: (out.reason ?? "").slice(0, 300), lastCrawlAt: now }
-      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: out.brandsFailed ? `${out.brandsFailed} brand fetch(es) failed; retried next run` : null, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 86_400_000) },
+      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: out.brandsFailed ? `${out.brandsFailed} brand fetch(es) failed; retried next run` : null, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 7 * 86_400_000) },
   });
   await commerceAudit(failed ? "COUPON_FEED_FAILED" : "COUPON_FEED_SYNCED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, provider: "feedico", target: FEEDICO_SOURCE_SLUG, status: out.status, reason: out.reason, brands: out.brandsChecked, failed: out.brandsFailed, requests: out.requests, requestsThisMonth: state.requests, coupons: out.coupons, created: out.created, invalidated: out.invalidated } });
   log.info("feedico coupon sync", { stage: "COMMERCE", status: out.status, brands: out.brandsChecked, failed: out.brandsFailed, requests: out.requests, month: state.month, used: state.requests, budget, coupons: out.coupons });
   return out;
+}
+
+// ── 14-day freshness sweep ───────────────────────────────────────────────
+
+const DAY_MS = 86_400_000;
+
+/** Feedico's latest confirmation (max fetchedAt) of `code` in a stored raw response, or null. */
+function confirmedAt(payload: unknown, code: string): Date | null {
+  const rows = payload && typeof payload === "object" ? (payload as { rows?: unknown }).rows : null;
+  if (!Array.isArray(rows)) return null;
+  let best: Date | null = null;
+  for (const r of rows) {
+    if (!r || typeof r !== "object") continue;
+    const row = r as { code?: unknown; fetchedAt?: unknown };
+    if (typeof row.code !== "string" || row.code.trim().toUpperCase() !== code) continue;
+    const d = feedicoDate(typeof row.fetchedAt === "string" ? row.fetchedAt : null);
+    if (d && (!best || d > best)) best = d;
+  }
+  return best;
+}
+
+/**
+ * Deactivates (INVALID, never deleted) every active stored Feedico code whose latest Feedico
+ * confirmation is older than FEEDICO_MAX_FEED_AGE_DAYS (14), or cannot be established. Read from the
+ * raw response each row was stored from. An admin's own "mark invalid" and EXPIRED rows are left alone.
+ */
+export async function deactivateStaleFeedicoCoupons(now = new Date()): Promise<number> {
+  const maxDays = config.feedico.maxFeedAgeDays();
+  const cutoff = now.getTime() - maxDays * DAY_MS;
+  const rows = await db.commerceCoupon.findMany({
+    where: { sourceUrl: { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons` }, status: { notIn: ["INVALID", "EXPIRED"] } },
+    select: { id: true, code: true, status: true, sourceUrl: true, sourceRawId: true, observedAt: true },
+  });
+  if (!rows.length) return 0;
+  const rawIds = [...new Set(rows.map((r) => r.sourceRawId).filter((x): x is string => Boolean(x)))];
+  const raws = rawIds.length ? await db.commerceRawRecord.findMany({ where: { id: { in: rawIds } }, select: { id: true, payload: true } }) : [];
+  const payloadOf = new Map(raws.map((r) => [r.id, r.payload]));
+  const events: VerificationEventInput[] = [];
+  let deactivated = 0;
+  for (const c of rows) {
+    const at = c.sourceRawId ? confirmedAt(payloadOf.get(c.sourceRawId), c.code) : null;
+    if (at && at.getTime() >= cutoff) continue;
+    const evidence = at ? `Feedico last confirmed it on ${at.toISOString().slice(0, 10)}, more than ${maxDays} days ago (checked ${now.toISOString()})` : `No Feedico confirmation date on record for this code; deactivated by the ${maxDays}-day rule (checked ${now.toISOString()})`;
+    await db.commerceCoupon.update({ where: { id: c.id }, data: { status: "INVALID", verificationEvidence: evidence } });
+    await commerceAudit("COUPON_INVALIDATED", "commerce_coupon", c.id, { before: { status: c.status }, after: { status: "INVALID" }, metadata: { code: c.code, evidence, rule: `feedico-${maxDays}-day-freshness` } });
+    events.push({ entityType: "coupon", entityId: c.id, kind: "COUPON", result: "INVALID", reason: evidence, sourceUrl: c.sourceUrl, details: { code: c.code, previous: c.status, changed: true, check: "FEED_FRESHNESS" }, checkedAt: now });
+    deactivated++;
+  }
+  await recordVerification(events);
+  return deactivated;
 }

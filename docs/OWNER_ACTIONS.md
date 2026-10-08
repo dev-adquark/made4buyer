@@ -161,16 +161,21 @@ in the registry only (matched by the merchant's exact website domain). Code: `li
 3. Check it (one request, prints counts only): `FEEDICO_API_KEY=… npx tsx scripts/verify-feedico.ts`,
    or Admin → Jobs → `feedico-coupons` → Run now.
 
-**What it does.** The `feedico-coupons` job runs daily at 09:50 UTC and refreshes each brand once a
-week (`FEEDICO_REFRESH_DAYS`, 7); a brand whose fetch failed is retried the next day. One request per
-brand (a second page only above 200 codes), so ~100 brands ≈ 430 requests/month. It stops at
-`FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429, well inside the Free plan's 1,000.
+**What it does.** The `feedico-coupons` job runs **once a week** (Sunday 09:50 UTC) and fetches every
+enabled brand: one request per brand (a second page only above 200 codes), ≈ 100 requests/week, ≈ 430
+/month. It stops at `FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429, well inside the Free
+plan's 1,000. A re-run within 20 hours only retries brands whose fetch failed.
+
+**14-day freshness.** A code is accepted only when Feedico confirmed it (its `fetchedAt`) within the
+last 14 days; a row with no `fetchedAt` is rejected (age unknown). Every run deactivates (INVALID, never
+deleted) each stored Feedico code whose latest Feedico confirmation is older than 14 days, even when the
+fetch itself could not run. A code Feedico confirms again later is reactivated as a candidate.
 
 **What it never does.** Make a code public on its own. Feedico codes are stored as **UNVERIFIED**
 candidates (Admin → Commerce → Coupons, source "Feedico coupon feed"); the existing rule still applies:
-a code is public only when the brand's own official page publishes it, verified within 7 days. A code
-missing from two consecutive successful fetches becomes INVALID; a stated end date that has passed
-makes it EXPIRED. A failed, malformed or quota-refused response changes nothing. Turn the feed off
+only verified codes are public, i.e. published on the brand's own official page and verified within 7
+days. A code missing from two consecutive successful fetches becomes INVALID; a stated end date that
+has passed makes it EXPIRED; duplicates across networks are merged and disagreements marked CONFLICTING. A failed, malformed or quota-refused response changes nothing. Turn the feed off
 in Admin → Commerce → Coupons → Sources (Feedico coupon feed → Disable).
 
 **Terms.** Feedico's catalogue pools codes from programmes across all Feedico customers. Before

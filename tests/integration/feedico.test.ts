@@ -46,7 +46,7 @@ let stub: Stub;
 let restore: () => void;
 beforeAll(async () => {
   stub = await startStub();
-  restore = withEnv({ FEEDICO_API_KEY: KEY, FEEDICO_API_BASE_URL: stub.base, UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: "true", FEEDICO_MONTHLY_REQUEST_BUDGET: undefined, FEEDICO_REFRESH_DAYS: undefined });
+  restore = withEnv({ FEEDICO_API_KEY: KEY, FEEDICO_API_BASE_URL: stub.base, UNSAFE_ALLOW_LOOPBACK_FOR_TESTS: "true", FEEDICO_MONTHLY_REQUEST_BUDGET: undefined, FEEDICO_MIN_REFETCH_HOURS: undefined, FEEDICO_MAX_FEED_AGE_DAYS: undefined, FEEDICO_BRANDS_PER_RUN: undefined });
 });
 afterAll(async () => {
   restore();
@@ -93,7 +93,7 @@ describe("Feedico coupon feed", () => {
     expect(run).toMatchObject({ purpose: "COUPON", status: "COLLECTED", apifyRunId: null, accepted: 2 });
   });
 
-  it("is idempotent: a second run inside the refresh window makes no request and changes nothing", async () => {
+  it("is idempotent: a second run within 20 hours makes no request and changes nothing", async () => {
     await addBrand();
     stub.rows.Acme = [row()];
     await runFeedicoSync("test");
@@ -117,14 +117,65 @@ describe("Feedico coupon feed", () => {
   it("deactivates a code missing from two consecutive successful fetches, and expires a passed end date", async () => {
     const brand = await addBrand();
     const t0 = new Date();
-    stub.rows.Acme = [row(), row({ id: "c9", code: "ENDED5", endsAt: new Date(t0.getTime() + 2 * day).toISOString() })];
-    await runFeedicoSync("test", { now: t0 });
-    stub.rows.Acme = [row({ id: "c9", code: "ENDED5", endsAt: new Date(t0.getTime() + 2 * day).toISOString() })];
-    await runFeedicoSync("test", { now: new Date(t0.getTime() + 7 * day) });
+    const at = (d: number) => new Date(t0.getTime() + d * day);
+    const ended = (d: number) => row({ id: "c9", code: "ENDED5", endsAt: at(2).toISOString(), fetchedAt: at(d).toISOString() });
+    stub.rows.Acme = [row({ fetchedAt: at(0).toISOString() }), ended(0)];
+    await runFeedicoSync("test", { now: at(0) });
+    stub.rows.Acme = [ended(7)];
+    await runFeedicoSync("test", { now: at(7) });
     expect((await feedRows(brand.id)).map((c) => [c.code, c.status])).toEqual([["ENDED5", "EXPIRED"], ["SAVE20", "UNVERIFIED"]]); // one miss: kept
-    await runFeedicoSync("test", { now: new Date(t0.getTime() + 14 * day) });
+    stub.rows.Acme = [ended(13)];
+    await runFeedicoSync("test", { now: at(13) });
     expect((await feedRows(brand.id)).map((c) => [c.code, c.status])).toEqual([["ENDED5", "EXPIRED"], ["SAVE20", "INVALID"]]);
     expect(await db.commerceCoupon.count()).toBe(2); // rows are never deleted
+  });
+
+  it("one weekly run fetches every brand", async () => {
+    for (const n of ["Acme", "Bolt", "Core"]) await addBrand(n, `${n.toLowerCase()}.com`);
+    const r = await runFeedicoSync("test");
+    expect(r).toMatchObject({ status: "OK", brandsChecked: 3, requests: 3, remaining: 0 });
+    expect(stub.requests.map((q) => q.body.firmName).sort()).toEqual(["Acme", "Bolt", "Core"]);
+  });
+
+  it("only accepts codes Feedico confirmed within 14 days (no date = rejected)", async () => {
+    const brand = await addBrand();
+    const now = new Date();
+    stub.rows.Acme = [row({ fetchedAt: new Date(now.getTime() - 13 * day).toISOString() }), row({ id: "c2", code: "OLD15", fetchedAt: new Date(now.getTime() - 15 * day).toISOString() }), row({ id: "c3", code: "NODATE5", fetchedAt: null })];
+    const r = await runFeedicoSync("test", { now });
+    expect(r).toMatchObject({ coupons: 1, dropped: 2 });
+    expect((await feedRows(brand.id)).map((c) => c.code)).toEqual(["SAVE20"]);
+  });
+
+  it("deactivates a stored code once Feedico's last confirmation is older than 14 days, and reactivates it when Feedico confirms it again", async () => {
+    const brand = await addBrand();
+    const t0 = new Date();
+    const at = (d: number) => new Date(t0.getTime() + d * day);
+    stub.rows.Acme = [row({ fetchedAt: at(0).toISOString() })];
+    await runFeedicoSync("test", { now: at(0) });
+    // Feedico still lists it a week later, but has not re-confirmed it since day 0.
+    expect(await runFeedicoSync("test", { now: at(7) })).toMatchObject({ coupons: 1, deactivated: 0 });
+    expect((await feedRows(brand.id))[0].status).toBe("UNVERIFIED");
+    const r = await runFeedicoSync("test", { now: at(15) });
+    expect(r).toMatchObject({ coupons: 0, dropped: 1, deactivated: 1 });
+    const [gone] = await feedRows(brand.id);
+    expect(gone.status).toBe("INVALID");
+    expect(gone.verificationEvidence).toMatch(/last confirmed it on .*more than 14 days ago/);
+    stub.rows.Acme = [row({ fetchedAt: at(16).toISOString() })];
+    await runFeedicoSync("test", { now: at(16) });
+    expect((await feedRows(brand.id)).map((c) => c.status)).toEqual(["UNVERIFIED"]); // confirmed again: a candidate again
+    expect(await db.commerceCoupon.count()).toBe(1);
+  });
+
+  it("deactivates stale codes even when nothing can be fetched (no key)", async () => {
+    const brand = await addBrand();
+    const t0 = new Date();
+    stub.rows.Acme = [row({ fetchedAt: t0.toISOString() })];
+    await runFeedicoSync("test", { now: t0 });
+    const off = withEnv({ FEEDICO_API_KEY: undefined });
+    const r = await runFeedicoSync("test", { now: new Date(t0.getTime() + 15 * day) });
+    off();
+    expect(r).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", deactivated: 1 });
+    expect((await feedRows(brand.id))[0].status).toBe("INVALID");
   });
 
   it("a rejected key stops the run and changes no coupon", async () => {

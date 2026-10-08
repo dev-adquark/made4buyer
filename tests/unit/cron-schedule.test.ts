@@ -29,7 +29,8 @@ describe("next / previous run (UTC)", () => {
   it("computes next and previous for every vercel.json schedule", () => {
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     expect(crons.length).toBeGreaterThan(0);
-    for (const { schedule } of crons) {
+    // Daily entries here; a weekly entry (day-of-week set) is checked on its own below.
+    for (const { schedule } of crons.filter((c) => c.schedule.split(" ")[4] === "*")) {
       const [m, h] = schedule.split(" ").map(Number);
       const today = Date.UTC(2026, 9, 7, h, m);
       const expectedNext = today > NOW.getTime() ? today : today + 86_400_000;
@@ -37,6 +38,14 @@ describe("next / previous run (UTC)", () => {
       expect(iso(nextRun(schedule, NOW)), schedule).toBe(new Date(expectedNext).toISOString());
       expect(iso(previousRun(schedule, NOW)), schedule).toBe(new Date(expectedPrev).toISOString());
     }
+  });
+
+  it("runs the Feedico coupon sync once a week, Sunday 09:50 UTC", () => {
+    const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
+    const feedico = crons.filter((c) => c.path === "/api/cron/feedico-coupons");
+    expect(feedico.map((c) => c.schedule)).toEqual(["50 9 * * 0"]);
+    expect(iso(nextRun("50 9 * * 0", NOW))).toBe("2026-10-11T09:50:00.000Z");
+    expect(iso(previousRun("50 9 * * 0", NOW))).toBe("2026-10-04T09:50:00.000Z");
   });
 
   it("matches hand-checked values for the current schedules", () => {

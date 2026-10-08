@@ -126,7 +126,7 @@ export const JOBS = {
   // Affiliate links on demand (Admin → Jobs / `npm run job -- affiliate-links`).
   "affiliate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runAffiliateLinks(trigger), locked: true },
   "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
-  // Feedico coupon feed (lib/commerce/feedico.ts): daily, each brand refreshed weekly; Admin candidates only (never public on its own).
+  // Feedico coupon feed (lib/commerce/feedico.ts): weekly (Sunday 09:50 UTC), every brand; codes older than 14 days deactivated; Admin candidates only (never public on its own).
   "feedico-coupons": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runFeedicoSync(trigger), locked: true },
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
   "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },
