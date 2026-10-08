@@ -5,6 +5,7 @@ import { publicImageUrl, relevantImage } from "@/lib/pipeline/images";
 import { entityKey } from "@/lib/entities/resolve";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { publishedFreshOffers } from "./offers";
+import { categoryFallbackPhoto, categoryPhotoSrc } from "./category-images";
 
 /** Public read models. Only PUBLISHED reviews are ever returned. */
 
@@ -33,17 +34,52 @@ export const cardSelect = {
   author: true,
   generationMeta: true,
   entities: { select: { source: true } },
-  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true, subject: true, searchQuery: true } },
+  images: { where: { isPrimary: true }, take: 1, select: { sourceType: true, sourceUrl: true, cdnUrl: true, licenseState: true, width: true, height: true, altText: true, enrichmentStatus: true, subject: true, searchQuery: true, imageType: true, attribution: true, attributionUrl: true } },
 } satisfies Prisma.NormalizedReviewSelect;
 
 export type ReviewCard = Prisma.NormalizedReviewGetPayload<{ select: typeof cardSelect }>;
 
-export function cardImage(r: ReviewCard) {
+export type CardImage = {
+  url: string;
+  /** True only when nothing but our placeholder graphic is left (no stored image, no category photo). */
+  isFallback: boolean;
+  /** Not the exact product (a Pexels photo of its type or category): shown with the "Representative photo" note. */
+  representative: boolean;
+  /** @deprecated alias of `representative`. */
+  illustrative: boolean;
+  /** Photo credit (Pexels photographer) for a representative photo. */
+  credit: string | null;
+  creditUrl: string | null;
+  /** What the photo shows (its own description). */
+  alt: string;
+  /** Tried in order when `url` fails to load in the browser (SafeImg), before the placeholder graphic. */
+  alternates: string[];
+};
+
+/** The stored image a card shows (sync, no category photo): see resolveCardImage for the full chain. */
+export function cardImage(r: Pick<ReviewCard, "images" | "productName" | "canonicalTitle" | "categorySlug" | "subcategorySlug" | "kind">): CardImage {
   // Same display guard as the review page: only relevant images.
   const asset = relevantImage(r.images[0], { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct: r.kind === "REVIEW" });
   const pub = publicImageUrl(asset, r.categorySlug);
-  // A topic/stock photo on a single-product card is labelled, so it is never read as the product itself.
-  return { ...pub, illustrative: !pub.isFallback && r.kind === "REVIEW" && (asset as { subject?: string | null } | null | undefined)?.subject === "ILLUSTRATIVE" };
+  const a = asset as (ReviewCard["images"][number] & { attribution?: string | null; attributionUrl?: string | null }) | null | undefined;
+  // A stock photo on a single-product card carries the small "Representative photo" note, so it is never read as the product itself.
+  const representative = !pub.isFallback && r.kind === "REVIEW" && a?.subject === "ILLUSTRATIVE";
+  return { ...pub, representative, illustrative: representative, credit: !pub.isFallback && a?.sourceType === "ENRICHMENT_SERVICE" ? (a.attribution ?? null) : null, creditUrl: !pub.isFallback && a?.sourceType === "ENRICHMENT_SERVICE" ? (a.attributionUrl ?? null) : null, alt: !pub.isFallback ? (a?.altText ?? "") : "", alternates: [] };
+}
+
+/**
+ * The image a card / hero shows, by priority: its stored image (exact product photo, else a
+ * representative Pexels photo), else the category's licensed Pexels photo ("Representative photo",
+ * credited); our placeholder graphic only when neither exists. The category photo is also the
+ * browser-side alternate when the stored image fails to load.
+ */
+export async function resolveCardImage(r: Parameters<typeof cardImage>[0]): Promise<CardImage> {
+  const img = cardImage(r);
+  const photo = await categoryFallbackPhoto(r.categorySlug).catch(() => null);
+  if (!photo) return img;
+  const src = categoryPhotoSrc(photo);
+  if (!img.isFallback) return { ...img, alternates: src !== img.url ? [src] : [] };
+  return { url: src, isFallback: false, representative: true, illustrative: true, credit: `Photo by ${photo.photographer} on Pexels`, creditUrl: photo.pexelsUrl, alt: photo.alt, alternates: [] };
 }
 
 export const categoryCounts = cache(async () => {

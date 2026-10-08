@@ -9,6 +9,8 @@ import { KindPill, kindNoun, ReviewGrid } from "@/components/review-card";
 import { ParallaxFigure, SectionNav } from "@/components/review-chrome";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { placeholderPath } from "@/lib/pipeline/images";
+import { categoryFallbackPhoto } from "@/lib/public/category-images";
+import { heroImage } from "@/lib/images/hero-image";
 import SponsoredSlot from "@/components/sponsored-slot";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -148,7 +150,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   if (!page) notFound();
   const { review, model: m } = page;
   const isGuide = m.kind === "AI_GUIDE";
-  const [liveOffers, commerceBrandId, related, brand, guidesRaw] = await Promise.all([m.kind === "REVIEW" ? freshOffersForReview(review.id) : Promise.resolve([]), m.kind === "REVIEW" ? commerceBrandIdForReview(review.id, m.brand) : Promise.resolve(null), relatedReviews(review, 3), brandPageEligible(review.brandSlug), m.category ? latestByKind("AI_GUIDE", 4, m.category.slug) : Promise.resolve([])]);
+  const [liveOffers, commerceBrandId, related, brand, guidesRaw, categoryPhoto] = await Promise.all([m.kind === "REVIEW" ? freshOffersForReview(review.id) : Promise.resolve([]), m.kind === "REVIEW" ? commerceBrandIdForReview(review.id, m.brand) : Promise.resolve(null), relatedReviews(review, 3), brandPageEligible(review.brandSlug), m.category ? latestByKind("AI_GUIDE", 4, m.category.slug) : Promise.resolve([]), categoryFallbackPhoto(m.category?.slug).catch(() => null)]);
+  const hero = heroImage(m.image, categoryPhoto);
   const guides = guidesRaw.filter((g) => g.id !== review.id).slice(0, 3);
   const crumbs: Crumb[] = [{ name: "Home", href: "/" }];
   if (m.category) crumbs.push({ name: m.category.name, href: `/category/${m.category.slug}` });
@@ -266,7 +269,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 </Link>
               </div>
             </div>
-            <ParallaxFigure src={m.image.url} fallback={placeholderPath(m.category?.slug)} alt={m.image.alt} width={m.image.width} height={m.image.height} caption={m.image.attribution} captionUrl={m.image.attributionUrl} illustrative={m.image.subject === "ILLUSTRATIVE" || m.image.isFallback} />
+            <ParallaxFigure src={hero.url} alternates={hero.alternates} fallback={placeholderPath(m.category?.slug)} alt={hero.alt} width={hero.width} height={hero.height} caption={hero.caption} captionUrl={hero.captionUrl} representative={hero.representative} />
           </div>
           <dl className="article-meta">
             <div>

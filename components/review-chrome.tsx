@@ -33,11 +33,11 @@ export function SectionNav({ items }: { items: Array<{ id: string; label: string
   );
 }
 
-/** Caption for every image that is not the exact product (topic photo or category illustration). */
-export const ILLUSTRATIVE_CAPTION = "Illustrative image — not the reviewed product";
+/** The small note on every photo that is not the exact product (a Pexels photo of its type or category). Kept equal to lib/images/provenance.ts. */
+export const REPRESENTATIVE_CAPTION = "Representative photo";
 
 /** Hero image with pointer tilt and gentle scroll parallax (disabled for reduced motion / touch). */
-export function ParallaxFigure({ src, fallback, alt, width, height, caption, captionUrl, illustrative }: { src: string; fallback: string; alt: string; width: number; height: number; caption?: string | null; captionUrl?: string | null; illustrative?: boolean }) {
+export function ParallaxFigure({ src, alternates, fallback, alt, width, height, caption, captionUrl, representative }: { src: string; alternates?: string[]; fallback: string; alt: string; width: number; height: number; caption?: string | null; captionUrl?: string | null; representative?: boolean }) {
   const frame = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = frame.current;
@@ -74,6 +74,7 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption, cap
       <div className="frame" ref={frame}>
         <SafeImg
           src={src}
+          alternates={alternates}
           fallback={fallback}
           alt={alt}
           width={width}
@@ -85,10 +86,10 @@ export function ParallaxFigure({ src, fallback, alt, width, height, caption, cap
           decoding="async"
         />
       </div>
-      {(caption || illustrative) && (
-        <figcaption className="figcaption">
-          {/* Any image that isn't the exact product says so, with or without an attribution. */}
-          {illustrative ? `${ILLUSTRATIVE_CAPTION}${caption ? ". " : ""}` : "Image: "}
+      {(caption || representative) && (
+        <figcaption className="figcaption" data-representative={representative ? "" : undefined}>
+          {/* A photo that isn't the exact product carries a small note, with its credit. */}
+          {representative ? `${REPRESENTATIVE_CAPTION}${caption ? " · " : ""}` : /^Image\b/.test(caption ?? "") ? "" : "Image: "}
           {caption ? (
             captionUrl ? (
               <a href={captionUrl} rel="noopener" target="_blank">

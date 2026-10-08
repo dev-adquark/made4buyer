@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { prerender } from "react-dom/static";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import HomeDealCard from "@/components/home-deal-card";
@@ -8,7 +7,7 @@ import { CurrentPriceCard, PriceDropCard } from "@/components/official-deals";
 import ReviewCard from "@/components/review-card";
 import { categoryCardImage, dealCardImage, storedCardImage, type DealCardImage, type DealCardImageInput, type StoredCardImage } from "@/lib/images/deal-card-image";
 import { commerceProductTopic, productTypeTopic, productTypeTopicForQuery, productTypeTopicFromContent } from "@/lib/images/product-type";
-import { ILLUSTRATIVE_CAPTION, ILLUSTRATIVE_DEAL_CAPTION } from "@/lib/images/provenance";
+import { REPRESENTATIVE_CAPTION } from "@/lib/images/provenance";
 import { dealBucket, reviewBucket } from "@/lib/images/slot-counts";
 import { enrichImage, relevantImage } from "@/lib/pipeline/images";
 import { photoMatchesTopic } from "@/lib/pipeline/image-topics";
@@ -68,7 +67,7 @@ describe("priority chain: exact official > retailer > internal verified > Pexels
     expect(dealCardImage(input({ official: true, retailer: true, internal: true, pexels: true }))).toMatchObject({ kind: "official", exact: true, src: SAMSUNG_IMG, sourceUrl: SAMSUNG });
     expect(dealCardImage(input({ retailer: true, internal: true, pexels: true }))).toMatchObject({ kind: "retailer", exact: true, src: BESTBUY_IMG });
     expect(dealCardImage(input({ internal: true, pexels: true }))).toMatchObject({ kind: "internal", exact: true });
-    expect(dealCardImage(input({ pexels: true }))).toMatchObject({ kind: "illustrative", exact: false, src: PEXELS, caption: ILLUSTRATIVE_DEAL_CAPTION, query: "smartphone in hand", attribution: "Photo by Jane on Pexels" });
+    expect(dealCardImage(input({ pexels: true }))).toMatchObject({ kind: "illustrative", exact: false, src: PEXELS, caption: REPRESENTATIVE_CAPTION, alt: "Person holding a smartphone in hand", query: "smartphone in hand", attribution: "Photo by Jane on Pexels" });
     expect(dealCardImage(input({}))).toMatchObject({ kind: "category", exact: false, src: "/placeholders/phones.svg", caption: null });
   });
 
@@ -218,13 +217,14 @@ describe("render: illustrative label shown, no empty slot on deal and review car
       for (const markup of await Promise.all([html(createElement(PriceDropCard, { d })), html(createElement(CurrentPriceCard, { p })), html(createElement(HomeDealCard, { d }))])) {
         expect(markup).toMatch(new RegExp(`<img[^>]+data-image-kind="${img.kind}"`));
         expect(markup).not.toMatch(/no-media|hd-mono/);
-        if (name === "illustrative") expect(markup).toContain(ILLUSTRATIVE_DEAL_CAPTION);
-        else expect(markup).not.toContain(ILLUSTRATIVE_DEAL_CAPTION);
+        if (name === "illustrative") expect(markup).toContain(REPRESENTATIVE_CAPTION);
+        else expect(markup).not.toContain(REPRESENTATIVE_CAPTION);
+        expect(markup).not.toMatch(/Illustrative image/);
       }
     });
   }
 
-  it("a review card with an illustrative photo carries the visible label and the full wording", () => {
+  it("a review card with a representative photo carries the small note (with its credit), never the old wording", async () => {
     const card = {
       id: "r1",
       slug: "galaxy-s26-ultra-review",
@@ -239,17 +239,22 @@ describe("render: illustrative label shown, no empty slot on deal and review car
       author: null,
       sourcePublishedAt: null,
       publishedAt: new Date(),
-      images: [{ sourceType: "ENRICHMENT_SERVICE", sourceUrl: PEXELS, cdnUrl: null, licenseState: "VERIFIED", width: 1200, height: 627, altText: "Person holding a smartphone in hand", enrichmentStatus: "ENRICHED", subject: "ILLUSTRATIVE", searchQuery: "smartphone in hand" }],
+      images: [{ sourceType: "ENRICHMENT_SERVICE", sourceUrl: PEXELS, cdnUrl: null, licenseState: "VERIFIED", width: 1200, height: 627, altText: "Person holding a smartphone in hand", enrichmentStatus: "ENRICHED", subject: "ILLUSTRATIVE", searchQuery: "smartphone in hand", imageType: "illustrative-product-type", attribution: "Photo by Jane on Pexels", attributionUrl: "https://www.pexels.com/photo/123/" }],
     };
-    const markup = renderToStaticMarkup(createElement(ReviewCard, { review: card as never }));
+    const markup = await html(createElement(ReviewCard, { review: card as never }));
     expect(markup).toMatch(/<img[^>]+src="[^"]*pexels/);
-    expect(markup).toContain(">Illustrative<");
-    expect(markup).toContain(ILLUSTRATIVE_CAPTION.replace(/^Illustrative/, ""));
+    expect(markup).toContain(">Representative photo<");
+    expect(markup).toContain('title="Representative photo · Photo by Jane on Pexels"');
+    expect(markup).not.toMatch(/Illustrative/);
+    // An exact product photo carries no note.
+    const exactCard = { ...card, images: [{ ...card.images[0], sourceType: "WIKIMEDIA_COMMONS", sourceUrl: "https://upload.wikimedia.org/wikipedia/commons/a/ab/S26.jpg", subject: "PRODUCT", imageType: "commons-product" }] };
+    expect(await html(createElement(ReviewCard, { review: exactCard as never }))).not.toContain("Representative photo");
   });
 
-  it("the review hero's caption and the shared constant say the same thing", () => {
-    expect(readFileSync("components/review-chrome.tsx", "utf8")).toContain(`ILLUSTRATIVE_CAPTION = "${ILLUSTRATIVE_CAPTION}"`);
-    expect(ILLUSTRATIVE_DEAL_CAPTION).toMatch(/^Illustrative image — not the /);
+  it("the review hero's caption, the card chip and the deal note use the one shared wording", () => {
+    expect(REPRESENTATIVE_CAPTION).toBe("Representative photo");
+    expect(readFileSync("components/review-chrome.tsx", "utf8")).toContain(`REPRESENTATIVE_CAPTION = "${REPRESENTATIVE_CAPTION}"`);
+    for (const f of ["components/review-chrome.tsx", "components/review-card.tsx", "components/official-deals.tsx", "components/home-deal-card.tsx", "lib/images/deal-card-image.ts", "lib/public/deals.ts", "lib/images/provenance.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/Illustrative image — not the/);
   });
 });
 
@@ -259,9 +264,13 @@ describe("Admin → Images slot buckets (same as the audit)", () => {
     expect(dealBucket(dealCardImage(input({ retailer: true })))).toBe("retailer");
     expect(dealBucket(dealCardImage(input({ internal: true })))).toBe("internal");
     expect(dealBucket(illustrative)).toBe("pexels");
-    expect(dealBucket(category)).toBe("categoryFallback");
+    // The bare category graphic is a missing image; the category's photo standing in is a category fallback.
+    expect(dealBucket(category)).toBe("missing");
+    expect(dealBucket({ ...category, src: PEXELS, caption: REPRESENTATIVE_CAPTION })).toBe("categoryFallback");
     expect(dealBucket(null)).toBe("missing");
     expect(reviewBucket({ url: "/placeholders/phones.svg", isFallback: true }, null)).toBe("missing");
+    expect(reviewBucket({ url: "/placeholders/phones.svg", isFallback: true }, null, true)).toBe("categoryFallback");
+    expect(reviewBucket({ url: "https://www.samsung.com/x.jpg", isFallback: false }, { sourceType: "OFFICIAL_SITE", imageType: "official-product" })).toBe("exactOfficial");
     expect(reviewBucket({ url: PEXELS, isFallback: false }, { sourceType: "ENRICHMENT_SERVICE", imageType: "illustrative-product-type" })).toBe("pexels");
     expect(reviewBucket({ url: "https://upload.wikimedia.org/x.jpg", isFallback: false }, { sourceType: "WIKIMEDIA_COMMONS", imageType: "commons-product" })).toBe("internal");
   });

@@ -2,7 +2,7 @@ import { placeholderPath } from "@/lib/pipeline/images";
 import { isPexelsImageUrl } from "@/lib/pipeline/pexels";
 import { brokenImageSrcs, dealImage, retailerDealImage, type DealImageProduct } from "./deal-image";
 import { commerceProductTopic, type CommerceTopic } from "./product-type";
-import { ILLUSTRATIVE_DEAL_CAPTION, LOW_CONFIDENCE, PRODUCT_IMAGE_TYPES } from "./provenance";
+import { LOW_CONFIDENCE, PRODUCT_IMAGE_TYPES, REPRESENTATIVE_CAPTION } from "./provenance";
 
 /**
  * The image on a deal / price card. Every card gets one, by this priority (never another product's photo):
@@ -11,9 +11,10 @@ import { ILLUSTRATIVE_DEAL_CAPTION, LOW_CONFIDENCE, PRODUCT_IMAGE_TYPES } from "
  *                    or, for a retailer page, the official page of the same identity-matched product
  *   2. retailer      the retailer page's own photo of this exact (identity-matched) product, on its own domain
  *   3. internal      the verified exact-product ImageAsset of the published review of the same product
- *   4. illustrative  a labelled Pexels photo of the product's TYPE (data.cardImage, chosen by the deal-images job
- *                    from the product's own name / page category / description; stored with provenance)
- *   5. category      our neutral category image, only when 1–4 found nothing
+ *   4. illustrative  a Pexels photo of the product's TYPE, noted "Representative photo" (data.cardImage, chosen by
+ *                    the deal-images job from the product's own name / page category / description; stored with provenance)
+ *   5. category      the category's licensed Pexels photo (lib/public/deals.ts, from the daily category-photo cache),
+ *                    noted "Representative photo"; our neutral category graphic only when no such photo exists
  *
  * Pure and network-free: the request path only reads what the jobs stored.
  */
@@ -26,8 +27,10 @@ export type DealCardImage = {
   kind: DealCardImageKind;
   /** Shows the exact product (kinds official, retailer, internal). */
   exact: boolean;
-  /** Visible label for an image that is not the exact product (illustrative); null otherwise. */
+  /** Visible note for an image that is not the exact product ("Representative photo"); null otherwise. */
   caption: string | null;
+  /** Tried in order in the browser when `src` fails to load (e.g. the category's licensed photo), before the placeholder graphic. */
+  alternates?: string[];
   /** Provenance: where the image comes from. */
   source: string;
   sourceUrl: string | null;
@@ -109,7 +112,8 @@ export function storedCardImage(product: { id: string; name: string; data: unkno
   return c as unknown as StoredCardImage;
 }
 
-function exactConfidence(source: string): number {
+/** How sure an official / retailer page photo is of the exact product, by where on the page it was read. */
+export function exactConfidence(source: string): number {
   return source === "shopify-variant" || source === "shopify-product" ? 1 : source === "json-ld" ? 0.95 : 0.9;
 }
 
@@ -140,12 +144,12 @@ export function dealCardImage(input: DealCardImageInput): DealCardImage {
   if (internal) return { ...base, src: internal.url, alt: product.name, kind: "internal", exact: true, caption: null, source: `image-asset:${internal.imageType}`, sourceUrl: internal.sourcePageUrl ?? null, attribution: internal.attribution ?? null, attributionUrl: internal.attributionUrl ?? null, confidence: internal.matchConfidence ?? LOW_CONFIDENCE };
   // 4. A labelled photo of this kind of product.
   const stored = storedCardImage(product, input.categories);
-  if (stored) return { src: stored.src, alt: stored.alt ? `Illustrative photo: ${stored.alt}` : `Illustrative photo of ${stored.topicLabel}`, kind: "illustrative", exact: false, caption: ILLUSTRATIVE_DEAL_CAPTION, source: "pexels", sourceUrl: stored.sourceUrl, query: stored.query, attribution: stored.attribution, attributionUrl: stored.attributionUrl, confidence: stored.confidence, width: 1200, height: 627 };
+  if (stored) return { src: stored.src, alt: stored.alt || `Photo of ${stored.topicLabel}`, kind: "illustrative", exact: false, caption: REPRESENTATIVE_CAPTION, source: "pexels", sourceUrl: stored.sourceUrl, query: stored.query, attribution: stored.attribution, attributionUrl: stored.attributionUrl, confidence: stored.confidence, width: 1200, height: 627 };
   // 5. Our neutral category image.
   return categoryCardImage(input.categories[0]);
 }
 
-/** Priority 5: our neutral category image (names the category, shows no product). */
+/** Priority 5 before the category photo is applied (lib/public/deals.ts): our neutral category image. */
 export function categoryCardImage(categorySlug: string | null | undefined): DealCardImage {
   return { src: placeholderPath(categorySlug), alt: "", kind: "category", exact: false, caption: null, source: "category-placeholder", sourceUrl: null, query: null, attribution: null, attributionUrl: null, confidence: 0, width: 1200, height: 675 };
 }

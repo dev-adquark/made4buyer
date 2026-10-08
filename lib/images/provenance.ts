@@ -28,6 +28,10 @@ export function inferImageType(a: { sourceType: string; subject?: string | null 
       return "neutral-category";
     case "WIKIMEDIA_COMMONS":
       return "commons-product";
+    case "OFFICIAL_SITE":
+      return "official-product";
+    case "RETAILER_SITE":
+      return "retailer-product";
     case "CONTENT_API":
       return a.subject === "ILLUSTRATIVE" ? "illustrative-category" : "source-product";
     case "ENRICHMENT_SERVICE":
@@ -41,7 +45,9 @@ export function inferImageType(a: { sourceType: string; subject?: string | null 
 /** Below this, a photo claiming to be the exact product is "low confidence" (Admin → Images) and never used on a deal card. */
 export const LOW_CONFIDENCE = 0.85;
 
-/** Visible label on any image that is not the exact reviewed product (review hero, review cards). Kept equal to components/review-chrome.tsx. */
-export const ILLUSTRATIVE_CAPTION = "Illustrative image — not the reviewed product";
-/** Visible label on an illustrative deal / price card photo (same wording pattern). */
-export const ILLUSTRATIVE_DEAL_CAPTION = "Illustrative image — not the exact product";
+/**
+ * The small, unobtrusive note on any photo that is not the exact product (a Pexels photo of the
+ * product's type or category): review heroes, review cards, deal / price cards. Exact product photos
+ * carry no note. Kept equal to components/review-chrome.tsx (a client module).
+ */
+export const REPRESENTATIVE_CAPTION = "Representative photo";

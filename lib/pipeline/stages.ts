@@ -14,6 +14,7 @@ import { recordFailure, resolveFailures } from "./failures";
 import { enrichImage, neutralCategoryDecision, probeImage, stockPhotoStillRelevant } from "./images";
 import { inferImageType } from "@/lib/images/provenance";
 import { commonsImagesFor, primaryProductOf } from "@/lib/products/commons-image";
+import { exactProductImagesFor } from "@/lib/images/review-exact-image";
 import type { PexelsSearchResult } from "./pexels";
 import { normalizeContent } from "./normalize";
 import { validateContentItem, type ValidatedContent } from "./validate";
@@ -194,9 +195,11 @@ export async function runTaxonomyStage(review: NormalizedReview, content: Valida
 type RankedImage = { isFallback: boolean; subject?: string | null; licenseState?: string | null; sourceType?: string | null; imageType?: string | null };
 
 /**
- * How good an image is for its page: a licensed photo of the exact product (3) beats the
- * source's own product image (2), which beats a labelled topic photo (1), which beats the
- * neutral placeholder (0). `singleProduct` is the page's context when known:
+ * How good an image is for its page: the brand's own photo of the exact product (3.2) beats an
+ * identity-matched retailer's (3.1), which beats a licensed (Commons) photo of the exact product (3),
+ * which beats the source's own product image (2), which beats a labelled photo of the product's type (1),
+ * which beats a labelled category photo on a single-product page (0.5), which beats the neutral
+ * placeholder (0). `singleProduct` is the page's context when known:
  *  - on a single-product page a keyword stock photo is worth nothing (it is replaced);
  *  - a stock photo stored as a "product" photo is worth nothing anywhere;
  *  - without context, a stock photo stored before provenance existed (imageType null) is worth
@@ -208,12 +211,14 @@ export function imageRank(a: RankedImage | null | undefined, ctx?: { singleProdu
   if (a.licenseState === "UNVERIFIED" && config.images.requireLicense()) return 0;
   if (a.sourceType === "ENRICHMENT_SERVICE") {
     if (a.subject !== "ILLUSTRATIVE") return 0;
-    // On a single-product page only a photo of the product's type counts (better than the placeholder).
-    if (ctx?.singleProduct) return a.imageType === "illustrative-product-type" ? 1 : 0;
+    // On a single-product page a photo of the product's type counts, a category photo a little (both beat the placeholder).
+    if (ctx?.singleProduct) return a.imageType === "illustrative-product-type" ? 1 : a.imageType === "illustrative-category" ? 0.5 : 0;
     if (!ctx && !a.imageType) return 0;
     return 1;
   }
-  if (a.sourceType === "WIKIMEDIA_COMMONS" || a.imageType === "commons-product" || a.imageType === "official-product" || a.imageType === "retailer-product") return 3;
+  if (a.sourceType === "OFFICIAL_SITE" || a.imageType === "official-product") return 3.2;
+  if (a.sourceType === "RETAILER_SITE" || a.imageType === "retailer-product") return 3.1;
+  if (a.sourceType === "WIKIMEDIA_COMMONS" || a.imageType === "commons-product") return 3;
   return a.subject === "ILLUSTRATIVE" ? 1 : 2;
 }
 
@@ -229,10 +234,13 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   const primary = await primaryProductOf(review.id);
   const singleProduct = current.kind === "REVIEW" || Boolean(primary);
   const existing = await db.imageAsset.findFirst({ where: { normalizedReviewId: review.id, isPrimary: true } });
-  // Photos other pages already use, so each page gets its own stock photo where one exists.
-  const exclude =
-    opts.excludePhotoIds ??
-    new Set((await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true } })).map((a) => a.providerPhotoId!));
+  // Photos other pages already use, so each page gets its own stock photo where one exists; when the
+  // on-topic pool is exhausted the least-used on-topic photo is reused, never one stored as a product's own photo.
+  const others = await db.imageAsset.findMany({ where: { isPrimary: true, providerPhotoId: { not: null }, normalizedReviewId: { not: review.id } }, select: { providerPhotoId: true, subject: true } });
+  const exclude = opts.excludePhotoIds ?? new Set(others.map((a) => a.providerPhotoId!));
+  const usage = new Map<string, number>();
+  for (const a of others) usage.set(a.providerPhotoId!, (usage.get(a.providerPhotoId!) ?? 0) + 1);
+  const neverReuse = new Set(others.filter((a) => a.subject === "PRODUCT").map((a) => a.providerPhotoId!));
   let decision: Awaited<ReturnType<typeof enrichImage>>;
   if (!(await getSwitches()).image_enrichment && !content.imageUrl) {
     // Admin switch: image enrichment paused → no provider call; existing images are kept, except
@@ -242,6 +250,8 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   } else {
     try {
       const product = singleProduct && primary ? await commonsImagesFor(primary) : { images: [], rejected: [] };
+      // The brand's own (or an identity-matched retailer's) photo of the exact product, from the commerce engine.
+      const exactImages = singleProduct && primary ? await exactProductImagesFor(primary.productEntityId).catch(() => []) : [];
       if (product.rejected.length) log.info("product image facts rejected", { stage: "IMAGE_ENRICHMENT", reviewId: review.id, reasons: product.rejected.slice(0, 5) });
       decision = await enrichImage({
         imageUrl: content.imageUrl,
@@ -258,7 +268,10 @@ export async function runImageStage(review: NormalizedReview, content: Validated
         kind: current.kind,
         singleProduct,
         productImages: product.images,
+        exactImages,
         excludePhotoIds: exclude,
+        photoUsage: usage,
+        neverReusePhotoIds: neverReuse,
         searchCache: opts.searchCache,
       });
     } catch (error) {
@@ -272,13 +285,13 @@ export async function runImageStage(review: NormalizedReview, content: Validated
   let asset;
   if (existing && sameImage(existing, data)) {
     // Same image as before: refresh its provenance in place (idempotent, no new row, no re-render).
-    asset = await db.imageAsset.update({ where: { id: existing.id }, data: { ...data, failureReason: data.failureReason ?? null, matchConfidence: data.matchConfidence ?? null, sourcePageUrl: data.sourcePageUrl ?? null } });
+    asset = await db.imageAsset.update({ where: { id: existing.id }, data: { ...data, failureReason: data.failureReason ?? null, matchConfidence: data.matchConfidence ?? null, sourcePageUrl: data.sourcePageUrl ?? null, matchBasis: data.matchBasis ?? null } });
   } else if (
     existing &&
     !opts.replaceExisting &&
     imageRank(existing, ctx) > imageRank(data, ctx) &&
     // A stock photo that no longer passes the relevance rule is not worth keeping over anything.
-    (existing.sourceType !== "ENRICHMENT_SERVICE" || stockPhotoStillRelevant(existing.altText, { productName: current.productName, title: current.canonicalTitle, categorySlug: current.categorySlug, subcategorySlug: current.subcategorySlug, singleProduct })) &&
+    (existing.sourceType !== "ENRICHMENT_SERVICE" || stockPhotoStillRelevant(existing.altText, { productName: current.productName, title: current.canonicalTitle, categorySlug: current.categorySlug, subcategorySlug: current.subcategorySlug, singleProduct, searchQuery: existing.searchQuery, imageType: existing.imageType })) &&
     existing.sourceUrl &&
     (await probeImage(existing.sourceUrl)).ok
   ) {
@@ -293,8 +306,8 @@ export async function runImageStage(review: NormalizedReview, content: Validated
     try {
       asset = await db.imageAsset.create({ data: { normalizedReviewId: review.id, ...data, isPrimary: true } });
     } catch (error) {
-      // Another article claimed this photo a moment ago (unique primary photo index): retry once
-      // with it excluded, else use the placeholder. A stock photo is never shared between articles.
+      // Legacy databases still carrying the unique primary-photo index (before migration
+      // 20261016000000): another article claimed this photo a moment ago, so retry once with it excluded.
       if ((error as { code?: string }).code !== "P2002" || !data.providerPhotoId || opts.retried) throw error;
       exclude.add(data.providerPhotoId);
       return runImageStage(review, content, { ...opts, excludePhotoIds: exclude, replaceExisting: true, retried: true });

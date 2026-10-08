@@ -105,21 +105,26 @@ describe("hero image for a single-product review", () => {
     });
   });
 
-  it("never uses a Pexels photo: falls back to the neutral category image, without calling Pexels", async () => {
-    const before = pexelsCalls();
-    // "Sony WH-1000XM6" is a product the Pexels stub has a matching "product" photo for.
+  it("never uses a product-matched stock photo: with no readable type, the category's representative photo", async () => {
+    // "Sony WH-1000XM6" is a product the Pexels stub has a matching "product" photo for: never used.
     const d = await enrichImage({ productName: "WH-1000XM6", brand: "Sony", title: "Sony WH-1000XM6 review", categorySlug: "audio", kind: "REVIEW" });
-    expect(d).toMatchObject({ sourceType: "PLACEHOLDER", sourceUrl: "/placeholders/audio.svg", imageType: "neutral-category", isFallback: true, licenseState: "OWNED_PLACEHOLDER", enrichmentStatus: "FALLBACK" });
-    expect(d.subject).toBeUndefined();
-    expect(pexelsCalls()).toBe(before);
+    expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", isFallback: false, searchQuery: "headphones close up", matchBasis: "pexels:category" });
+    expect(d.altText).not.toMatch(/sony/i);
     // Same when the kind is unknown: the safe default is single-product.
-    expect((await enrichImage({ productName: "WH-1000XM6", brand: "Sony", categorySlug: "audio" })).sourceType).toBe("PLACEHOLDER");
+    expect(await enrichImage({ productName: "WH-1000XM6", brand: "Sony", categorySlug: "audio" })).toMatchObject({ subject: "ILLUSTRATIVE", imageType: "illustrative-category" });
+  });
+
+  it("only when no photo provider can answer at all: the neutral category image, without calling Pexels", async () => {
+    local = withEnv({ PEXELS_API_KEY: undefined });
+    const before = pexelsCalls();
+    const d = await enrichImage({ productName: "WH-1000XM6", brand: "Sony", title: "Sony WH-1000XM6 review", categorySlug: "audio", kind: "REVIEW" });
+    expect(d).toMatchObject({ sourceType: "PLACEHOLDER", sourceUrl: "/placeholders/audio.svg", imageType: "neutral-category", isFallback: true, licenseState: "OWNED_PLACEHOLDER" });
     expect(pexelsCalls()).toBe(before);
   });
 
-  it("falls back to neutral (FAILED, reported) when the Commons file does not load", async () => {
+  it("when the Commons file does not load: reported, and the next relevant photo is used (never a placeholder)", async () => {
     const d = await enrichImage({ productName: "Olight Warrior 3S", categorySlug: "tools-diy", kind: "REVIEW", productImages: [commons(`${stub.base}/pexels-img/broken.jpeg`)] });
-    expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category", enrichmentStatus: "FAILED" });
+    expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", isFallback: false });
     expect(d.issues[0].message).toMatch(/Commons product image unusable/);
   });
 
@@ -127,7 +132,8 @@ describe("hero image for a single-product review", () => {
     const bad = { ...commons("https://www.olight.com/img/warrior.jpg") };
     const unlicensed = { ...commons(`${stub.base}/image/olight.png`), license: "" };
     const d = await enrichImage({ productName: "Olight Warrior 3S", categorySlug: "tools-diy", kind: "REVIEW", productImages: [bad, unlicensed] });
-    expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
+    expect(d.sourceType).not.toBe("WIKIMEDIA_COMMONS");
+    expect(d).toMatchObject({ subject: "ILLUSTRATIVE", imageType: "illustrative-category" });
   });
 
   it("keeps the source's explicitly licensed image as the product image when there is no Commons photo", async () => {
@@ -156,18 +162,19 @@ describe("illustrative photos for category-level content", () => {
     else expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
   });
 
-  it("single-product pages without a readable product type get the neutral image, with no stock search", async () => {
-    const before = pexelsCalls();
+  it("single-product pages without a readable product type get the category's photo (its description names the category topic)", async () => {
     const d = await enrichImage({ productName: "Zx-9", title: "Zx-9 review", categorySlug: "luggage-travel", kind: "REVIEW" });
-    expect(d).toMatchObject({ sourceType: "PLACEHOLDER", imageType: "neutral-category" });
-    expect(pexelsCalls()).toBe(before);
+    expect(d).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", searchQuery: "suitcase travel" });
   });
 });
 
 describe("image rank and provenance", () => {
   const pexels = { isFallback: false, licenseState: "VERIFIED", sourceType: "ENRICHMENT_SERVICE" };
   it("a stock photo is worthless on a single-product page and as a 'product' photo anywhere", () => {
-    expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: "illustrative-category" }, { singleProduct: true })).toBe(0);
+    // A category photo on a single-product page beats only the placeholder; a product-type photo beats it.
+    expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: "illustrative-category" }, { singleProduct: true })).toBe(0.5);
+    expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: "illustrative-product-type" }, { singleProduct: true })).toBe(1);
+    expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: null }, { singleProduct: true })).toBe(0);
     expect(imageRank({ ...pexels, subject: "PRODUCT", imageType: null }, { singleProduct: false })).toBe(0);
     expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: "illustrative-category" }, { singleProduct: false })).toBe(1);
     expect(imageRank({ ...pexels, subject: "ILLUSTRATIVE", imageType: "illustrative-category" })).toBe(1);
@@ -182,6 +189,9 @@ describe("image rank and provenance", () => {
     expect(imageRank({ isFallback: false, licenseState: "VERIFIED", sourceType: "WIKIMEDIA_COMMONS", subject: "PRODUCT", imageType: "commons-product" }, { singleProduct: true })).toBe(3);
     expect(imageRank({ isFallback: false, licenseState: "VERIFIED", sourceType: "CONTENT_API", subject: "PRODUCT" })).toBe(2);
     expect(imageRank({ isFallback: true, sourceType: "PLACEHOLDER" })).toBe(0);
+    // The brand's own photo > an identity-matched retailer's > Commons.
+    expect(imageRank({ isFallback: false, licenseState: "PROVIDER_ASSERTED", sourceType: "OFFICIAL_SITE", subject: "PRODUCT", imageType: "official-product" }, { singleProduct: true })).toBe(3.2);
+    expect(imageRank({ isFallback: false, licenseState: "PROVIDER_ASSERTED", sourceType: "RETAILER_SITE", subject: "PRODUCT", imageType: "retailer-product" }, { singleProduct: true })).toBe(3.1);
   });
 
   it("infers provenance for rows stored before it existed", () => {
@@ -189,5 +199,7 @@ describe("image rank and provenance", () => {
     expect(inferImageType({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE" })).toBe("illustrative-category");
     expect(inferImageType({ sourceType: "ENRICHMENT_SERVICE", subject: "PRODUCT" })).toBeNull();
     expect(inferImageType({ sourceType: "CONTENT_API", subject: "PRODUCT" })).toBe("source-product");
+    expect(inferImageType({ sourceType: "OFFICIAL_SITE" })).toBe("official-product");
+    expect(inferImageType({ sourceType: "RETAILER_SITE" })).toBe("retailer-product");
   });
 });

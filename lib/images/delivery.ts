@@ -102,3 +102,26 @@ export function optimizedImage(src: string, opts: DeliveryOptions = {}): Deliver
   if (!cdn.srcSet) return { mode: "direct", src: cdn.src, blocked: false };
   return { mode: "source-cdn", src: cdn.src, srcSet: cdn.srcSet, sizes: opts.sizes ?? defaultSizes(width), retrySrc: src, blocked: false };
 }
+
+/** Where <SafeImg> is in its candidate chain: which candidate, and whether it is retrying that candidate's original URL. */
+export type ImageStep = { index: number; retry: 0 | 1 };
+
+/** The candidates <SafeImg> tries, in order (duplicates and empty values removed): the image, then each alternate. */
+export function imageCandidates(src: string, alternates?: readonly string[] | null): string[] {
+  return [...new Set([src, ...(alternates ?? [])].filter((c): c is string => typeof c === "string" && c.length > 0))];
+}
+
+/** The first candidate at or after `from` that may be shown (not blocked), or -1 when none is left (the placeholder). */
+export function firstShowable(candidates: readonly string[], from: number, opts: DeliveryOptions): number {
+  for (let i = Math.max(0, from); i < candidates.length; i++) if (!optimizedImage(candidates[i], opts).blocked) return i;
+  return -1;
+}
+
+/**
+ * After the shown image failed: retry the same candidate's original URL once (optimized/srcset failed,
+ * the original may still load), else move to the next candidate. Past the last one, <SafeImg> shows the placeholder.
+ */
+export function nextImageStep(step: ImageStep, shownIndex: number, canRetryDirect: boolean): ImageStep {
+  const retrying = shownIndex === step.index ? step.retry : 0;
+  return retrying === 0 && canRetryDirect ? { index: shownIndex, retry: 1 } : { index: shownIndex + 1, retry: 0 };
+}

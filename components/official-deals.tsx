@@ -58,12 +58,13 @@ function Checked({ iso }: { iso: string }) {
 
 /**
  * The card's product image (never empty: lib/images/deal-card-image.ts resolves exact → illustrative → category).
- * An exact photo is shown whole (contain); an illustrative one fills the box and is labelled below.
+ * An exact photo is shown whole (contain); a representative one fills the box and carries a small note below.
  */
 export function DealCardMedia({ image, category }: { image: DealCardImage; category: string | null | undefined }) {
   return (
     <SafeImg
       src={image.src}
+      alternates={image.alternates}
       fallback={placeholderPath(category)}
       alt={image.alt}
       width={84}
@@ -78,11 +79,11 @@ export function DealCardMedia({ image, category }: { image: DealCardImage; categ
   );
 }
 
-/** The visible label of an illustrative photo (with its credit), or nothing. */
-export function IllustrativeNote({ image }: { image: DealCardImage }) {
+/** The small "Representative photo" note of a photo that is not the exact product (with its credit), or nothing. */
+export function RepresentativeNote({ image }: { image: DealCardImage }) {
   if (!image.caption) return null;
   return (
-    <span className="small muted dc-illus" data-illustrative="">
+    <span className="rep-note dc-rep" data-representative="">
       {image.caption}
       {image.attribution ? (
         <>
@@ -141,7 +142,7 @@ export function PriceDropCard({ d, headingLevel = 3 }: { d: PriceDrop; headingLe
             {d.savingPercent >= 1 ? ` (${d.savingPercent}%)` : ""}
           </span>
           {d.availability && <span className="dc-avail small">{d.availability}</span>}
-          {d.image && <IllustrativeNote image={d.image} />}
+          {d.image && <RepresentativeNote image={d.image} />}
         </div>
       </div>
       <dl className="dc-facts">
@@ -295,7 +296,7 @@ export function CurrentPriceCard({ p, headingLevel = 3 }: { p: CurrentPrice; hea
           </span>
           <span className="small muted">No previous price stated: not a discount.</span>
           {p.availability && <span className="dc-avail small">{p.availability}</span>}
-          {p.image && <IllustrativeNote image={p.image} />}
+          {p.image && <RepresentativeNote image={p.image} />}
         </div>
       </div>
       <dl className="dc-facts">

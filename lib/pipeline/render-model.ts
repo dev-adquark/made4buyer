@@ -20,7 +20,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 10;
+export const RENDER_MODEL_VERSION = 11;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -128,7 +128,7 @@ export type RenderInputs = {
   };
   entities: { brand: string | null; productName: string; modelNumber: string | null; deviceType: string | null; platform: string | null; useCase: string | null; rating: number | null; ratingScale: number | null; source: string } | null;
   assignments: Array<{ tagType: string; isPrimary: boolean; confidence: number; categoryTag: { slug: string; name: string } }>;
-  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null; enrichmentStatus?: EnrichmentStatus | null } | null | undefined;
+  image: { sourceType: ImageSourceType; sourceUrl: string | null; cdnUrl: string | null; licenseState: LicenseState; width: number | null; height: number | null; attribution: string | null; attributionUrl?: string | null; subject?: string | null; altText?: string | null; enrichmentStatus?: EnrichmentStatus | null; imageType?: string | null; searchQuery?: string | null } | null | undefined;
   offers: PublicOffer[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
@@ -187,7 +187,8 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
       alt: pub.isFallback
         ? `${categoryName(categorySlug) ?? "Category"} illustration`
         : image?.subject === "ILLUSTRATIVE"
-          ? `Illustrative photo${image.altText ? `: ${image.altText}` : ""}`
+          ? // A representative photo's alt text says what the photo shows (its own description), never that it is the product.
+            (image.altText?.trim() || `Photo of ${categoryName(categorySlug)?.toLowerCase() ?? "a related product"}`)
           : (image?.altText ?? `${review.productName}${review.brand && !review.productName.startsWith(review.brand) ? ` by ${review.brand}` : ""}`),
       width: (!pub.isFallback && image?.width) || PLACEHOLDER_SIZE.width,
       height: (!pub.isFallback && image?.height) || PLACEHOLDER_SIZE.height,

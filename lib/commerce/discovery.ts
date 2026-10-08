@@ -47,7 +47,15 @@ export type DiscoveryResult = {
 
 export type DiscoveryBrand = Pick<CommerceBrand, "officialDomain" | "discoveryUrls" | "productUrlPatterns" | "maxProductsPerRun" | "lastCrawlAt"> & { id?: string | null; slug?: string; market?: string | null };
 
-export type DiscoveryOptions = { now?: Date; persist?: boolean; maxSitemaps?: number; maxBytes?: number; timeoutMs?: number };
+export type DiscoveryOptions = {
+  now?: Date;
+  persist?: boolean;
+  maxSitemaps?: number;
+  maxBytes?: number;
+  timeoutMs?: number;
+  /** Keep only product URLs this accepts (e.g. the slug names one exact product: lib/images/official-product-urls.ts), before the cap. */
+  filter?: (url: string) => boolean;
+};
 
 export const DISCOVERY_DEFAULTS = { maxSitemaps: 10, maxBytes: 5_000_000, timeoutMs: 15_000 } as const;
 
@@ -379,6 +387,10 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
     }
     if (!robotsAllows(robots.body, pathOf(u))) {
       counts.robotsDisallowed++;
+      continue;
+    }
+    if (options.filter && !options.filter(norm)) {
+      counts.notProduct++;
       continue;
     }
     const prev = best.get(norm);

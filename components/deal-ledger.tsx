@@ -3,7 +3,7 @@ import DealImpression from "./deal-impression";
 import SafeImg from "./safe-img";
 import { placeholderPath } from "@/lib/pipeline/images";
 import { displayText } from "@/lib/public/display";
-import { cardImage, type DealRow } from "@/lib/public/queries";
+import { resolveCardImage, type DealRow } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { availabilityLabel, dateline, money } from "@/lib/util/format";
@@ -14,12 +14,13 @@ export function dealRowShowable(d: DealRow): boolean {
 }
 
 /** One fresh commerce price as a tear-off tag: product, price and seller as observed, and when we checked. */
-export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2 | 3 }) {
+export async function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2 | 3 }) {
   const H = headingLevel === 2 ? "h2" : "h3";
   const r = d.review;
   const price = money(d.price, d.currency);
   // Never a card without a verified price: nothing is rendered instead.
   if (!price || !displayText(d.seller)) return null;
+  const img = await resolveCardImage(r);
   const availability = availabilityLabel(d.availability);
   const checked = dateline(d.observedAt);
   const category = categoryName(r.categorySlug);
@@ -31,7 +32,7 @@ export function DealCard({ d, headingLevel = 3 }: { d: DealRow; headingLevel?: 2
           <span className="trust checked">Price checked</span>
         </div>
         <div className="dc-main">
-          <SafeImg src={cardImage(r).url} fallback={placeholderPath(r.categorySlug)} alt="" width={84} height={84} sizes="84px" loading="lazy" decoding="async" />
+          <SafeImg src={img.url} alternates={img.alternates} fallback={placeholderPath(r.categorySlug)} alt="" width={84} height={84} sizes="84px" loading="lazy" decoding="async" />
           <div>
             <H style={{ font: "inherit", margin: 0 }}>
               <Link className="dc-title" href={`/review/${r.slug}`} data-cursor="Read">

@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { ILLUSTRATIVE_DEAL_CAPTION } from "@/lib/images/provenance";
+import { REPRESENTATIVE_CAPTION } from "@/lib/images/provenance";
 import { loadDealCardImages, runDealCardImages } from "@/lib/images/deal-card-images";
 import { runImageIntegrity } from "@/lib/images/integrity";
 import { loadImageSlotCounts } from "@/lib/images/slot-counts";
@@ -92,7 +92,7 @@ describe("deal-images job", () => {
     for (const k of ["src", "photoId", "observedAt", "confidence", "attribution", "license"]) expect(data.cardImage[k]).toBeTruthy();
 
     const img = (await loadDealCardImages([p.id])).get(p.id)!;
-    expect(img).toMatchObject({ kind: "illustrative", exact: false, caption: ILLUSTRATIVE_DEAL_CAPTION, source: "pexels" });
+    expect(img).toMatchObject({ kind: "illustrative", exact: false, caption: REPRESENTATIVE_CAPTION, source: "pexels" });
 
     // Second run: nothing to do (no new search).
     const again = await runDealCardImages("test");
@@ -178,8 +178,8 @@ describe("/deals render: no empty image slot", () => {
     }
     const illus = cards.filter((c) => /data-image-kind="illustrative"/.test(c));
     expect(illus).toHaveLength(1);
-    expect(illus[0]).toContain(ILLUSTRATIVE_DEAL_CAPTION);
+    expect(illus[0]).toContain(REPRESENTATIVE_CAPTION);
     // The category-image card is not labelled illustrative (it names the category, shows no product).
-    expect(cards.find((c) => /data-image-kind="category"/.test(c))).not.toContain(ILLUSTRATIVE_DEAL_CAPTION);
+    expect(cards.find((c) => /data-image-kind="category"/.test(c))).not.toContain(REPRESENTATIVE_CAPTION);
   });
 });

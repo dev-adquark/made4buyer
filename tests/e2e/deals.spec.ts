@@ -217,14 +217,16 @@ test("deals and homepage: every deal card shows a loaded image (no empty slot)",
     const slots = await cards.evaluateAll((els) =>
       els.map((el) => {
         const img = el.querySelector("img[data-image-kind]") as HTMLImageElement | null;
-        return { kind: img?.dataset.imageKind ?? null, empty: el.classList.contains("no-media") || Boolean(el.querySelector(".hd-mono")), illustrative: Boolean(el.querySelector("[data-illustrative]")) };
+        return { kind: img?.dataset.imageKind ?? null, svg: /\/placeholders\/.+\.svg/.test(img?.getAttribute("src") ?? ""), empty: el.classList.contains("no-media") || Boolean(el.querySelector(".hd-mono")), representative: Boolean(el.querySelector("[data-representative]")), note: el.querySelector("[data-representative]")?.textContent ?? "" };
       }),
     );
     for (const s of slots) {
       expect(s.kind, `${path}: every card has an image`).not.toBeNull();
       expect(s.empty, `${path}: no empty media slot`).toBe(false);
-      // A photo that is not the exact product is labelled on the card.
-      expect(s.illustrative).toBe(s.kind === "illustrative");
+      // A photo that is not the exact product carries the small "Representative photo" note; an exact photo none.
+      expect(s.representative).toBe(s.kind === "illustrative" || (s.kind === "category" && !s.svg));
+      if (s.representative) expect(s.note).toMatch(/^Representative photo/);
+      expect(s.note).not.toMatch(/Illustrative image/);
     }
     for (const img of await cards.locator("img[data-image-kind]").all()) {
       await img.scrollIntoViewIfNeeded();

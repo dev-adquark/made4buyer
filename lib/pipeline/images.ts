@@ -10,23 +10,30 @@ import { imageTopic, photoMatchesTopic, type ImageTopic } from "./image-topics";
 import { commonsFileTitle, namesSeveralProducts, searchCommonsProductPhoto } from "@/lib/images/commons-search";
 
 /**
- * Stage IMAGE_ENRICHMENT. Never blocks publishing. A wrong image is worse than no image.
+ * Stage IMAGE_ENRICHMENT. Never blocks publishing. A wrong image is worse than no image, and every
+ * slot gets a relevant image: an exact product photo first, else a clearly labelled representative photo.
  *
  * Single-product content (a REVIEW, or anything with a PRIMARY product link):
- *   (1) a licensed photo of the exact product (Wikimedia Commons via a Wikidata "image" fact,
+ *   (1) the brand's own photo of the exact product, from its official product page (an identity-matched
+ *       CommerceProduct; lib/images/review-exact-image.ts), then an identity-matched retailer page's photo,
+ *   (2) a licensed photo of the exact product (Wikimedia Commons via a Wikidata "image" fact,
  *       identity-matched; see lib/products/commons-image.ts),
- *   (2) the review source's own image when explicitly licensed (Content API),
- *   (3) a Commons photo whose file title names this exact product,
- *   (4) a labelled ILLUSTRATIVE Pexels photo of the product's TYPE (read from its name / title, else
- *       its subcategory or the first type its own text names), whose own description names that type,
- *   (5) our neutral category placeholder. Never a keyword-matched "product" stock photo.
+ *   (3) the review source's own image when explicitly licensed (Content API),
+ *   (4) a Commons photo whose file title names this exact product,
+ *   (5) a representative Pexels photo of the product's TYPE (read from its name / title, else
+ *       its subcategory or the first type its own text names), whose own description names that type:
+ *       an unused photo first, else the least-used on-topic photo (reused),
+ *   (6) a representative Pexels photo of the product's CATEGORY (its description names the category topic),
+ *   (7) our neutral category placeholder, only when no photo provider can answer at all.
+ *   Never a keyword-matched "product" stock photo, never another product's exact photo.
  * Category-level content (comparisons, buying guides, AI guides):
- *   (1) the source's licensed image, (2) a labelled ILLUSTRATIVE topic photo whose own
+ *   (1) the source's licensed image, (2) a representative topic photo whose own
  *   description is about the topic (Pexels), (3) the neutral category placeholder.
  *
  * License safety is only VERIFIED when explicitly established (payload flag, operator-level
  * CONTENT_API_IMAGES_LICENSED, the Pexels License, or a free Commons licence); a license string
- * from a provider is PROVIDER_ASSERTED. Every decision records its provenance (imageType).
+ * from a provider (or a brand's own product photo, shown linked to its official page) is
+ * PROVIDER_ASSERTED. Every decision records its provenance (imageType, matchBasis).
  */
 
 export type ImageDecision = {
@@ -53,8 +60,10 @@ export type ImageDecision = {
   imageType: ImageType;
   /** How sure we are the image shows the content's product (0..1); omitted for category images. */
   matchConfidence?: number;
-  /** The page describing the image (e.g. its Commons file page). */
+  /** The page describing the image (e.g. its Commons file page, the official product page). */
   sourcePageUrl?: string;
+  /** How the image was matched to the product (e.g. "commerce-product:shopify-variant", "pexels:reused-on-topic"). */
+  matchBasis?: string;
   /** Provider status when the provider stopped us (rate limit, auth): the caller should pause. */
   providerStatus?: PexelsSearchStatus;
   issues: Array<{ code: "IMAGE_ENRICHMENT_FAILED" | "LICENSE_UNVERIFIED"; message: string }>;
@@ -105,10 +114,32 @@ export type ImageInput = {
   singleProduct?: boolean;
   /** Validated, licensed photos of the exact product, best first (lib/products/commons-image.ts). */
   productImages?: CommonsImage[];
+  /** Exact photos of the product from its official / identity-matched retailer page, best first (lib/images/review-exact-image.ts). */
+  exactImages?: ExactProductImage[];
   /** Provider photo ids already used by other reviews (avoided where an alternative exists). */
   excludePhotoIds?: Set<string>;
+  /** How many articles use each provider photo (the least-used on-topic photo is reused when the pool is exhausted). */
+  photoUsage?: Map<string, number>;
+  /** Provider photos stored as some product's own photo: never reused for another article. */
+  neverReusePhotoIds?: Set<string>;
   /** Per-run search cache shared across reviews. */
   searchCache?: Map<string, PexelsSearchResult>;
+};
+
+/** An exact photo of the product from its official product page or an identity-matched retailer page. */
+export type ExactProductImage = {
+  url: string;
+  kind: "official" | "retailer";
+  /** The product page the photo was read from. */
+  pageUrl: string;
+  /** e.g. "commerce-product:shopify-variant". */
+  basis: string;
+  confidence: number;
+  alt?: string | null;
+  width?: number;
+  height?: number;
+  /** Who publishes the page (brand or retailer name), for the credit line. */
+  publisher?: string | null;
 };
 
 type ServiceImage = {
@@ -125,6 +156,7 @@ type ServiceImage = {
   searchQuery?: string;
   altText?: string;
   photographerUrl?: string;
+  reused?: boolean;
 };
 
 async function fromService(input: ImageInput, topic?: ImageTopic): Promise<{ image?: ServiceImage; reason?: string; providerStatus?: PexelsSearchStatus }> {
@@ -133,7 +165,7 @@ async function fromService(input: ImageInput, topic?: ImageTopic): Promise<{ ima
       // The lookup is always for an ILLUSTRATIVE photo, never a keyword "product" photo: of the
       // product type for single-product pages, of the topic for category-level content.
       { productName: input.productName, brand: input.brand, title: input.title, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug, kind: topic ? "PRODUCT_TYPE" : input.kind && input.kind !== "REVIEW" ? input.kind : "BUYING_GUIDE" },
-      { exclude: input.excludePhotoIds, cache: input.searchCache, topic },
+      { exclude: input.excludePhotoIds, cache: input.searchCache, topic, usage: input.photoUsage, never: input.neverReusePhotoIds },
     );
     // Every photo served by the Pexels API is covered by the Pexels License.
     if (p.image) {
@@ -246,12 +278,99 @@ async function fromProductImages(images: CommonsImage[], issues: ImageDecision["
   return null;
 }
 
+/** The brand's own (or an identity-matched retailer's) photo of the exact product, if one loads. */
+async function fromExactImages(images: ExactProductImage[], issues: ImageDecision["issues"]): Promise<ImageDecision | null> {
+  for (const img of images) {
+    if (!/^https:\/\//i.test(img.url) && !isLoopbackForTests(img.url)) continue;
+    const probe = await probeImage(img.url);
+    if (!probe.ok) {
+      issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `${img.kind === "official" ? "Official" : "Retailer"} product image unusable: ${probe.reason}`.slice(0, 300) });
+      continue;
+    }
+    const official = img.kind === "official";
+    return {
+      sourceType: official ? "OFFICIAL_SITE" : "RETAILER_SITE",
+      sourceUrl: img.url,
+      contentType: probe.contentType,
+      width: img.width,
+      height: img.height,
+      // The publisher's own product photo, shown linked to its product page (as on deal cards).
+      licenseState: "PROVIDER_ASSERTED",
+      license: official ? "Manufacturer product image, linked to the official product page" : "Retailer product image, linked to the retailer's product page",
+      attribution: img.publisher ? `Image: ${img.publisher}` : official ? "Image: official product page" : "Image: retailer product page",
+      attributionUrl: img.pageUrl,
+      sourcePageUrl: img.pageUrl,
+      altText: img.alt ?? undefined,
+      subject: "PRODUCT",
+      imageType: official ? "official-product" : "retailer-product",
+      matchConfidence: img.confidence,
+      matchBasis: img.basis,
+      enrichmentStatus: "ENRICHED",
+      isFallback: false,
+      verifiedAt: new Date(),
+      issues,
+    };
+  }
+  return null;
+}
+
+function isLoopbackForTests(url: string): boolean {
+  try {
+    const h = new URL(url).hostname;
+    return config.allowLoopbackForTests() && (h === "127.0.0.1" || h === "localhost");
+  } catch {
+    return false;
+  }
+}
+
+/** A representative Pexels photo decision (type or category topic). */
+function stockDecision(image: ServiceImage, probe: { contentType: string }, imageType: "illustrative-product-type" | "illustrative-category", issues: ImageDecision["issues"], basis: string): ImageDecision {
+  const licenseState = licenseStateOf(Boolean(image.licenseVerified), image.license);
+  if (licenseState === "UNVERIFIED") issues.push({ code: "LICENSE_UNVERIFIED", message: "Image service returned no license information" });
+  return {
+    sourceType: "ENRICHMENT_SERVICE",
+    sourceUrl: image.url,
+    cdnUrl: cdnUrlFor(image.url),
+    contentType: probe.contentType,
+    width: image.width,
+    height: image.height,
+    licenseState,
+    license: image.license,
+    attribution: image.attribution,
+    attributionUrl: image.attributionUrl,
+    // A stock/service photo is never presented as a product.
+    subject: "ILLUSTRATIVE",
+    imageType,
+    providerPhotoId: image.providerPhotoId,
+    searchQuery: image.searchQuery,
+    altText: image.altText,
+    photographerUrl: image.photographerUrl,
+    matchBasis: `${basis}${image.reused ? ":reused-on-topic" : ""}`,
+    enrichmentStatus: "ENRICHED",
+    isFallback: false,
+    verifiedAt: new Date(),
+    issues,
+  };
+}
+
+/** The topic of a category-level representative photo (the category's own topic). */
+export function categoryImageTopic(categorySlug: string | null | undefined): ImageTopic | null {
+  if (!categorySlug) return null;
+  const t = imageTopic({ title: "", productName: "", categorySlug });
+  return t ? { ...t, key: `category:${categorySlug}` } : null;
+}
+
 /**
  * True when a stored stock photo still passes today's relevance rule for this content: its own
  * description must name the product type (read from the name / title; when they state none, the
  * type the photo was searched for, recovered from its stored query), or the topic for category content.
  */
-export function stockPhotoStillRelevant(altText: string | null | undefined, input: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean; searchQuery?: string | null }): boolean {
+export function stockPhotoStillRelevant(altText: string | null | undefined, input: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean; searchQuery?: string | null; imageType?: string | null }): boolean {
+  // A single-product page's category photo (last resort before the placeholder): it must be about the category.
+  if (input.singleProduct && input.imageType === "illustrative-category") {
+    const cat = categoryImageTopic(input.categorySlug);
+    return Boolean(cat && altText && photoMatchesTopic(altText, cat));
+  }
   const typeTopic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug });
   const topic = typeTopic ?? (input.singleProduct ? productTypeTopicForQuery(input.searchQuery) : imageTopic({ title: input.title ?? input.productName, productName: input.productName, categorySlug: input.categorySlug, subcategorySlug: input.subcategorySlug }));
   return Boolean(topic && altText && photoMatchesTopic(altText, topic));
@@ -262,13 +381,13 @@ export function stockPhotoStillRelevant(altText: string | null | undefined, inpu
  * relevance rule is dropped (the caller then shows the neutral category image). Licensed product
  * photos (Commons, the source's licensed image) and our placeholders pass unchanged.
  */
-export function relevantImage<T extends { sourceType: string; altText?: string | null; searchQuery?: string | null }>(
+export function relevantImage<T extends { sourceType: string; altText?: string | null; searchQuery?: string | null; imageType?: string | null }>(
   asset: T | null | undefined,
   ctx: { productName: string; title?: string | null; categorySlug?: string | null; subcategorySlug?: string | null; singleProduct: boolean },
 ): T | null {
   if (!asset) return null;
   if (asset.sourceType !== "ENRICHMENT_SERVICE") return asset;
-  return stockPhotoStillRelevant(asset.altText, { ...ctx, searchQuery: asset.searchQuery }) ? asset : null;
+  return stockPhotoStillRelevant(asset.altText, { ...ctx, searchQuery: asset.searchQuery, imageType: asset.imageType }) ? asset : null;
 }
 
 export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
@@ -276,7 +395,12 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   const now = new Date();
   const single = isSingleProductContent(input);
 
-  // 1. Single-product content: a licensed photo of the exact product comes first.
+  // 1. Single-product content: the brand's own photo of the exact product (else an identity-matched retailer's).
+  if (single && input.exactImages?.length) {
+    const exact = await fromExactImages(input.exactImages, issues);
+    if (exact) return exact;
+  }
+  // 2. A licensed (Commons) photo of the exact product.
   if (single && input.productImages?.length) {
     const product = await fromProductImages(input.productImages, issues, input);
     if (product) return product;
@@ -312,48 +436,42 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   }
 
   if (single) {
-    // 2. A freely licensed Commons photo whose own file title names this exact product.
+    // A freely licensed Commons photo whose own file title names this exact product.
     const commons = await searchCommonsProductPhoto({ productName: input.productName, brand: input.brand }).catch(() => null);
     if (commons) {
       const found = await fromProductImages([commons], issues, input);
       if (found) return found;
     }
-    // 3. A labelled illustrative photo of this KIND of product (its type read from the product
-    // name / title, else its subcategory or the first type its own text names; never the category),
-    // accepted only if the photo's own description names that type.
+    // 3. A representative photo of this KIND of product (its type read from the product name / title,
+    // else its subcategory or the first type its own text names), accepted only if the photo's own
+    // description names that type: an unused photo first, else the least-used on-topic photo.
     const topic = productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? productTypeTopicFromContent({ subcategorySlug: input.subcategorySlug, prose: input.prose });
-    if (!topic) return neutralCategoryDecision(input.categorySlug, issues, "no licensed photo of this product, and neither its name, title, subcategory nor text states its product type");
-    const typed = await fromService(input, topic);
-    if (typed.image && typed.image.subject === "ILLUSTRATIVE") {
-      const probe = await probeImage(typed.image.url);
-      if (probe.ok) {
-        return {
-          sourceType: "ENRICHMENT_SERVICE",
-          sourceUrl: typed.image.url,
-          cdnUrl: cdnUrlFor(typed.image.url),
-          contentType: probe.contentType,
-          width: typed.image.width,
-          height: typed.image.height,
-          licenseState: licenseStateOf(Boolean(typed.image.licenseVerified), typed.image.license),
-          license: typed.image.license,
-          attribution: typed.image.attribution,
-          attributionUrl: typed.image.attributionUrl,
-          subject: "ILLUSTRATIVE",
-          imageType: "illustrative-product-type",
-          providerPhotoId: typed.image.providerPhotoId,
-          searchQuery: typed.image.searchQuery,
-          altText: typed.image.altText,
-          photographerUrl: typed.image.photographerUrl,
-          enrichmentStatus: "ENRICHED",
-          isFallback: false,
-          verifiedAt: now,
-          issues,
-        };
+    let reason = topic ? undefined : "neither its name, title, subcategory nor text states its product type";
+    let providerStatus: PexelsSearchStatus | undefined;
+    if (topic) {
+      const typed = await fromService(input, topic);
+      if (typed.image && typed.image.subject === "ILLUSTRATIVE") {
+        const probe = await probeImage(typed.image.url);
+        if (probe.ok) return stockDecision(typed.image, probe, "illustrative-product-type", issues, "pexels:product-type");
+        issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Representative photo unusable: ${probe.reason}` });
       }
-      issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Illustrative photo unusable: ${probe.reason}` });
+      reason = typed.reason ?? `no on-topic photo of ${topic.label}`;
+      providerStatus = typed.providerStatus;
     }
-    // 4. Nothing relevant: the neutral category image, never an unrelated photo.
-    return neutralCategoryDecision(input.categorySlug, issues, typed.reason ?? `no on-topic photo of ${topic.label}`, typed.providerStatus);
+    // 4. A representative photo of the product's category (never an unrelated photo), unless the provider stopped us.
+    const cat = providerStatus ? null : categoryImageTopic(input.categorySlug);
+    if (cat) {
+      const c = await fromService(input, cat);
+      if (c.image && c.image.subject === "ILLUSTRATIVE") {
+        const probe = await probeImage(c.image.url);
+        if (probe.ok) return stockDecision(c.image, probe, "illustrative-category", issues, "pexels:category");
+        issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Category photo unusable: ${probe.reason}` });
+      }
+      providerStatus = c.providerStatus;
+      reason = `${reason ?? ""}${reason ? "; " : ""}${c.reason ?? `no on-topic photo of ${cat.label}`}`;
+    }
+    // 5. No photo provider could answer: the neutral category image.
+    return neutralCategoryDecision(input.categorySlug, issues, `no licensed photo of this product, and ${reason ?? "no photo provider available"}`, providerStatus);
   }
 
   // Category-level content: a labelled illustrative photo. When the title names a product type
@@ -362,33 +480,7 @@ export async function enrichImage(input: ImageInput): Promise<ImageDecision> {
   const service = await fromService(input, productTypeTopic({ productName: input.productName, title: input.title, categorySlug: input.categorySlug }) ?? undefined);
   if (service.image) {
     const probe = await probeImage(service.image.url);
-    if (probe.ok) {
-      const licenseState = licenseStateOf(Boolean(service.image.licenseVerified), service.image.license);
-      if (licenseState === "UNVERIFIED") issues.push({ code: "LICENSE_UNVERIFIED", message: "Image service returned no license information" });
-      return {
-        sourceType: "ENRICHMENT_SERVICE",
-        sourceUrl: service.image.url,
-        cdnUrl: cdnUrlFor(service.image.url),
-        contentType: probe.contentType,
-        width: service.image.width,
-        height: service.image.height,
-        licenseState,
-        license: service.image.license,
-        attribution: service.image.attribution,
-        attributionUrl: service.image.attributionUrl,
-        // A stock/service photo is never presented as a product.
-        subject: "ILLUSTRATIVE",
-        imageType: "illustrative-category",
-        providerPhotoId: service.image.providerPhotoId,
-        searchQuery: service.image.searchQuery,
-        altText: service.image.altText,
-        photographerUrl: service.image.photographerUrl,
-        enrichmentStatus: "ENRICHED",
-        isFallback: false,
-        verifiedAt: now,
-        issues,
-      };
-    }
+    if (probe.ok) return stockDecision(service.image, probe, "illustrative-category", issues, "pexels:topic");
     issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: `Image service result unusable: ${probe.reason}` });
   } else if (service.reason && (config.images.enrichmentUrl() || config.images.pexelsKey())) {
     issues.push({ code: "IMAGE_ENRICHMENT_FAILED", message: service.reason });

@@ -270,7 +270,7 @@ describe("daily article automation", () => {
     ).toBe(true);
   });
 
-  it("enforces one image per article at the database level", async () => {
+  it("allows a reused on-topic photo as several articles' primary image (non-unique index since 20261016000000)", async () => {
     const mk = (n: number) =>
       db.normalizedReview.create({
         data: {
@@ -294,13 +294,17 @@ describe("daily article automation", () => {
       isPrimary: true,
     };
     await db.imageAsset.create({ data: { ...img, normalizedReviewId: a.id } });
-    await expect(
-      db.imageAsset.create({ data: { ...img, normalizedReviewId: b.id } }),
-    ).rejects.toMatchObject({ code: "P2002" });
+    // Since migration 20261016000000 an on-topic photo may be reused once the pool is exhausted
+    // (lib/pipeline/pexels.ts prefers an unused photo): the database no longer refuses a second primary use.
+    await db.imageAsset.create({ data: { ...img, normalizedReviewId: b.id } });
+    const idx = await db.$queryRaw<Array<{ indexname: string; indexdef: string }>>`SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'image_assets' AND indexname LIKE 'image_assets_primary_photo%'`;
+    expect(idx.map((i) => i.indexname)).toEqual(["image_assets_primary_photo_idx"]);
+    expect(idx[0].indexdef).not.toMatch(/UNIQUE/);
     // History rows (not primary) may keep the id.
     await db.imageAsset.create({
       data: { ...img, normalizedReviewId: b.id, isPrimary: false },
     });
+    await db.imageAsset.deleteMany({ where: { normalizedReviewId: { in: [a.id, b.id] } } });
   });
 
   it("lets an Article and a Guide share a title, but never two posts of the same type", async () => {

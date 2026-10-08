@@ -134,6 +134,10 @@ enum ImageSourceType {
   PLACEHOLDER
   /// A freely licensed photo of the exact product on Wikimedia Commons (via Wikidata P18).
   WIKIMEDIA_COMMONS
+  /// The brand's own photo of the exact product, from its official product page (identity-matched CommerceProduct).
+  OFFICIAL_SITE
+  /// A retailer page's own photo of the exact, identity-matched product.
+  RETAILER_SITE
 
   @@map("image_source_type")
 }
@@ -605,7 +609,7 @@ model ImageAsset {
   failureReason      String?
   /// PRODUCT (the photo shows the reviewed product) or ILLUSTRATIVE (a topic photo, labelled as such).
   subject            String?
-  /// Provider-scoped photo id, e.g. "pexels:12345", used to avoid reusing one photo across reviews.
+  /// Provider-scoped photo id, e.g. "pexels:12345": an unused photo is preferred; an on-topic photo may be reused when the pool is exhausted.
   providerPhotoId    String?
   searchQuery        String?
   altText            String?
@@ -618,6 +622,8 @@ model ImageAsset {
   matchConfidence    Float?
   /// The page the image is described on / taken from (e.g. its Wikimedia Commons file page).
   sourcePageUrl      String?
+  /// How the image was matched to the product, e.g. "commerce-product:shopify-variant" or "pexels:reused-on-topic".
+  matchBasis         String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   review             NormalizedReview @relation(fields: [normalizedReviewId], references: [id], onDelete: Cascade)

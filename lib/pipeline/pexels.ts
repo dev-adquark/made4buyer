@@ -156,6 +156,8 @@ export type PexelsImage = {
   attributionUrl: string;
   photographerUrl?: string;
   license: string;
+  /** True when every on-topic photo was already another article's image and this one is reused (still strictly on-topic). */
+  reused?: boolean;
 };
 
 export type PexelsLookup = { image?: PexelsImage; status: PexelsSearchStatus; reason?: string; requests: number };
@@ -178,15 +180,32 @@ function toImage(p: PexelsPhoto, subject: PexelsImage["subject"], query: string,
   };
 }
 
+export type PexelsFindOptions = {
+  /** Photos already used by other articles: an unused on-topic photo is always preferred. */
+  exclude?: Set<string>;
+  cache?: Map<string, PexelsSearchResult>;
+  topic?: ImageTopic;
+  /**
+   * When every on-topic photo is already used, reuse one (default true): the least-used on-topic
+   * photo, ties broken by search relevance. Never reuses a photo in `never` (a photo stored as some
+   * product's own photo), so another product's photo is never shown.
+   */
+  allowReuse?: boolean;
+  /** How many articles use each photo as their primary image (for picking the least-used reuse). */
+  usage?: Map<string, number>;
+  never?: Set<string>;
+};
+
 /**
  * Finds the best real Pexels photo for a review:
  *  1. a photo that shows the product itself (its description names the product), else
- *  2. an ILLUSTRATIVE photo of the review's subject (see image-topics.ts), labelled as such.
- * Photos already used by other reviews (`exclude`) are skipped where an alternative exists.
+ *  2. an ILLUSTRATIVE photo of the review's subject (see image-topics.ts), labelled as such:
+ *     an unused on-topic photo first; when the on-topic pool is exhausted, the least-used
+ *     on-topic photo is reused (still strictly on-topic via photoMatchesTopic).
  */
 export async function findPexelsImage(
   input: { productName: string; brand?: string | null; title?: string; categorySlug?: string | null; subcategorySlug?: string | null; kind?: string | null },
-  opts: { exclude?: Set<string>; cache?: Map<string, PexelsSearchResult>; topic?: ImageTopic } = {},
+  opts: PexelsFindOptions = {},
 ): Promise<PexelsLookup> {
   const exclude = opts.exclude ?? new Set<string>();
   const fresh = (p: PexelsPhoto) => !exclude.has(`pexels:${p.id}`);
@@ -209,7 +228,7 @@ export async function findPexelsImage(
     const r = await search(q);
     if (stop(r)) return { status: r.status, reason: r.reason, requests };
     const usable = r.photos.filter(wide);
-    // Never another article's photo (1 article = 1 image; enforced by a unique index too).
+    // A photo of the product itself is never shared with another article.
     const pick = pickRelevantPhoto(usable.filter(fresh), input.productName, input.brand);
     if (pick) return { image: toImage(pick.photo, "PRODUCT", r.query), status: "OK", requests };
   }
@@ -220,14 +239,22 @@ export async function findPexelsImage(
   if (!topic) return { status: "EMPTY", reason: "no product photo, and no image topic for this category", requests };
   // The topic's queries, then the subject itself ("office chairs"), still filtered by the topic.
   const queries = [...topic.queries, ...(input.kind === "AI_GUIDE" || input.kind === "BUYING_GUIDE" ? [input.productName.toLowerCase()] : [])];
+  const never = opts.never ?? new Set<string>();
+  const reusable: Array<{ photo: PexelsPhoto; query: string; order: number }> = [];
   for (const q of [...new Set(queries)]) {
     const r = await search(q);
     if (stop(r)) return { status: r.status, reason: r.reason, requests };
     const onTopic = r.photos.filter((p) => wide(p) && photoMatchesTopic(p.alt ?? "", topic));
-    const unused = onTopic.find(fresh);
+    const unused = onTopic.find((p) => fresh(p) && !never.has(`pexels:${p.id}`));
     if (unused) return { image: toImage(unused, "ILLUSTRATIVE", r.query, topic), status: "OK", requests };
+    for (const p of onTopic) if (!never.has(`pexels:${p.id}`) && !reusable.some((x) => x.photo.id === p.id)) reusable.push({ photo: p, query: r.query, order: reusable.length });
   }
-  // Every on-topic photo is already another article's image: no reuse, the caller falls back.
+  // Every on-topic photo is already another article's image: reuse the least-used one (most relevant first on ties).
+  if (opts.allowReuse !== false && reusable.length) {
+    const uses = (p: PexelsPhoto) => opts.usage?.get(`pexels:${p.id}`) ?? (exclude.has(`pexels:${p.id}`) ? 1 : 0);
+    const best = [...reusable].sort((a, b) => uses(a.photo) - uses(b.photo) || a.order - b.order)[0];
+    return { image: { ...toImage(best.photo, "ILLUSTRATIVE", best.query, topic), reused: true }, status: "OK", requests };
+  }
   return { status: last?.status === "OK" ? "EMPTY" : (last?.status ?? "EMPTY"), reason: `no on-topic Pexels photo for ${topic.label} (${topic.queries.join(" / ")})`, requests };
 }
 

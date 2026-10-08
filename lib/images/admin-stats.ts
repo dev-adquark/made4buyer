@@ -27,7 +27,9 @@ export function classifyImage(a: ImageRow): ImageClass {
   if (a.enrichmentStatus === "FAILED") return "failed";
   if (a.imageType?.startsWith("illustrative-")) return "illustrative";
   if (a.imageType && PRODUCT_IMAGE_TYPES.has(a.imageType)) {
-    return a.matchConfidence != null && a.matchConfidence >= LOW_CONFIDENCE && a.licenseState === "VERIFIED" ? "verifiedExact" : "lowConfidence";
+    // The brand's (or an identity-matched retailer's) own product photo is shown linked to its page: provider-asserted.
+    const licensed = a.licenseState === "VERIFIED" || (a.licenseState === "PROVIDER_ASSERTED" && (a.imageType === "official-product" || a.imageType === "retailer-product"));
+    return a.matchConfidence != null && a.matchConfidence >= LOW_CONFIDENCE && licensed ? "verifiedExact" : "lowConfidence";
   }
   return "other";
 }
@@ -88,14 +90,15 @@ export function imageFilterWhere(filter: string | undefined): Prisma.ImageAssetW
 }
 
 /** How the image was matched to the product (Commons via Wikidata: the stored fact's basis). */
-export async function matchBasisFor(assets: Array<{ id: string; sourceType: string; sourcePageUrl: string | null; imageType: string | null }>): Promise<Map<string, string>> {
+export async function matchBasisFor(assets: Array<{ id: string; sourceType: string; sourcePageUrl: string | null; imageType: string | null; matchBasis?: string | null }>): Promise<Map<string, string>> {
   // Wikidata image facts are keyed by their Commons file page (ImageAsset.sourcePageUrl).
   const pages = assets.filter((a) => a.sourceType === "WIKIMEDIA_COMMONS" && a.sourcePageUrl).map((a) => a.sourcePageUrl!);
   const facts = pages.length ? await db.productFact.findMany({ where: { field: "image", sourceKey: { in: pages } }, select: { sourceKey: true, matchBasis: true } }) : [];
   const byPage = new Map(facts.map((f) => [f.sourceKey, f.matchBasis]));
   return new Map(
     assets.map((a) => {
-      if (a.sourceType === "WIKIMEDIA_COMMONS") return [a.id, byPage.get(a.sourcePageUrl ?? "") ?? "commons:file-title"];
+      if (a.sourceType === "WIKIMEDIA_COMMONS") return [a.id, byPage.get(a.sourcePageUrl ?? "") ?? a.matchBasis ?? "commons:file-title"];
+      if (a.matchBasis) return [a.id, a.matchBasis];
       if (a.sourceType === "CONTENT_API") return [a.id, "review source's own image"];
       if (a.sourceType === "ENRICHMENT_SERVICE") return [a.id, a.imageType === "illustrative-product-type" ? "photo description names the product type" : "photo description names the topic"];
       return [a.id, "category placeholder"];

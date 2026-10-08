@@ -1,4 +1,6 @@
 import { unstable_cache } from "next/cache";
+import { cache } from "react";
+import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { config } from "@/lib/config";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
@@ -52,22 +54,25 @@ const QUERIES: Record<string, string> = {
 /** Cache tag of the category photos (purged by the image-integrity job when one no longer loads). */
 export const CATEGORY_PHOTOS_TAG = "category-photos";
 
-export type CategoryPhoto = { url: string; alt: string; photographer: string; photographerUrl: string; pexelsUrl: string };
+/** `url` is the portrait rendition (category panels); `landscape` the 1200×627 crop for cards and heroes. */
+export type CategoryPhoto = { url: string; landscape?: string; alt: string; photographer: string; photographerUrl: string; pexelsUrl: string };
 
 async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
   const key = config.images.pexelsKey();
   const query = QUERIES[slug];
   if (!key || !query) return null;
-  const url = `https://api.pexels.com/v1/search?${new URLSearchParams({ query, per_page: "6", orientation: "portrait" })}`;
+  const url = `${config.images.pexelsBaseUrl()}/search?${new URLSearchParams({ query, per_page: "6", orientation: "portrait" })}`;
   const res = await safeFetch(url, { headers: { Authorization: key, Accept: "application/json" }, timeoutMs: 8000, maxRedirects: 2, readBody: true, maxBytes: 1_000_000 });
   if (!res.ok) {
     log.warn("category photo unavailable", { slug, status: res.status, error: res.error?.kind });
     return null;
   }
   try {
-    const photos = (JSON.parse(res.body ?? "") as { photos?: Array<{ url: string; alt?: string; photographer: string; photographer_url: string; src: { portrait: string } }> }).photos ?? [];
+    const photos = (JSON.parse(res.body ?? "") as { photos?: Array<{ url: string; alt?: string; photographer: string; photographer_url: string; src: { portrait: string; landscape?: string } }> }).photos ?? [];
     const p = photos.find((x) => typeof x?.src?.portrait === "string" && x.src.portrait.startsWith("https://images.pexels.com/"));
-    return p ? { url: p.src.portrait, alt: p.alt ?? "", photographer: p.photographer, photographerUrl: p.photographer_url, pexelsUrl: p.url } : null;
+    if (!p) return null;
+    const landscape = typeof p.src.landscape === "string" && p.src.landscape.startsWith("https://images.pexels.com/") ? p.src.landscape : undefined;
+    return { url: p.src.portrait, ...(landscape ? { landscape } : {}), alt: p.alt ?? "", photographer: p.photographer, photographerUrl: p.photographer_url, pexelsUrl: p.url };
   } catch {
     return null;
   }
@@ -84,7 +89,7 @@ export const categoryPhotos = unstable_cache(
     }
     return out;
   },
-  ["category-photos-v2"],
+  ["category-photos-v3"],
   { revalidate: 86_400, tags: [CATEGORY_PHOTOS_TAG] },
 );
 
@@ -98,4 +103,32 @@ export async function cachedCategoryPhotosForCheck(slugs: string[]): Promise<Rec
   } catch {
     return {};
   }
+}
+
+const ALL_SLUGS = CATEGORIES.map((c) => c.slug);
+
+/**
+ * Every category's photo, once per request (one data-cache entry for all categories, shared with the
+ * home page's category panels). Empty outside a Next.js request context or when Pexels is unavailable.
+ */
+export const allCategoryPhotos = cache(async (): Promise<Record<string, CategoryPhoto | null>> => {
+  try {
+    return await categoryPhotos(ALL_SLUGS);
+  } catch {
+    return {};
+  }
+});
+
+/** A category photo's landscape rendition (cards, heroes), else its portrait one. */
+export function categoryPhotoSrc(p: CategoryPhoto): string {
+  return p.landscape ?? p.url;
+}
+
+/**
+ * The last resort of every public image slot before our placeholder graphic: the category's licensed
+ * Pexels photo, labelled "Representative photo" with its credit. Null when there is none.
+ */
+export async function categoryFallbackPhoto(categorySlug: string | null | undefined): Promise<CategoryPhoto | null> {
+  if (!categorySlug) return null;
+  return (await allCategoryPhotos())[categorySlug] ?? null;
 }

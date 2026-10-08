@@ -18,11 +18,11 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { dealImage, type DealImage } from "@/lib/images/deal-image";
 import { placeholderPath } from "@/lib/pipeline/images";
-import { categoryPhotos } from "@/lib/public/category-images";
+import { allCategoryPhotos } from "@/lib/public/category-images";
 import { officialDeals } from "@/lib/public/deals";
 import { prerenderNeedsDatabase } from "@/lib/public/isr";
-import { cardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, freshDealRows } from "@/lib/public/queries";
-import { CATEGORIES, categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
+import { resolveCardImage, categoryLedger, comparePair, latestByKind, trendingReviews, trustStats, freshDealRows } from "@/lib/public/queries";
+import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { dateline, money } from "@/lib/util/format";
 import "./home.css";
@@ -82,7 +82,7 @@ export default async function Home() {
     trendingReviews(7, 6),
     comparePair(),
     trustStats(),
-    categoryPhotos(CATEGORIES.map((c) => c.slug)).catch(() => ({}) as Record<string, null>),
+    allCategoryPhotos(),
     officialDeals().catch(() => ({ drops: [], codes: [], checkedAt: null })),
   ]);
   // Verified deals and coupons: ACTIVE drops and VERIFIED codes from officialDeals(), the same list /deals shows; nothing when none.
@@ -91,6 +91,7 @@ export default async function Home() {
   const dealImages = await dealImagesFor(railDrops.map((d) => d.id)).catch(() => new Map<string, DealImage>());
   const site = config.siteUrl();
   const lead = reviews[0];
+  const leadImage = lead ? await resolveCardImage(lead) : null;
   const heroDeal = deals[0];
   const specSource = pair?.[0];
   const activeCats = ledger.filter((c) => c.reviews + c.comparisons + c.guides > 0);
@@ -160,7 +161,7 @@ export default async function Home() {
               {lead ? (
                 <Link className="clip photo crop" href={`/review/${lead.slug}`} data-depth="1.2" data-cursor="Read" style={style(lead.categorySlug)}>
                   <span className="tape" aria-hidden="true" />
-                  <SafeImg src={cardImage(lead).url} fallback={placeholderPath(lead.categorySlug)} alt="" width={380} height={285} />
+                  <SafeImg src={leadImage!.url} alternates={leadImage!.alternates} fallback={placeholderPath(lead.categorySlug)} alt="" width={380} height={285} />
                   <span className="clip-body">
                     {categoryName(lead.categorySlug) && <span className="cat-tag">{categoryName(lead.categorySlug)}</span>}
                     <span className="clip-title">{lead.productName}</span>
@@ -242,7 +243,7 @@ export default async function Home() {
           </SectionHeader>
           {lead ? (
             <div className="lead-grid">
-              <FeatureStory review={lead} />
+              <FeatureStory review={lead} image={leadImage ?? undefined} />
               <ul className="story-list" aria-label="More reviews">
                 {reviews.slice(1, 5).map((r) => (
                   <li key={r.id}>

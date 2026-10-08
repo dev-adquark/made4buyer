@@ -211,7 +211,7 @@ export type DealImageProduct = {
  * The image to show on a deal card for this CommerceProduct, or null (show the placeholder).
  * Render it with <SafeImg …>: the URL is on the brand's own official domain (validated here), so it may load directly.
  */
-export function dealImage(product: DealImageProduct | null | undefined): DealImage | null {
+export function dealImage(product: DealImageProduct | null | undefined, opts: { requireListedDomain?: boolean } = {}): DealImage | null {
   if (!product) return null;
   const domain = domainOf(product.canonicalUrl);
   if (!domain || !product.canonicalUrl.toLowerCase().startsWith("https://")) return null;
@@ -223,8 +223,10 @@ export function dealImage(product: DealImageProduct | null | undefined): DealIma
   for (const img of storedDealImages(product.data)) {
     if (broken.has(img.src)) continue; // the image-integrity job found it no longer loads
     if (onDomainImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
-    // On the brand's own official domain (checked above): loads directly from that domain.
-    if (!onOfficialImageDomain(img.src)) continue;
+    // On the brand's own official domain (checked above): loads directly from that domain. Deal cards
+    // also require the domain to be on the reviewed list (OFFICIAL_IMAGE_DOMAINS); a review hero only
+    // needs the brand's own registered domain (opts.requireListedDomain = false).
+    if (opts.requireListedDomain !== false && !onOfficialImageDomain(img.src)) continue;
     return img;
   }
   return null;

@@ -142,7 +142,9 @@ describe("image enrichment in the pipeline", () => {
     if (illustrative) {
       const m = await buildPageRenderModel(illustrative.normalizedReviewId);
       expect(m.image.subject).toBe("ILLUSTRATIVE");
-      expect(m.image.alt).toMatch(/^Illustrative photo/);
+      // The alt text says what the photo shows (its own description), never the old "Illustrative" wording.
+      expect(m.image.alt).toBe(illustrative.altText);
+      expect(m.image.alt).not.toMatch(/Illustrative/);
       expect(m.image.attribution).toMatch(/on Pexels$/);
     }
   });

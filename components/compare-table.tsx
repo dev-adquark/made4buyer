@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import SafeImg from "./safe-img";
 
-export type CompareColumn = { id: string; slug: string; name: string; image: string; fallback: string; categoryName: string; facts: Record<string, string | null> };
+export type CompareColumn = { id: string; slug: string; name: string; image: string; alternates?: string[]; fallback: string; categoryName: string; facts: Record<string, string | null> };
 export type CompareSection = { title: string; rows: string[] };
 
 /**
@@ -38,7 +38,7 @@ export default function CompareTable({ columns, sections, removeHref, addSlot }:
           </div>
           {columns.map((c) => (
             <div key={c.id}>
-              <SafeImg src={c.image} fallback={c.fallback} alt="" width={180} height={112} loading="lazy" />
+              <SafeImg src={c.image} alternates={c.alternates} fallback={c.fallback} alt="" width={180} height={112} loading="lazy" />
               <Link className="name" href={`/review/${c.slug}`}>
                 {c.name}
               </Link>

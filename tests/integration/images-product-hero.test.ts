@@ -201,7 +201,7 @@ describe("category-level content keeps illustrative photos", () => {
     expect(asset).toMatchObject({ sourceType: "ENRICHMENT_SERVICE", subject: "ILLUSTRATIVE", imageType: "illustrative-category", licenseState: "VERIFIED" });
     const m = await buildPageRenderModel(guide.id);
     expect(m.image.subject).toBe("ILLUSTRATIVE");
-    expect(m.image.alt).toMatch(/^Illustrative photo/);
+    expect(m.image.alt).toBe(asset!.altText);
 
     // A legacy illustrative photo (no provenance) on category content is kept and stamped.
     await db.imageAsset.update({ where: { id: asset!.id }, data: { imageType: null } });

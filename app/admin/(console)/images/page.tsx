@@ -60,12 +60,17 @@ export default async function ImagesPage({ searchParams }: { searchParams: Searc
       <h1>Images</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        Hero images of published pages. Single-product pages show the exact product (licensed, identity-matched) or a neutral category image; category pages may show a labelled illustrative photo. The <code>image-integrity</code> job re-checks live images daily: a broken one falls back to the category image at once and is restored when it loads again. CDN: {integrations.imageCdn}. Unverified-licence images are {config.images.requireLicense() ? "withheld (category image shown)" : "shown publicly"}.
+        Hero images of published pages. Single-product pages show the exact product (the brand&rsquo;s own product page photo, an identity-matched retailer&rsquo;s, or a licensed Commons photo); otherwise a Pexels photo of the product&rsquo;s type or category with a small &ldquo;Representative photo&rdquo; note and its credit (an unused photo first, an on-topic one reused when the pool is exhausted). Our placeholder graphic only appears when no photo exists at all. The <code>image-integrity</code> job re-checks live images daily: a broken one falls back to the category image at once and is restored when it loads again. CDN: {integrations.imageCdn}. Unverified-licence images are {config.images.requireLicense() ? "withheld (category image shown)" : "shown publicly"}.
       </p>
       <h2>Image slots on the public site</h2>
       <p className="small muted">
-        Every image slot the design gives (review and guide cards/heroes, deal and price cards, category features), per item. Priority: exact official photo → retailer&rsquo;s exact photo → our verified exact photo → labelled Pexels photo of the product&rsquo;s type → neutral category image. Missing = a placeholder or nothing on a review/guide; broken and mismatched images already show the next fallback.
+        Every image slot the design gives (review and guide cards/heroes, deal and price cards, category features), per item. Priority: exact official photo → retailer&rsquo;s exact photo → our verified exact photo → Pexels photo of the product&rsquo;s type (unused, else reused on-topic) → the category&rsquo;s licensed photo → placeholder graphic. Missing = the placeholder graphic or nothing; broken and mismatched images already show the next fallback.
       </p>
+      {slots && (
+        <div className="stats">
+          <Stat label="Placeholder SVG in public slots" value={slots.placeholderSvg} note={slots.placeholderSvg === 0 ? "target met: 0" : "must be 0"} />
+        </div>
+      )}
       {slots ? (
         <div className="table-wrap">
           <table className="table" data-testid="image-slot-counts">

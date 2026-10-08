@@ -32,6 +32,7 @@ export default function HomeDealCard({ d, image }: { d: PriceDrop; image?: DealI
         {img ? (
           <SafeImg
             src={img.src}
+            alternates={img.alternates}
             fallback={placeholderPath(d.categories[0])}
             alt={img.alt}
             width={300}
@@ -66,7 +67,7 @@ export default function HomeDealCard({ d, image }: { d: PriceDrop; image?: DealI
           )}
         </h3>
         {img?.caption && (
-          <p className="small muted hd-illus" data-illustrative="">
+          <p className="rep-note hd-rep" data-representative="" title={img.attribution ?? undefined}>
             {img.caption}
           </p>
         )}

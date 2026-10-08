@@ -1,9 +1,9 @@
 import Link from "next/link";
 import SafeImg from "./safe-img";
 import TrustLabel from "./trust-label";
-import { ILLUSTRATIVE_CAPTION } from "@/lib/images/provenance";
+import { REPRESENTATIVE_CAPTION } from "@/lib/images/provenance";
 import { placeholderPath } from "@/lib/pipeline/images";
-import { cardImage, type ReviewCard as Card } from "@/lib/public/queries";
+import { resolveCardImage, type CardImage, type ReviewCard as Card } from "@/lib/public/queries";
 import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { displayText } from "@/lib/public/display";
@@ -49,12 +49,14 @@ function Meta({ r }: { r: Card }) {
   );
 }
 
-/** Visible "Illustrative" tag on a card photo that is not the reviewed product (the full wording for screen readers and on hover). */
-export function IllustrativeTag() {
+/**
+ * The small "Representative photo" chip on a card photo that is not the exact product (a Pexels
+ * photo of its type or category); the photo credit is in its title. Exact product photos carry none.
+ */
+export function RepresentativeTag({ credit }: { credit?: string | null }) {
   return (
-    <span className="illus-tag" title={ILLUSTRATIVE_CAPTION} data-illustrative="">
-      Illustrative
-      <span className="visually-hidden">{ILLUSTRATIVE_CAPTION.replace(/^Illustrative/, "")}</span>
+    <span className="rep-tag" title={credit ? `${REPRESENTATIVE_CAPTION} · ${credit}` : REPRESENTATIVE_CAPTION} data-representative="">
+      {REPRESENTATIVE_CAPTION}
     </span>
   );
 }
@@ -73,18 +75,18 @@ function editorialSizes(i: number) {
  * Compact review card (default). `row` is the list variant used beside a feature story.
  * The verified-offer label appears only for a VERIFIED_OK link on a matched offer.
  */
-export default function ReviewCard({ review, headingLevel = 3, eager = false, variant, sizes = CARD_SIZES }: { review: Card; headingLevel?: 2 | 3; eager?: boolean; variant?: "row"; sizes?: string }) {
-  const img = cardImage(review);
+export default async function ReviewCard({ review, headingLevel = 3, eager = false, variant, sizes = CARD_SIZES, image }: { review: Card; headingLevel?: 2 | 3; eager?: boolean; variant?: "row"; sizes?: string; image?: CardImage }) {
+  const img = image ?? (await resolveCardImage(review));
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <article className={`review-card${variant ? ` ${variant}` : ""}`} style={themeStyle(review.categorySlug) as React.CSSProperties}>
       <Link href={`/review/${review.slug}`} data-cursor="Read">
         <div className="media">
-          <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={640} height={427} loading={eager ? "eager" : "lazy"} decoding="async" {...(variant === "row" ? ROW_IMAGE : { sizes })} />
+          <SafeImg src={img.url} alternates={img.alternates} fallback={placeholderPath(review.categorySlug)} alt="" width={640} height={427} loading={eager ? "eager" : "lazy"} decoding="async" {...(variant === "row" ? ROW_IMAGE : { sizes })} />
           <span className="kind">
             <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
           </span>
-          {img.illustrative && <IllustrativeTag />}
+          {img.representative && <RepresentativeTag credit={img.credit} />}
         </div>
         <div className="body">
           <div className="meta-row">
@@ -100,14 +102,14 @@ export default function ReviewCard({ review, headingLevel = 3, eager = false, va
 }
 
 /** Feature story: the dominant item of a section, large image and display headline. */
-export function FeatureStory({ review }: { review: Card }) {
-  const img = cardImage(review);
+export async function FeatureStory({ review, image }: { review: Card; image?: CardImage }) {
+  const img = image ?? (await resolveCardImage(review));
   return (
     <article className="feature-story" style={themeStyle(review.categorySlug) as React.CSSProperties}>
       <Link href={`/review/${review.slug}`} data-cursor="Read">
         <div className="media">
-          <SafeImg src={img.url} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
-          {img.illustrative && <IllustrativeTag />}
+          <SafeImg src={img.url} alternates={img.alternates} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
+          {img.representative && <RepresentativeTag credit={img.credit} />}
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
           {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}

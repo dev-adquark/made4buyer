@@ -6,11 +6,11 @@ import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { db } from "@/lib/db";
 import { categoryCardImage, type DealCardImage } from "@/lib/images/deal-card-image";
 import { loadDealCardImages } from "@/lib/images/deal-card-images";
-import { ILLUSTRATIVE_DEAL_CAPTION } from "@/lib/images/provenance";
+import { REPRESENTATIVE_CAPTION } from "@/lib/images/provenance";
 import { log } from "@/lib/log";
 import { registrableDomain } from "@/lib/net/ip";
 import { validateOutboundUrl } from "@/lib/net/safe-fetch";
-import { categoryPhotos, type CategoryPhoto } from "./category-images";
+import { allCategoryPhotos, categoryPhotoSrc } from "./category-images";
 import { displayDate, displayPrice, displayText, displayUrl } from "./display";
 import { freshOfferWhere, offerDomain, offerLinkKey, offerUrl, priceMaxAgeMs } from "./offers";
 
@@ -463,19 +463,19 @@ export async function officialDeals(now = Date.now()): Promise<OfficialDeals> {
 
 /**
  * Last resort of the card-image chain: the category's licensed Pexels photo (cached daily; no extra
- * requests per card), labelled illustrative — instead of the bare category placeholder graphic.
- * Cards keep the placeholder only when no category photo is available.
+ * requests per card), noted "Representative photo" with its credit — instead of the category
+ * placeholder graphic. Every other card gets it as its browser-side alternate (if its photo stops
+ * loading). Cards keep the placeholder only when no category photo is available.
  */
-async function withCategoryPhotos<T extends { image: DealCardImage; categories?: string[] }>(rows: T[]): Promise<T[]> {
-  const need = rows.filter((r) => r.image.kind === "category");
-  if (!need.length) return rows;
-  const slugs = [...new Set(need.map((r) => r.categories?.[0]).filter((x): x is string => Boolean(x)))];
-  if (!slugs.length) return rows;
-  const photos = (await categoryPhotos(slugs).catch(() => ({}))) as Record<string, CategoryPhoto | null>;
+export async function withCategoryPhotos<T extends { image: DealCardImage; categories?: string[] }>(rows: T[]): Promise<T[]> {
+  if (!rows.length) return rows;
+  const photos = await allCategoryPhotos();
   return rows.map((r) => {
-    if (r.image.kind !== "category") return r;
     const photo = r.categories?.[0] ? photos[r.categories[0]] : null;
     if (!photo) return r;
-    return { ...r, image: { ...r.image, src: photo.url, alt: "", source: "pexels-category", caption: ILLUSTRATIVE_DEAL_CAPTION, attribution: `Photo: ${photo.photographer} / Pexels`, attributionUrl: photo.photographerUrl, sourceUrl: photo.pexelsUrl, width: 800, height: 1200 } };
+    const src = categoryPhotoSrc(photo);
+    if (r.image.kind !== "category") return src === r.image.src ? r : { ...r, image: { ...r.image, alternates: [src] } };
+    const landscape = Boolean(photo.landscape);
+    return { ...r, image: { ...r.image, src, alt: photo.alt, source: "pexels-category", caption: REPRESENTATIVE_CAPTION, attribution: `Photo: ${photo.photographer} / Pexels`, attributionUrl: photo.pexelsUrl, sourceUrl: photo.pexelsUrl, width: landscape ? 1200 : 800, height: landscape ? 627 : 1200 } };
   });
 }
