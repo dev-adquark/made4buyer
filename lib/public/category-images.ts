@@ -2,6 +2,7 @@ import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { config } from "@/lib/config";
+import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
 
@@ -78,18 +79,84 @@ async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
   }
 }
 
+/**
+ * Last-known-good category photos (automation_settings), so a Pexels rate limit (429) or outage never
+ * blanks a slot: Pexels is asked only for a category with no stored photo or one older than a week.
+ */
+const LAST_GOOD_KEY = "category-photos:last-good";
+const REFRESH_AFTER_MS = 7 * 86_400_000;
+type StoredPhoto = CategoryPhoto & { at: string };
+
+async function readLastGood(): Promise<Record<string, StoredPhoto>> {
+  const row = await db.automationSetting.findUnique({ where: { key: LAST_GOOD_KEY } }).catch(() => null);
+  if (!row) return {};
+  try {
+    const v = JSON.parse(row.value) as Record<string, StoredPhoto>;
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeLastGood(value: Record<string, StoredPhoto>): Promise<void> {
+  const json = JSON.stringify(value);
+  await db.automationSetting
+    .upsert({ where: { key: LAST_GOOD_KEY }, create: { key: LAST_GOOD_KEY, value: json, updatedBy: "category-photos" }, update: { value: json, updatedBy: "category-photos" } })
+    .catch((error: unknown) => log.warn("category photos not saved", { error: String(error).slice(0, 200) }));
+}
+
+/** Drops a stored category photo that no longer loads (image-integrity), so the next read fetches a new one. */
+export async function forgetCategoryPhoto(slug: string): Promise<void> {
+  const stored = await readLastGood();
+  if (!stored[slug]) return;
+  delete stored[slug];
+  await writeLastGood(stored);
+}
+
+/** Every requested category's photo: the stored copy, refreshed from Pexels when missing or a week old. */
+export async function loadCategoryPhotos(slugs: string[], now = Date.now()): Promise<Record<string, CategoryPhoto | null>> {
+  const stored = await readLastGood();
+  const due = slugs.filter((s) => QUERIES[s] && now - (Date.parse(stored[s]?.at ?? "") || 0) > REFRESH_AFTER_MS);
+  let fetched = 0;
+  // Small batches, not one burst of 32 requests: Pexels limits are per hour and per key.
+  for (let i = 0; i < due.length; i += 4) {
+    const batch = due.slice(i, i + 4);
+    const photos = await Promise.all(batch.map((s) => fetchPhoto(s).catch(() => null)));
+    batch.forEach((s, j) => {
+      const p = photos[j];
+      if (p) {
+        stored[s] = { ...p, at: new Date(now).toISOString() };
+        fetched++;
+      }
+    });
+  }
+  if (fetched) await writeLastGood(stored);
+  const out: Record<string, CategoryPhoto | null> = {};
+  for (const s of slugs) {
+    out[s] = stored[s] ? toPhoto(stored[s]) : null;
+  }
+  return out;
+}
+
+/** The stored photos only (no Pexels request): what a slot shows while Pexels is unavailable. */
+async function storedCategoryPhotos(slugs: string[]): Promise<Record<string, CategoryPhoto | null>> {
+  const stored = await readLastGood();
+  return Object.fromEntries(slugs.map((s) => [s, stored[s] ? toPhoto(stored[s]) : null]));
+}
+
+function toPhoto(p: StoredPhoto): CategoryPhoto {
+  return { url: p.url, ...(p.landscape ? { landscape: p.landscape } : {}), alt: p.alt, photographer: p.photographer, photographerUrl: p.photographerUrl, pexelsUrl: p.pexelsUrl };
+}
+
 export const categoryPhotos = unstable_cache(
   async (slugs: string[]) => {
-    // Small batches, not one burst of 32 requests: Pexels limits are per hour and per key.
-    const out: Record<string, CategoryPhoto | null> = {};
-    for (let i = 0; i < slugs.length; i += 4) {
-      const batch = slugs.slice(i, i + 4);
-      const photos = await Promise.all(batch.map((s) => fetchPhoto(s).catch(() => null)));
-      batch.forEach((s, j) => (out[s] = photos[j]));
-    }
+    const out = await loadCategoryPhotos(slugs);
+    // An incomplete answer (Pexels limited, nothing stored yet) is not cached for a day: the next
+    // request asks Pexels again, for the missing categories only.
+    if (slugs.some((s) => QUERIES[s] && !out[s])) throw new Error("category photos incomplete");
     return out;
   },
-  ["category-photos-v3"],
+  ["category-photos-v4"],
   { revalidate: 86_400, tags: [CATEGORY_PHOTOS_TAG] },
 );
 
@@ -101,7 +168,7 @@ export async function cachedCategoryPhotosForCheck(slugs: string[]): Promise<Rec
   try {
     return await categoryPhotos(slugs);
   } catch {
-    return {};
+    return storedCategoryPhotos(slugs).catch(() => ({}));
   }
 }
 
@@ -115,7 +182,7 @@ export const allCategoryPhotos = cache(async (): Promise<Record<string, Category
   try {
     return await categoryPhotos(ALL_SLUGS);
   } catch {
-    return {};
+    return storedCategoryPhotos(ALL_SLUGS).catch(() => ({}));
   }
 });
 

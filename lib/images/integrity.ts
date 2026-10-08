@@ -10,7 +10,7 @@ import { commonsFileTitle, fileTitleMatches, namesSeveralProducts } from "./comm
 import { revalidateCommerce } from "@/lib/commerce/revalidate";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 import { revalidateTag } from "next/cache";
-import { CATEGORY_PHOTOS_TAG, cachedCategoryPhotosForCheck } from "@/lib/public/category-images";
+import { CATEGORY_PHOTOS_TAG, cachedCategoryPhotosForCheck, forgetCategoryPhoto } from "@/lib/public/category-images";
 import { storedCardImage } from "./deal-card-image";
 import { clearCardImage, dealCardImageContext, liveCommerceProducts, resolveDealCardImage, runDealCardImages, type DealCardImagesResult } from "./deal-card-images";
 import { brokenImageSrcs, extractOfficialProductImages } from "./deal-image";
@@ -341,7 +341,10 @@ export async function checkDealCardImages(trigger: string, state: IntegrityState
       out.categoryChecked++;
       const v = await checkImageUrl(photo.url);
       state.assets[key] = { at: now.toISOString(), last: v.kind === "OK" ? "ok" : v.kind.toLowerCase() };
-      if (v.kind === "BROKEN") out.categoryBroken++;
+      if (v.kind === "BROKEN") {
+        out.categoryBroken++;
+        await forgetCategoryPhoto(slug).catch(() => undefined);
+      }
     }
     if (out.categoryBroken) {
       try {
