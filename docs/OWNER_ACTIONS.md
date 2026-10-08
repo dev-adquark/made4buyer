@@ -147,11 +147,42 @@ stored affiliate link on the next run.
    days, and records a 28-day clicks/impressions snapshot. All numbers come from Google; nothing
    is estimated.
 
+## 6a. Feedico coupon feed (optional)
+
+Promo codes that merchants publish through affiliate networks (CJ, Impact, Awin, …), for the brands
+in the registry only (matched by the merchant's exact website domain). Code: `lib/commerce/feedico.ts`.
+
+1. Feedico dashboard → **Account** → create an API token (`fdco_…`).
+2. Add it to Vercel **Production** only, marked Sensitive, then redeploy:
+   ```sh
+   npx vercel env add FEEDICO_API_KEY production --scope team_nWHsBPLFeOoHpJYXLxPC3eF9
+   npx vercel deploy --prod --yes --scope team_nWHsBPLFeOoHpJYXLxPC3eF9
+   ```
+3. Check it (one request, prints counts only): `FEEDICO_API_KEY=… npx tsx scripts/verify-feedico.ts`,
+   or Admin → Jobs → `feedico-coupons` → Run now.
+
+**What it does.** The `feedico-coupons` job runs daily at 09:50 UTC and refreshes each brand once a
+week (`FEEDICO_REFRESH_DAYS`, 7); a brand whose fetch failed is retried the next day. One request per
+brand (a second page only above 200 codes), so ~100 brands ≈ 430 requests/month. It stops at
+`FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429, well inside the Free plan's 1,000.
+
+**What it never does.** Make a code public on its own. Feedico codes are stored as **UNVERIFIED**
+candidates (Admin → Commerce → Coupons, source "Feedico coupon feed"); the existing rule still applies:
+a code is public only when the brand's own official page publishes it, verified within 7 days. A code
+missing from two consecutive successful fetches becomes INVALID; a stated end date that has passed
+makes it EXPIRED. A failed, malformed or quota-refused response changes nothing. Turn the feed off
+in Admin → Commerce → Coupons → Sources (Feedico coupon feed → Disable).
+
+**Terms.** Feedico's catalogue pools codes from programmes across all Feedico customers. Before
+showing any of these codes publicly (a separate decision, not implemented), confirm your own approval
+in each affiliate programme.
+
 ## 7. Other integrations shown in Admin → Integrations
 
 | Integration | Variables |
 |---|---|
 | Pexels images | `PEXELS_API_KEY` |
+| Feedico coupon feed | `FEEDICO_API_KEY` (section 6a) |
 | Keyword-to-Blog | `KEYWORD_TO_BLOG_API_URL`, `KEYWORD_TO_BLOG_API_KEY` (optional `KEYWORD_TO_BLOG_API_KEY_SECONDARY`) |
 | Analytics | first-party events need only `DATABASE_URL`; optional `NEXT_PUBLIC_ANALYTICS_ID` (public) |
 | Cron | `CRON_SECRET` (Vercel sends it automatically to `/api/cron/*`) |

@@ -21,7 +21,7 @@ export default async function CommerceCouponsPage({ searchParams }: { searchPara
     db.commerceCoupon.count({ where }),
     db.commerceCoupon.groupBy({ by: ["status"], _count: { _all: true } }),
     db.commerceBrand.findMany({ select: { id: true, name: true, promoUrls: true, enabled: true }, orderBy: { name: "asc" } }),
-    db.commerceSource.findMany({ where: { kind: "COUPON_SITE" }, orderBy: { name: "asc" } }),
+    db.commerceSource.findMany({ where: { kind: { in: ["COUPON_SITE", "COUPON_FEED"] } }, orderBy: { name: "asc" } }),
     db.commerceRun.findMany({ where: { purpose: "COUPON" }, orderBy: { startedAt: "desc" }, take: 10, include: { brand: { select: { name: true } }, source: { select: { name: true } } } }),
   ]);
   const count = (s: string) => byStatus.find((b) => b.status === s)?._count._all ?? 0;

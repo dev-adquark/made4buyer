@@ -10,6 +10,7 @@ import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } f
 import { runDataAudit } from "@/lib/ops/data-audit";
 import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline";
 import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
+import { runFeedicoSync } from "@/lib/commerce/feedico";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
 import { runClassifyDeals } from "@/lib/commerce/classify";
@@ -125,6 +126,8 @@ export const JOBS = {
   // Affiliate links on demand (Admin → Jobs / `npm run job -- affiliate-links`).
   "affiliate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runAffiliateLinks(trigger), locked: true },
   "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
+  // Feedico coupon feed (lib/commerce/feedico.ts): daily, each brand refreshed weekly; Admin candidates only (never public on its own).
+  "feedico-coupons": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runFeedicoSync(trigger), locked: true },
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
   "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },
   "commerce-official-verify": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runOfficialVerify(trigger), locked: true },
@@ -158,6 +161,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-collect": ["commerce_engine"],
   "affiliate-links": ["commerce_engine"],
   "commerce-coupons": ["commerce_engine"],
+  "feedico-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],
   "commerce-official-verify": ["commerce_engine"],
   "commerce-classify-deals": ["commerce_engine"],

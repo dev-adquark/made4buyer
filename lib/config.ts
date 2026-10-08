@@ -148,6 +148,21 @@ export const config = {
     maxItemsPerCollect: () => num("APIFY_MAX_ITEMS_PER_COLLECT", 100, 1, 1000),
   },
 
+  /**
+   * Feedico coupon feed (lib/commerce/feedico.ts): server-side Bearer key only. The Free plan allows
+   * 1,000 requests/month; the sync stops at FEEDICO_MONTHLY_REQUEST_BUDGET (default 600).
+   */
+  feedico: {
+    apiKey: () => str("FEEDICO_API_KEY"),
+    /** Overridable only so tests can point at a local stub. */
+    baseUrl: () => (str("FEEDICO_API_BASE_URL") ?? "https://api.feedico.io").replace(/\/+$/, ""),
+    monthlyRequestBudget: () => num("FEEDICO_MONTHLY_REQUEST_BUDGET", 600, 1, 1_000_000),
+    refreshDays: () => num("FEEDICO_REFRESH_DAYS", 7, 1, 30),
+    brandsPerRun: () => num("FEEDICO_BRANDS_PER_RUN", 40, 1, 200),
+    maxPagesPerBrand: () => num("FEEDICO_MAX_PAGES_PER_BRAND", 2, 1, 5),
+    maxFeedAgeDays: () => num("FEEDICO_MAX_FEED_AGE_DAYS", 30, 1, 365),
+  },
+
   /** Test-only escape hatch so integration/E2E suites can verify links against loopback stubs. */
   allowLoopbackForTests: () =>
     bool("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS", false) && process.env.VERCEL_ENV !== "production",
@@ -161,6 +176,7 @@ export function integrationStatus() {
     database: state(Boolean(str("DATABASE_URL"))),
     contentApi: state(Boolean(config.contentApi.url())),
     apify: state(Boolean(config.apify.token())),
+    feedico: state(Boolean(config.feedico.apiKey())),
     aiGuides: state(Boolean(config.aiGuides.url() && config.aiGuides.key())),
     imageProvider: state(Boolean(config.images.enrichmentUrl() || config.images.pexelsKey())),
     imageCdn: state(Boolean(config.images.cdnTemplate())),

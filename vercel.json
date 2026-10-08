@@ -66,6 +66,10 @@
       "schedule": "20 9 * * *"
     },
     {
+      "path": "/api/cron/feedico-coupons",
+      "schedule": "50 9 * * *"
+    },
+    {
       "path": "/api/cron/data-audit",
       "schedule": "0 12 * * *"
     },

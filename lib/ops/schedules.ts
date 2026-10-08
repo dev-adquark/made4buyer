@@ -119,7 +119,7 @@ export async function loadRecentFailures(limit = 60): Promise<FailureView[]> {
     ...pipeline.map((f) => ({ origin: "Pipeline failure", job: f.stage, subject: `${f.entityType} ${f.entityId}`, error: `${f.errorCode}: ${f.message}`, at: f.lastOccurredAt, retries: f.retryCount, status: f.kind, href: f.normalizedReviewId ? `/admin/reviews/${f.normalizedReviewId}` : "/admin/failures" })),
     ...commerce.map((r) => ({
       origin: "Commerce run",
-      job: r.purpose === "COUPON" ? "commerce-coupons" : "commerce-discover / commerce-collect",
+      job: r.actorId.startsWith("feedico:") ? "feedico-coupons" : r.purpose === "COUPON" ? "commerce-coupons" : "commerce-discover / commerce-collect",
       subject: r.brand ? `brand ${r.brand.name}` : r.source ? `source ${r.source.name}` : null,
       error: firstError(r.errors) ?? r.status,
       at: r.finishedAt ?? r.startedAt,

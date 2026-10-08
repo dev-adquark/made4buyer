@@ -51,13 +51,14 @@ describe("Content API schema mismatch is admin-visible", () => {
 
 describe("Integrations readiness", () => {
   it("lists every integration with exact missing env var names, never values", async () => {
-    const r = withEnv({ PEXELS_API_KEY: undefined, GSC_SITE_URL: undefined, GSC_SERVICE_ACCOUNT_JSON: undefined, KEYWORD_TO_BLOG_API_URL: undefined, KEYWORD_TO_BLOG_API_KEY: undefined, APIFY_API_TOKEN: undefined, CRON_SECRET: undefined });
+    const r = withEnv({ PEXELS_API_KEY: undefined, GSC_SITE_URL: undefined, GSC_SERVICE_ACCOUNT_JSON: undefined, KEYWORD_TO_BLOG_API_URL: undefined, KEYWORD_TO_BLOG_API_KEY: undefined, APIFY_API_TOKEN: undefined, CRON_SECRET: undefined, FEEDICO_API_KEY: undefined });
     const rows = await integrationReadiness();
     r();
-    expect(rows.map((x) => x.key)).toEqual(["contentApi", "apify", "pexels", "keywordToBlog", "affiliate", "gsc", "analytics", "cron"]);
+    expect(rows.map((x) => x.key)).toEqual(["contentApi", "apify", "pexels", "feedico", "keywordToBlog", "affiliate", "gsc", "analytics", "cron"]);
     const by = Object.fromEntries(rows.map((x) => [x.key, x]));
     expect(by.apify).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["APIFY_API_TOKEN"] });
     expect(by.pexels).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["PEXELS_API_KEY"] });
+    expect(by.feedico).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["FEEDICO_API_KEY"] });
     expect(by.keywordToBlog.missingEnv).toEqual(["KEYWORD_TO_BLOG_API_URL", "KEYWORD_TO_BLOG_API_KEY"]);
     expect(by.gsc.missingEnv).toEqual(["GSC_SITE_URL", "GSC_SERVICE_ACCOUNT_JSON"]);
     expect(by.affiliate).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["AFFILIATE_PROVIDER"] });

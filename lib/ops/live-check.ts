@@ -299,6 +299,13 @@ export async function integrationReadiness(now = new Date()): Promise<Integratio
     const ok = await q(() => db.imageAsset.findFirst({ where: { providerPhotoId: { startsWith: "pexels:" } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }), null);
     rows.push(row({ key: "pexels", name: "Pexels images", missingEnv: need("PEXELS_API_KEY"), optionalMissing: [], success: latest(ok?.createdAt, liveOkAt("pexels")), error: liveError("pexels") }));
   }
+  // Feedico coupon feed
+  {
+    const ok = await jobRun("feedico-coupons", "SUCCEEDED");
+    const src = await q(() => db.commerceSource.findUnique({ where: { slug: "feedico" }, select: { lastError: true, crawlStatus: true, lastCrawlAt: true } }), null);
+    const err = src?.lastError && src.lastCrawlAt && src.crawlStatus !== "OK" ? { at: src.lastCrawlAt, message: `${src.crawlStatus}: ${src.lastError}` } : null;
+    rows.push(row({ key: "feedico", name: "Feedico coupon feed", missingEnv: need("FEEDICO_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: err, note: "Admin coupon candidates only (public only when the brand's own page shows the code). Verify with `npx tsx scripts/verify-feedico.ts`." }));
+  }
   // Keyword-to-Blog
   {
     const ok = await q(() => db.normalizedReview.findFirst({ where: { kind: "AI_GUIDE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }), null);
