@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { feedicoDate, feedicoSourceUrl, normalizeFeedicoRows, parseFeedicoPage, type FeedicoCouponRow } from "@/lib/commerce/feedico";
-import { couponDealStatus, publicCoupons } from "@/lib/commerce/deal-status";
+import { couponDealStatus, nonUsFeedMarket, publicCoupons } from "@/lib/commerce/deal-status";
 import { toPromoCode } from "@/lib/public/deals";
 
 // SAMPLE rows shaped like POST /api/v1/catalog/coupons (feedico.io/openapi-customer.yaml v1.4).
@@ -66,6 +66,24 @@ describe("normalizeFeedicoRows", () => {
     const clash = normalizeFeedicoRows([row(), row({ id: "c2", title: "25% off sitewide", fetchedAt: "2026-10-08T01:00:00Z" })], brand, NOW);
     expect(clash.coupons).toHaveLength(1);
     expect(clash.coupons[0].conflict).toMatch(/disagree/);
+  });
+
+  it("lists US offers only: country storefronts and non-USD offers are rejected", () => {
+    expect(nonUsFeedMarket("https://uk.jackery.com", "save £60")).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://ca.acme.com", null)).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://eu.acme.com/", null)).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://www.acme.com/en-gb/", null)).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://www.acme.com", "Save €20 on orders")).toMatch(/non-USD/);
+    expect(nonUsFeedMarket("https://www.acme.com", "CAD 15 off")).toMatch(/non-USD/);
+    expect(nonUsFeedMarket("https://www.acme.com", "$25 off orders over $200")).toBeNull();
+    expect(nonUsFeedMarket("https://shop.acme.com", "20% off")).toBeNull();
+    expect(nonUsFeedMarket("https://www.acme.com/us/", null)).toBeNull();
+    expect(nonUsFeedMarket("https://www.acme.com/en-us/", null)).toBeNull();
+    const n = normalizeFeedicoRows([row(), row({ id: "uk", code: "UKSAVE60", title: "save £60", merchantWebsiteUrl: "https://uk.acme.com" })], brand, NOW);
+    expect(n.coupons.map((c) => c.code)).toEqual(["SAVE20"]);
+    expect(n.dropped[0]).toMatchObject({ id: "uk", reason: expect.stringMatching(/non-US storefront/) });
+    const shown = toPromoCode({ id: "u", code: "UKSAVE60", discount: "save £60", eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://uk.acme.com", observedAt: NOW }, { name: "Acme", slug: "acme", categories: [], officialDomain: "acme.com", officialStoreUrl: null });
+    expect(shown).toBeNull();
   });
 
   it("a fresh Feedico code is public in its own right (tier 5); stale, expired, invalid or conflicting ones are not", () => {

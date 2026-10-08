@@ -9,7 +9,7 @@ import { commerceAudit } from "./audit";
 import { ensureBrandsSeeded } from "./brands";
 import { revalidateCommerce } from "./revalidate";
 import { markExpiredCoupons, notACodeReason, recordDisappearances, statedDiscount, upsertCoupons, type NormalizedCoupon } from "./coupons";
-import { officialDomainsOf } from "./deal-status";
+import { nonUsFeedMarket, officialDomainsOf } from "./deal-status";
 import { sourceRunnable } from "./sources";
 import { recordVerification, type VerificationEventInput } from "./verification-events";
 
@@ -184,6 +184,11 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
     }
     if (now.getTime() - seen.getTime() > maxAge) {
       dropped.push({ id: r.id, reason: `stale: Feedico last confirmed it ${seen.toISOString().slice(0, 10)}, over ${config.feedico.maxFeedAgeDays()} days ago` });
+      continue;
+    }
+    const market = nonUsFeedMarket(r.merchantWebsiteUrl, [r.title, r.description].filter(Boolean).join(" "));
+    if (market) {
+      dropped.push({ id: r.id, reason: market });
       continue;
     }
     const expiresAt = feedicoDate(r.endsAt);
@@ -480,7 +485,7 @@ export async function deactivateStaleFeedicoCoupons(now = new Date()): Promise<n
   const cutoff = now.getTime() - maxDays * DAY_MS;
   const rows = await db.commerceCoupon.findMany({
     where: { sourceUrl: { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons` }, status: { notIn: ["INVALID", "EXPIRED"] } },
-    select: { id: true, code: true, status: true, sourceUrl: true, sourceRawId: true, observedAt: true },
+    select: { id: true, code: true, status: true, sourceUrl: true, sourceRawId: true, observedAt: true, merchantUrl: true, title: true, description: true, discount: true },
   });
   if (!rows.length) return 0;
   const rawIds = [...new Set(rows.map((r) => r.sourceRawId).filter((x): x is string => Boolean(x)))];
@@ -490,8 +495,9 @@ export async function deactivateStaleFeedicoCoupons(now = new Date()): Promise<n
   let deactivated = 0;
   for (const c of rows) {
     const at = c.sourceRawId ? confirmedAt(payloadOf.get(c.sourceRawId), c.code) : null;
-    if (at && at.getTime() >= cutoff) continue;
-    const evidence = at ? `Feedico last confirmed it on ${at.toISOString().slice(0, 10)}, more than ${maxDays} days ago (checked ${now.toISOString()})` : `No Feedico confirmation date on record for this code; deactivated by the ${maxDays}-day rule (checked ${now.toISOString()})`;
+    const market = nonUsFeedMarket(c.merchantUrl, [c.title, c.description, c.discount].filter(Boolean).join(" "));
+    if (at && at.getTime() >= cutoff && !market) continue;
+    const evidence = market ? `Not a US-market offer: ${market} (checked ${now.toISOString()})` : at ? `Feedico last confirmed it on ${at.toISOString().slice(0, 10)}, more than ${maxDays} days ago (checked ${now.toISOString()})` : `No Feedico confirmation date on record for this code; deactivated by the ${maxDays}-day rule (checked ${now.toISOString()})`;
     await db.commerceCoupon.update({ where: { id: c.id }, data: { status: "INVALID", verificationEvidence: evidence } });
     await commerceAudit("COUPON_INVALIDATED", "commerce_coupon", c.id, { before: { status: c.status }, after: { status: "INVALID" }, metadata: { code: c.code, evidence, rule: `feedico-${maxDays}-day-freshness` } });
     events.push({ entityType: "coupon", entityId: c.id, kind: "COUPON", result: "INVALID", reason: evidence, sourceUrl: c.sourceUrl, details: { code: c.code, previous: c.status, changed: true, check: "FEED_FRESHNESS" }, checkedAt: now });

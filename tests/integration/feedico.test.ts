@@ -179,6 +179,15 @@ describe("Feedico coupon feed", () => {
     expect((await feedRows(brand.id))[0].status).toBe("INVALID");
   });
 
+  it("deactivates a stored code that is not for the US market at the next sync", async () => {
+    const brand = await addBrand();
+    const now = new Date();
+    await db.commerceCoupon.create({ data: { brandId: brand.id, merchant: "Acme", code: "UKSAVE60", discount: "save £60", sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://uk.acme.com", status: "UNVERIFIED", observedAt: now } });
+    const r = await runFeedicoSync("test", { now });
+    expect(r.deactivated).toBe(1);
+    expect(await db.commerceCoupon.findFirst({ where: { code: "UKSAVE60" } })).toMatchObject({ status: "INVALID", verificationEvidence: expect.stringMatching(/Not a US-market offer/) });
+  });
+
   it("a rejected key stops the run and changes no coupon", async () => {
     await addBrand();
     await addBrand("Bolt", "bolt.com");

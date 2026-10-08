@@ -53,6 +53,8 @@ const publicCode = (c: PromoCode) => ({
   useUrl: c.useUrl,
   source: c.source,
   verifiedVia: c.verifiedVia,
+  viaFeed: Boolean(c.viaFeed),
+  checkedAt: c.checkedAt ?? c.lastVerifiedAt,
 });
 
 /**

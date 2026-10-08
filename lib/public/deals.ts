@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
-import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
+import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, nonUsFeedMarket, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
 import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -326,7 +326,7 @@ export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
 }
 
 type PromoBrand = { name: string; slug: string; categories: string[]; officialDomain: string; officialStoreUrl: string | null };
-type PromoRow = { id: string; code: string; discount: string | null; eligibility: string | null; restrictions: string | null; expiresAt: Date | null; lastVerifiedAt: Date | null; sourceUrl: string; merchantUrl?: string | null; observedAt?: Date | null };
+type PromoRow = { id: string; code: string; discount: string | null; eligibility: string | null; restrictions: string | null; expiresAt: Date | null; lastVerifiedAt: Date | null; sourceUrl: string; merchantUrl?: string | null; observedAt?: Date | null; title?: string | null; description?: string | null };
 
 /** Pure: a public coupon row (already passed publicCoupons) → the display shape. Null when a required field is unusable. */
 export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
@@ -335,6 +335,8 @@ export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
   const tier = couponSourceTier(c.sourceUrl, b);
   const feed = tier === 5;
   if (!brandName || !code || (tier !== 1 && tier !== 2 && !feed)) return null;
+  // The site lists US offers: a feed code for another country's storefront or currency is not shown.
+  if (feed && nonUsFeedMarket(c.merchantUrl, [c.title, c.description, c.discount].filter(Boolean).join(" "))) return null;
   // A feed code's stored source is the Feedico API: never shown or linked; "View offer" goes to the brand's own website.
   const sourceUrl = feed ? null : displayUrl(c.sourceUrl);
   const target = feed ? displayUrl(c.merchantUrl ?? null) : sourceUrl;
