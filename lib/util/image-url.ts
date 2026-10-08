@@ -84,6 +84,26 @@ function pexelsCandidates(u: URL, src: string, opts: ResponsiveOptions): { candi
   return { candidates: widths.map((w) => ({ url: pexelsUrl(src, w), width: w })), aspect };
 }
 
+// ---------------------------------------------------------------- Shopify CDN
+
+/**
+ * A brand store's own Shopify CDN image (https://<store>/cdn/shop/… or cdn.shopify.com/s/files/…):
+ * Shopify serves resized copies via the documented `width` query parameter (same image, same crop).
+ */
+const SHOPIFY_WIDTHS = [240, 360, 480, 600, 800, 1200];
+function isShopifyCdn(u: URL): boolean {
+  if (u.protocol !== "https:") return false;
+  return u.pathname.startsWith("/cdn/shop/") || (u.hostname === "cdn.shopify.com" && u.pathname.startsWith("/s/files/"));
+}
+export function shopifyImageUrl(src: string, width: number): string {
+  const u = new URL(src);
+  u.searchParams.set("width", String(width));
+  return u.toString();
+}
+function shopifyCandidates(src: string): { candidates: Candidate[] } {
+  return { candidates: SHOPIFY_WIDTHS.map((w) => ({ url: shopifyImageUrl(src, w), width: w })) };
+}
+
 // ---------------------------------------------------------------- Wikimedia
 
 type CommonsFile = { base: string; hashA: string; hashAB: string; name: string; ext: string; thumbWidth?: number };
@@ -152,6 +172,7 @@ export function responsiveImage(src: string, opts: ResponsiveOptions = {}): Resp
   let built: { candidates: Candidate[]; aspect?: number; tiff?: boolean } | null = null;
   if (isPexels(u)) built = pexelsCandidates(u, src, opts);
   else if (COMMONS_HOSTS.has(u.hostname)) built = commonsCandidates(src, opts);
+  else if (isShopifyCdn(u)) built = shopifyCandidates(src);
   if (!built || !built.candidates.length) return { src };
 
   const box = positive(opts.boxAspect);

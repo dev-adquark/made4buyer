@@ -105,3 +105,19 @@ describe("responsiveImage", () => {
     expect(responsiveImage(tiny)).toEqual({ src: tiny });
   });
 });
+
+describe("Shopify CDN images (brand stores)", () => {
+  it("builds a width-based srcset for /cdn/shop/ and cdn.shopify.com URLs, keeping existing params", async () => {
+    const { responsiveImage } = await import("@/lib/util/image-url");
+    const r = responsiveImage("https://us.sennheiser-hearing.com/cdn/shop/files/HD_560_S.jpg?v=1759792454", { maxWidth: 600 });
+    expect(r.srcSet).toContain("width=240");
+    expect(r.srcSet).toContain("v=1759792454");
+    expect(r.srcSet).toMatch(/width=600 600w/);
+    expect(r.srcSet).not.toContain("width=800");
+    expect(responsiveImage("https://cdn.shopify.com/s/files/1/0001/products/a.jpg", { maxWidth: 300 }).srcSet).toContain("width=360");
+  });
+  it("leaves other brand hosts alone", async () => {
+    const { responsiveImage } = await import("@/lib/util/image-url");
+    expect(responsiveImage("https://www.example-brand.com/images/a.jpg").srcSet).toBeUndefined();
+  });
+});
