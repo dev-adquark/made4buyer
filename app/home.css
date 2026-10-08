@@ -13,7 +13,7 @@
 /* ── Rhythm ── */
 .home .section, .home .section.tight { padding-block: var(--home-sec); }
 .home .section + .section { padding-top: calc(var(--home-sec) * 0.6); }
-.home .sec-head { gap: 6px 20px; padding-bottom: 10px; margin-bottom: clamp(14px, 1.8vw, 22px); }
+.home .sec-head { gap: 10px 20px; padding-bottom: 10px; margin-bottom: clamp(14px, 1.8vw, 22px); }
 .home .sec-head h2 { font-size: clamp(30px, 3.4vw, 52px); }
 .home .sec-head p { font-size: 16px; line-height: 1.45; }
 

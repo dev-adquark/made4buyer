@@ -443,7 +443,7 @@ legend { font-weight: 700; padding: 0 6px; }
 /* ── section headers ──────────────────────────────────────────────────── */
 .sec-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px 24px; align-items: end; padding-bottom: 16px; margin-bottom: clamp(24px, 3vw, 40px); border-bottom: 1px solid var(--ink); }
 .sec-head .label { align-self: start; padding-top: 0.6em; }
-.sec-head h2 { margin: 0; }
+.sec-head h2 { margin: 0; line-height: 1.04; } /* room for descenders: the dek sits right under the title */
 .sec-head p { grid-column: 2; margin: 0; color: var(--muted); font-family: var(--f-read); font-size: 18px; }
 .sec-head > .btn, .sec-head > .arrow-link { grid-column: 3; grid-row: 1; }
 /* Only elements the reveal script found BELOW the fold get .rv-pending (after hydration), so
