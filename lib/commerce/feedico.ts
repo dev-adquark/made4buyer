@@ -10,7 +10,7 @@ import { commerceAudit } from "./audit";
 import { ensureBrandsSeeded } from "./brands";
 import { revalidateCommerce } from "./revalidate";
 import { markExpiredCoupons, notACodeReason, recordDisappearances, statedDiscount, upsertCoupons, type NormalizedCoupon } from "./coupons";
-import { nonUsFeedMarket, officialDomainsOf } from "./deal-status";
+import { officialDomainsOf } from "./deal-status";
 import { sourceRunnable } from "./sources";
 import { recordVerification, type VerificationEventInput } from "./verification-events";
 
@@ -127,7 +127,7 @@ export async function fetchFeedicoCoupons(body: { page: number; pageSize: number
 
 // ── Normalization (pure) ─────────────────────────────────────────────────
 
-export type FeedicoBrand = { id: string; slug: string; name: string; officialDomain: string; officialStoreUrl?: string | null };
+export type FeedicoBrand = { id: string | null; slug: string; name: string; officialDomain: string; officialStoreUrl?: string | null };
 
 /** Parses a Feedico timestamp ("2026-01-01T00:00:00.000Z" or "2026-01-01 00:00:00", UTC). Year ≥ 2100 is a "no end" placeholder → null. */
 export function feedicoDate(v: string | null): Date | null {
@@ -187,11 +187,6 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
       dropped.push({ id: r.id, reason: `stale: Feedico last confirmed it ${seen.toISOString().slice(0, 10)}, over ${config.feedico.maxFeedAgeDays()} days ago` });
       continue;
     }
-    const market = nonUsFeedMarket(r.merchantWebsiteUrl, [r.title, r.description].filter(Boolean).join(" "));
-    if (market) {
-      dropped.push({ id: r.id, reason: market });
-      continue;
-    }
     const expiresAt = feedicoDate(r.endsAt);
     const startsAt = feedicoDate(r.startsAt);
     const disc = statedDiscount([r.title, r.description].filter(Boolean).join(". "), code);
@@ -240,7 +235,7 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
 // ── State (request budget, per-brand freshness) ──────────────────────────
 
 type BrandState = { at: string; ok: boolean; codes?: number; error?: string };
-type FeedicoState = { month: string; requests: number; quotaExceeded?: boolean; brands: Record<string, BrandState> };
+type FeedicoState = { month: string; requests: number; quotaExceeded?: boolean; brands: Record<string, BrandState>; catalogAt?: string; catalogComplete?: boolean; recordCount?: number };
 
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);
 
@@ -312,6 +307,12 @@ export type FeedicoSyncResult = {
   invalidated: number;
   expired: number;
   remaining: number;
+  /** Catalogue read: Feedico's total coded coupons, pages read, whether every page was read, rows read, merchants. */
+  recordCount?: number;
+  pages?: number;
+  complete?: boolean;
+  fetchedRows?: number;
+  merchants?: number;
   /** Brands whose request preflight refused (duplicate trigger, invalid parameters, database not ready): not called. */
   brandsSkipped?: number;
   /** Stored Feedico codes deactivated because Feedico's latest confirmation is older than 14 days. */
@@ -338,6 +339,35 @@ export async function runFeedicoSync(trigger: string, opts: FeedicoSyncOptions =
   return result;
 }
 
+/** "Banggood CJ Affiliate Program" → "Banggood": the merchant's name without the network/programme suffix. */
+export function merchantName(brandName: string): string {
+  const cleaned = brandName
+    .replace(/\s*[-–|(]?\s*(?:cj|impact|awin|rakuten|shareasale|admitad|partnerize|flexoffers|pepperjam|webgains|tradedoubler)?\s*(?:affiliate|partner)?\s*program(?:me)?\)?\s*$/i, "")
+    .replace(/\s+(?:affiliates?|partners?)$/i, "")
+    .trim();
+  return (cleaned || brandName).slice(0, 120);
+}
+
+const domainOf = (url: string | null): string | null => {
+  if (!url) return null;
+  try {
+    return registrableDomain(new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.toLowerCase().replace(/^www\./, ""));
+  } catch {
+    return null;
+  }
+};
+
+/** A stable slug for a merchant that has no brand in the registry: its domain. */
+export const merchantSlug = (domain: string) => `m-${domain.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+
+/**
+ * The weekly sync: reads the WHOLE Feedico catalogue of coded coupons (every merchant), page by page —
+ * one guarded request per page, no retry — and stores every valid, current code. A merchant whose
+ * website is a registry brand's domain is stored under that brand (shown on its review pages too);
+ * any other merchant under its own name. Rows without a merchant website, codes that are not codes,
+ * expired or not-yet-started codes, and rows Feedico has not confirmed within 14 days are not stored.
+ * After a COMPLETE read, a stored Feedico code that is no longer listed is deactivated (INVALID).
+ */
 async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: Date }): Promise<FeedicoSyncResult> {
   const now = opts.now;
   const deadline = Date.now() + (opts.deadlineMs ?? 240_000);
@@ -351,47 +381,41 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   base.requestsThisMonth = state.requests;
   if (state.quotaExceeded) return { ...base, status: "BUDGET_EXHAUSTED", reason: `Feedico reported its monthly quota exceeded for ${state.month}; the next sync runs next month` };
   if (state.requests >= budget) return { ...base, status: "BUDGET_EXHAUSTED", reason: `${state.requests} of ${budget} Feedico requests used in ${state.month} (FEEDICO_MONTHLY_REQUEST_BUDGET)` };
+  // A re-run within FEEDICO_MIN_REFETCH_HOURS after a complete read is a no-op.
+  if (!opts.force && state.catalogAt && state.catalogComplete && now.getTime() - Date.parse(state.catalogAt) < config.feedico.minRefetchHours() * 3_600_000) {
+    return { ...base, status: "NOT_DUE", reason: `The Feedico catalogue was read within the last ${config.feedico.minRefetchHours()} hours` };
+  }
 
   await ensureBrandsSeeded();
-  const brands = await db.commerceBrand.findMany({ where: { enabled: true }, orderBy: [{ priority: "desc" }, { name: "asc" }], select: { id: true, slug: true, name: true, officialDomain: true, officialStoreUrl: true } });
-  const refetchMs = config.feedico.minRefetchHours() * 3_600_000;
-  // Due: every brand not fetched successfully within the last 12 h (never fetched and failed first).
-  const due = brands
-    .filter((b) => {
-      const st = state.brands[b.slug];
-      return opts.force || !st || !st.ok || now.getTime() - Date.parse(st.at) >= refetchMs;
-    })
-    .sort((a, b) => (Date.parse(state.brands[a.slug]?.at ?? "") || 0) - (Date.parse(state.brands[b.slug]?.at ?? "") || 0));
-  if (!due.length) return { ...base, status: "NOT_DUE", reason: `Every brand was fetched within the last ${config.feedico.minRefetchHours()} hours` };
+  const brands = await db.commerceBrand.findMany({ where: { enabled: true }, select: { id: true, slug: true, name: true, officialDomain: true, officialStoreUrl: true } });
+  const brandByDomain = new Map<string, (typeof brands)[number]>();
+  for (const b of brands) for (const d of officialDomainsOf({ name: b.name, officialDomain: b.officialDomain, officialStoreUrl: b.officialStoreUrl })) if (!brandByDomain.has(d)) brandByDomain.set(d, b);
 
   const run = await db.commerceRun.create({ data: { purpose: COUPON_PURPOSE, sourceId: source.id, actorId: ACTOR, trigger, status: "RUNNING", startUrls: 0 } });
-  const limit = Math.min(opts.brandLimit ?? config.feedico.brandsPerRun(), due.length);
+  const out: FeedicoSyncResult = { ...base };
   const failures: Array<{ brand: string; error: string }> = [];
-  let stop: { status: string; reason: string } | null = null;
-  let consecutiveFailures = 0;
-  const out = { ...base };
+  const basis = state.catalogAt ?? "never";
 
-  /** Counts the attempt against the monthly budget before making it. */
   /**
-   * One guarded request (lib/ops/api-guard.ts): parameters, database, monthly budget and an idempotency
-   * marker per (brand, page, previous fetch) are checked first; the attempt is counted before it is made;
-   * no retry. A duplicate trigger for the same brand and page finds the marker and makes no request.
+   * One guarded request per catalogue page (lib/ops/api-guard.ts): parameters, database, monthly budget
+   * and an idempotency marker per (page, previous read) are checked first; the attempt is counted before
+   * it is made; no retry. A duplicate trigger finds the marker and makes no request.
    */
-  const request = async (body: { page: number; pageSize: number; firmName: string }, brandSlug: string) => {
+  const request = async (page: number) => {
     const guarded = await guardedApiCall({
       api: "feedico",
-      unit: `catalog:${brandSlug}:page${body.page}`,
-      idempotencyBasis: state.brands[brandSlug]?.at ?? "never",
+      unit: `catalog:page${page}`,
+      idempotencyBasis: basis,
       markerTtlMs: 7 * 86_400_000,
       trigger,
       config: [() => (feedicoConfigured() ? null : { code: "FEEDICO_NOT_CONFIGURED", reason: "FEEDICO_API_KEY not configured" })],
-      params: () => (body.firmName.trim() && body.page >= 1 && body.page <= config.feedico.maxPagesPerBrand() && body.pageSize >= 1 && body.pageSize <= 200 ? null : { code: "INVALID_PARAMS", reason: `bad request ${JSON.stringify({ page: body.page, pageSize: body.pageSize })}` }),
+      params: () => (page >= 1 && page <= config.feedico.maxCatalogPages() ? null : { code: "INVALID_PARAMS", reason: `page ${page} outside 1–${config.feedico.maxCatalogPages()}` }),
       budget: [() => (state.requests >= budget ? { code: "QUOTA_EXCEEDED", reason: `request budget ${budget} for ${state.month} reached` } : null)],
       call: async () => {
         state.requests++;
         out.requests++;
         await writeState(state);
-        return fetchFeedicoCoupons(body);
+        return fetchFeedicoCoupons({ page, pageSize: PAGE_SIZE });
       },
     });
     if (guarded.status === "SKIPPED") return { ok: false as const, error: { kind: guarded.code === "QUOTA_EXCEEDED" ? ("QUOTA_EXCEEDED" as const) : ("SKIPPED" as const), status: 0, message: `${guarded.code}: ${guarded.reason}` }, local: true };
@@ -399,90 +423,126 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
     return { ...guarded.value, local: false };
   };
 
-  for (const brand of due.slice(0, limit)) {
+  // ── Read the catalogue ──
+  const pages: Array<{ page: number; rows: FeedicoCouponRow[]; rawId: string }> = [];
+  let recordCount = 0;
+  let complete = false;
+  let error: FeedicoFetchError | null = null;
+  for (let page = 1; page <= config.feedico.maxCatalogPages(); page++) {
     if (Date.now() > deadline) break;
-    // Pages: 1, plus page 2.. only while this brand has more matches (bounded).
-    const rows: FeedicoCouponRow[] = [];
-    let error: FeedicoFetchError | null = null;
-    for (let page = 1; page <= config.feedico.maxPagesPerBrand(); page++) {
-      // Exactly one request per brand page: no retry (a failed brand is due again at the next sync).
-      const res = await request({ page, pageSize: PAGE_SIZE, firmName: brand.name }, brand.slug);
-      if (!res.ok) {
-        error = res.error;
-        if (res.error.kind === "QUOTA_EXCEEDED" && !res.local) state.quotaExceeded = true;
-        break;
-      }
-      rows.push(...res.page.coupons);
-      if (page * PAGE_SIZE >= res.page.recordCount || res.page.coupons.length < PAGE_SIZE) break;
+    const res = await request(page);
+    if (!res.ok) {
+      error = res.error;
+      if (res.error.kind === "QUOTA_EXCEEDED" && !res.local) state.quotaExceeded = true;
+      break;
     }
-
-    if (error?.kind === "SKIPPED") {
-      // Preflight refused the request (duplicate trigger, invalid parameters, database not ready):
-      // nothing was called and nothing changes for this brand.
-      out.brandsSkipped = (out.brandsSkipped ?? 0) + 1;
-      failures.push({ brand: brand.slug, error: error.message });
-      continue;
-    }
-    if (error) {
-      out.brandsFailed++;
-      consecutiveFailures++;
-      failures.push({ brand: brand.slug, error: `${error.kind}: ${error.message}` });
-      state.brands[brand.slug] = { at: now.toISOString(), ok: false, error: `${error.kind}: ${error.message}`.slice(0, 200) };
-      await writeState(state);
-      if (error.kind === "AUTH_FAILED") stop = { status: "AUTH_FAILED", reason: error.message };
-      else if (error.kind === "QUOTA_EXCEEDED") stop = { status: "BUDGET_EXHAUSTED", reason: error.message };
-      else if (consecutiveFailures >= 3) stop = { status: "FAILED", reason: `Feedico failed for 3 brands in a row (last: ${error.message})` };
-      if (stop) break;
-      continue;
-    }
-    consecutiveFailures = 0;
-
-    // A successful fetch: store exactly what came back for this brand, then the coupons.
-    const sourceUrl = feedicoSourceUrl(brand);
-    const n = normalizeFeedicoRows(rows, brand, now);
-    const matchedRows = rows.filter((r) => n.coupons.some((c) => c.code === r.code.trim().toUpperCase()) || n.dropped.some((d) => d.id === r.id));
-    const payload = { provider: "feedico", endpoint: "POST /api/v1/catalog/coupons", firmName: brand.name, fetchedAt: now.toISOString(), returned: rows.length, matched: n.matched, rows: matchedRows };
+    recordCount = res.page.recordCount;
+    const url = `${config.feedico.baseUrl()}/api/v1/catalog/coupons?page=${page}`;
+    const payload = { provider: "feedico", endpoint: "POST /api/v1/catalog/coupons", page, pageSize: PAGE_SIZE, recordCount, fetchedAt: now.toISOString(), rows: res.page.coupons };
     const raw = await db.commerceRawRecord.upsert({
-      where: { runId_url: { runId: run.id, url: sourceUrl } },
-      create: { runId: run.id, url: sourceUrl, purpose: COUPON_PURPOSE, payload: payload as Prisma.InputJsonValue, contentHash: sha256(JSON.stringify(matchedRows)), fetchedAt: now },
+      where: { runId_url: { runId: run.id, url } },
+      create: { runId: run.id, url, purpose: COUPON_PURPOSE, payload: payload as Prisma.InputJsonValue, contentHash: sha256(JSON.stringify(res.page.coupons)), fetchedAt: now },
       update: {},
     });
-    const up = await upsertCoupons({ brandId: brand.id, coupons: n.coupons, observedAt: now, rawIds: { [sourceUrl]: raw.id }, now });
-    const gone = await recordDisappearances({ merchant: brand.name, sourceUrl, presentCodes: n.coupons.map((c) => c.code), now });
+    pages.push({ page, rows: res.page.coupons, rawId: raw.id });
+    if (page * PAGE_SIZE >= recordCount || res.page.coupons.length < PAGE_SIZE) {
+      complete = true;
+      break;
+    }
+  }
+  if (error) failures.push({ brand: "catalogue", error: `${error.kind}: ${error.message}` });
+
+  // ── Store every merchant's codes (only what was read; nothing invented) ──
+  const groups = new Map<string, { brand: FeedicoBrand; rows: FeedicoCouponRow[] }>();
+  // Each code is stored with the raw page it was read from (the 14-day sweep reads its confirmation date there).
+  const pageOf = new Map<string, { rawId: string; seen: number }>();
+  let fetchedRows = 0;
+  for (const p of pages) {
+    for (const r of p.rows) {
+      fetchedRows++;
+      const domain = domainOf(r.merchantWebsiteUrl);
+      if (!domain) {
+        out.dropped++;
+        continue;
+      }
+      const reg = brandByDomain.get(domain);
+      const brand: FeedicoBrand = reg ? { id: reg.id, slug: reg.slug, name: reg.name, officialDomain: reg.officialDomain, officialStoreUrl: reg.officialStoreUrl } : { id: null, slug: merchantSlug(domain), name: merchantName(r.brandName), officialDomain: domain };
+      const g = groups.get(domain) ?? { brand, rows: [] };
+      g.rows.push(r);
+      groups.set(domain, g);
+      const key = `${domain}|${r.code.trim().toUpperCase()}`;
+      const seen = feedicoDate(r.fetchedAt)?.getTime() ?? 0;
+      const prev = pageOf.get(key);
+      if (!prev || seen > prev.seen) pageOf.set(key, { rawId: p.rawId, seen });
+    }
+  }
+  const listed = new Set<string>();
+  for (const [domain, { brand, rows }] of groups) {
+    const n = normalizeFeedicoRows(rows, brand, now);
+    out.dropped += n.dropped.length;
+    if (!n.coupons.length) continue;
+    const sourceUrl = feedicoSourceUrl(brand);
+    // One upsert per raw page, so every code points at the page that listed it.
+    const byRaw = new Map<string, NormalizedCoupon[]>();
+    for (const c of n.coupons) {
+      const rawId = pageOf.get(`${domain}|${c.code}`)?.rawId ?? pages[0]?.rawId ?? "";
+      byRaw.set(rawId, [...(byRaw.get(rawId) ?? []), c]);
+    }
+    for (const [rawId, coupons] of byRaw) {
+      const up = await upsertCoupons({ brandId: brand.id, coupons, observedAt: now, rawIds: rawId ? { [sourceUrl]: rawId } : {}, now });
+      out.created += up.created;
+      out.changed += up.changed;
+    }
     out.brandsChecked++;
     out.coupons += n.coupons.length;
-    out.created += up.created;
-    out.changed += up.changed + gone.invalid;
-    out.dropped += n.dropped.length;
-    out.invalidated += gone.invalid;
-    state.brands[brand.slug] = { at: now.toISOString(), ok: true, codes: n.coupons.length };
-    await writeState(state);
+    for (const c of n.coupons) listed.add(`${c.merchant}\u0000${c.code}\u0000${c.sourceUrl}`);
   }
 
-  out.expired = await markExpiredCoupons(now);
-  out.remaining = Math.max(0, due.length - out.brandsChecked - out.brandsFailed);
-  out.requestsThisMonth = state.requests;
-  if (failures.length) out.failures = failures.slice(0, 20);
-  if (stop) {
-    out.status = stop.status;
-    out.reason = stop.reason;
-  } else if (out.brandsFailed && !out.brandsChecked) {
-    out.status = "FAILED";
-    out.reason = failures[0]?.error;
+  // ── A complete read: codes Feedico no longer lists are deactivated (never deleted) ──
+  if (complete && !error) {
+    const stale = await db.commerceCoupon.findMany({ where: { sourceUrl: { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons?` }, status: { notIn: ["INVALID", "EXPIRED"] } }, select: { id: true, merchant: true, code: true, sourceUrl: true, status: true } });
+    for (const c of stale) {
+      if (listed.has(`${c.merchant}\u0000${c.code}\u0000${c.sourceUrl}`)) continue;
+      const evidence = `No longer listed in the Feedico catalogue (complete read of ${recordCount} codes at ${now.toISOString()})`;
+      await db.commerceCoupon.update({ where: { id: c.id }, data: { status: "INVALID", verificationEvidence: evidence } });
+      await commerceAudit("COUPON_INVALIDATED", "commerce_coupon", c.id, { before: { status: c.status }, after: { status: "INVALID" }, metadata: { code: c.code, evidence } });
+      out.invalidated++;
+    }
   }
+  out.changed += out.invalidated;
+  out.expired = await markExpiredCoupons(now);
+  out.fetchedRows = fetchedRows;
+  out.merchants = groups.size;
+  out.recordCount = recordCount;
+  out.pages = pages.length;
+  out.complete = complete;
+  out.requestsThisMonth = state.requests;
+  if (failures.length) out.failures = failures;
+  if (error) {
+    out.brandsFailed = 1;
+    out.status = error.kind === "AUTH_FAILED" ? "AUTH_FAILED" : error.kind === "QUOTA_EXCEEDED" ? "BUDGET_EXHAUSTED" : error.kind === "SKIPPED" ? "SKIPPED" : "FAILED";
+    out.reason = error.message;
+  }
+  if (!error) {
+    state.catalogAt = now.toISOString();
+    state.catalogComplete = complete;
+    state.recordCount = recordCount;
+  }
+  await writeState(state);
+
   const failed = out.status !== "OK";
   await db.commerceRun.update({
     where: { id: run.id },
-    data: { status: failed ? "FAILED" : "COLLECTED", finishedAt: new Date(), collectedAt: failed ? null : new Date(), startUrls: out.brandsChecked + out.brandsFailed, pagesProcessed: out.requests, extracted: out.coupons + out.dropped, accepted: out.coupons, rejected: out.dropped, errors: failures.length ? (failures.slice(0, 50) as Prisma.InputJsonValue) : undefined },
+    data: { status: failed ? "FAILED" : "COLLECTED", finishedAt: new Date(), collectedAt: failed ? null : new Date(), startUrls: out.brandsChecked, pagesProcessed: out.requests, extracted: fetchedRows, accepted: out.coupons, rejected: out.dropped, errors: failures.length ? (failures as Prisma.InputJsonValue) : undefined },
   });
   await db.commerceSource.update({
     where: { id: source.id },
     data: failed
       ? { crawlStatus: out.status, consecutiveFailures: { increment: 1 }, lastError: (out.reason ?? "").slice(0, 300), lastCrawlAt: now }
-      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: out.brandsFailed ? `${out.brandsFailed} brand fetch(es) failed; retried next run` : null, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 7 * 86_400_000) },
+      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: complete ? null : `catalogue read stopped at page ${pages.length} of ${Math.ceil(recordCount / PAGE_SIZE)} (FEEDICO_MAX_CATALOG_PAGES or time limit)`, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 7 * 86_400_000) },
   });
-  await commerceAudit(failed ? "COUPON_FEED_FAILED" : "COUPON_FEED_SYNCED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, provider: "feedico", target: FEEDICO_SOURCE_SLUG, status: out.status, reason: out.reason, brands: out.brandsChecked, failed: out.brandsFailed, requests: out.requests, requestsThisMonth: state.requests, coupons: out.coupons, created: out.created, invalidated: out.invalidated } });
-  log.info("feedico coupon sync", { stage: "COMMERCE", status: out.status, brands: out.brandsChecked, failed: out.brandsFailed, requests: out.requests, month: state.month, used: state.requests, budget, coupons: out.coupons });
+  await commerceAudit(failed ? "COUPON_FEED_FAILED" : "COUPON_FEED_SYNCED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, provider: "feedico", status: out.status, reason: out.reason, recordCount, pages: pages.length, complete, fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, requestsThisMonth: state.requests } });
+  log.info("feedico coupon sync", { stage: "COMMERCE", status: out.status, recordCount, pages: pages.length, complete, fetched: fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, month: state.month, used: state.requests, budget });
   return out;
 }
 
@@ -515,7 +575,7 @@ export async function deactivateStaleFeedicoCoupons(now = new Date()): Promise<n
   const cutoff = now.getTime() - maxDays * DAY_MS;
   const rows = await db.commerceCoupon.findMany({
     where: { sourceUrl: { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons` }, status: { notIn: ["INVALID", "EXPIRED"] } },
-    select: { id: true, code: true, status: true, sourceUrl: true, sourceRawId: true, observedAt: true, merchantUrl: true, title: true, description: true, discount: true },
+    select: { id: true, code: true, status: true, sourceUrl: true, sourceRawId: true, observedAt: true },
   });
   if (!rows.length) return 0;
   const rawIds = [...new Set(rows.map((r) => r.sourceRawId).filter((x): x is string => Boolean(x)))];
@@ -525,9 +585,8 @@ export async function deactivateStaleFeedicoCoupons(now = new Date()): Promise<n
   let deactivated = 0;
   for (const c of rows) {
     const at = c.sourceRawId ? confirmedAt(payloadOf.get(c.sourceRawId), c.code) : null;
-    const market = nonUsFeedMarket(c.merchantUrl, [c.title, c.description, c.discount].filter(Boolean).join(" "));
-    if (at && at.getTime() >= cutoff && !market) continue;
-    const evidence = market ? `Not a US-market offer: ${market} (checked ${now.toISOString()})` : at ? `Feedico last confirmed it on ${at.toISOString().slice(0, 10)}, more than ${maxDays} days ago (checked ${now.toISOString()})` : `No Feedico confirmation date on record for this code; deactivated by the ${maxDays}-day rule (checked ${now.toISOString()})`;
+    if (at && at.getTime() >= cutoff) continue;
+    const evidence = at ? `Feedico last confirmed it on ${at.toISOString().slice(0, 10)}, more than ${maxDays} days ago (checked ${now.toISOString()})` : `No Feedico confirmation date on record for this code; deactivated by the ${maxDays}-day rule (checked ${now.toISOString()})`;
     await db.commerceCoupon.update({ where: { id: c.id }, data: { status: "INVALID", verificationEvidence: evidence } });
     await commerceAudit("COUPON_INVALIDATED", "commerce_coupon", c.id, { before: { status: c.status }, after: { status: "INVALID" }, metadata: { code: c.code, evidence, rule: `feedico-${maxDays}-day-freshness` } });
     events.push({ entityType: "coupon", entityId: c.id, kind: "COUPON", result: "INVALID", reason: evidence, sourceUrl: c.sourceUrl, details: { code: c.code, previous: c.status, changed: true, check: "FEED_FRESHNESS" }, checkedAt: now });

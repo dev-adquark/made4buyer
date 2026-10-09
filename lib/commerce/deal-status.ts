@@ -469,32 +469,6 @@ export function isFeedCoupon(sourceUrl: string | null | undefined): boolean {
   return Boolean(sourceUrl?.startsWith(`${feedCouponPrefix()}?`));
 }
 
-/** Country/region subdomains of non-US storefronts (uk.brand.com, ca.brand.com, eu.brand.com …). */
-const NON_US_HOST_LABEL = /^(uk|gb|ca|au|nz|ie|de|fr|es|it|nl|be|at|ch|se|dk|no|fi|pl|pt|cz|eu|europe|jp|kr|cn|hk|tw|sg|my|ph|th|id|in|ae|sa|za|mx|br|ar|cl|co|intl|global)$/i;
-/** A path locale that is not US/English: /uk/, /en-gb/, /de-de/, /fr/ … */
-const NON_US_PATH = /^\/(?!us\/|en\/|en-us\/|en_us\/)([a-z]{2}(?:[-_][a-z]{2})?)\//i;
-/** Currency other than USD stated in the offer text. */
-const NON_USD_TEXT = /[£€¥₹]|\b(?:GBP|EUR|CAD|AUD|NZD|JPY|INR|CHF|SEK|DKK|NOK|PLN|MXN|BRL|AED|SGD|HKD|C\$|A\$)\b/;
-
-/**
- * Why a feed code is not for the US market (null = it is): the merchant URL is a country storefront
- * (subdomain or path locale) or the offer states a non-USD currency. The site lists US offers only.
- */
-export function nonUsFeedMarket(merchantUrl: string | null | undefined, text: string | null | undefined): string | null {
-  if (merchantUrl) {
-    try {
-      const u = new URL(/^https?:\/\//i.test(merchantUrl) ? merchantUrl : `https://${merchantUrl}`);
-      const label = u.hostname.toLowerCase().replace(/^www\./, "").split(".")[0];
-      if (u.hostname.split(".").length > 2 && NON_US_HOST_LABEL.test(label)) return `non-US storefront (${u.hostname})`;
-      if (NON_US_PATH.test(`${u.pathname.replace(/\/?$/, "/")}`)) return `non-US storefront (${u.hostname}${u.pathname})`;
-    } catch {
-      /* unparsable: decided by the text */
-    }
-  }
-  const m = text?.match(NON_USD_TEXT);
-  return m ? `non-USD offer (${m[0]})` : null;
-}
-
 export function couponSourceTier(sourceUrl: string | null | undefined, brand: DealBrandInput, approved: readonly ApprovedCouponSource[] = []): CouponSourceTier | null {
   if (isFeedCoupon(sourceUrl)) return 5;
   const host = sourceUrl ? hostOf(sourceUrl) : null;

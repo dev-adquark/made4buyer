@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-import { verifiedCouponsForBrands } from "@/lib/commerce/coupons";
-import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, nonUsFeedMarket, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
+import { feedMerchantCoupons, verifiedCouponsForBrands } from "@/lib/commerce/coupons";
+import { classifyOffers, computeSaving, COUPON_TIER_LABEL, couponMaxAgeDays, couponSourceTier, onOfficialDomain, validUntilMs, type DealCandidate, type DealProductInput, type OfferDealVerdict, type OfficialReference } from "@/lib/commerce/deal-status";
 import { HIDDEN_LINK_STATUSES } from "@/lib/commerce/link-check";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
@@ -46,7 +46,7 @@ export const DEALS_TAG = "deals";
 export const DEALS_REVALIDATE_SECONDS = 300;
 export const DEAL_CURRENCY = "USD";
 export const MAX_PRICE_DROPS = 120;
-export const MAX_PROMO_CODES = 200;
+export const MAX_PROMO_CODES = 1000;
 export const MAX_CURRENT_PRICES = 60;
 
 export type PriceDrop = {
@@ -316,10 +316,15 @@ async function cardImagesFor(items: ClassifiedOffer[]): Promise<Map<string, Deal
 export async function loadPromoCodes(now = new Date()): Promise<PromoCode[]> {
   const brands = await db.commerceBrand.findMany({ where: { enabled: true }, select: { id: true, name: true, slug: true, categories: true, officialDomain: true, officialStoreUrl: true }, orderBy: [{ priority: "asc" }, { name: "asc" }] });
   // One query for every brand (a query per brand exhausted the connection pool with 100 brands); the rows are already public (publicCoupons).
-  const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, 20);
+  const byBrand = await verifiedCouponsForBrands(brands.map((b) => b.id), now, MAX_PROMO_CODES);
   const out: PromoCode[] = [];
   for (const b of brands) for (const c of byBrand.get(b.id) ?? []) {
     const code = toPromoCode(c, b);
+    if (code) out.push(code);
+  }
+  // Every other merchant in the Feedico catalogue (no brand in the registry).
+  for (const c of await feedMerchantCoupons(now).catch(() => [])) {
+    const code = toPromoCode(c, c.merchantBrand);
     if (code) out.push(code);
   }
   return out.sort((a, b) => Number(Boolean(a.viaFeed)) - Number(Boolean(b.viaFeed)) || Date.parse(b.checkedAt ?? "0") - Date.parse(a.checkedAt ?? "0")).slice(0, MAX_PROMO_CODES);
@@ -335,8 +340,6 @@ export function toPromoCode(c: PromoRow, b: PromoBrand): PromoCode | null {
   const tier = couponSourceTier(c.sourceUrl, b);
   const feed = tier === 5;
   if (!brandName || !code || (tier !== 1 && tier !== 2 && !feed)) return null;
-  // The site lists US offers: a feed code for another country's storefront or currency is not shown.
-  if (feed && nonUsFeedMarket(c.merchantUrl, [c.title, c.description, c.discount].filter(Boolean).join(" "))) return null;
   // A feed code's stored source is the Feedico API: never shown or linked; "View offer" goes to the brand's own website.
   const sourceUrl = feed ? null : displayUrl(c.sourceUrl);
   const target = feed ? displayUrl(c.merchantUrl ?? null) : sourceUrl;

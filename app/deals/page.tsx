@@ -19,8 +19,8 @@ import "./deals.css";
  * Deals, in three sections, every item verified (lib/public/deals.ts; the rules live in
  * lib/commerce/deal-status.ts):
  *   - Verified price drops: the page states a current and a higher previous price, checked within 48 h.
- *   - Latest coupons: codes on the brand's own site verified within the last 7 days, and codes the
- *     Feedico affiliate feed listed within the last 14 days (labelled "Via Feedico").
+ *   - All coupons: every current code of every merchant in the Feedico affiliate feed (labelled "Via
+ *     Feedico"), and codes on brands' own sites verified within the last 7 days.
  *   - Recently verified: current prices checked within 48 h whose page states no previous price
  *     (labelled as prices, never as deals).
  * Cached (ISR, 5 minutes; the data is tagged "deals" so the commerce engine refreshes it on demand).
@@ -138,8 +138,8 @@ export default async function Deals() {
 
           <section id="coupons" className="section deals-section" aria-labelledby="codes-title" data-deal-section="">
             <div className="wrap">
-              <SectionHeader id="codes-title" label={`${codes.length} current`} title="Latest coupons">
-                Codes published by the brand on its own site and verified there within the last {windowDays} days (marked Verified), and codes listed by the Feedico affiliate feed within the last 14 days (marked Via Feedico, not checked on the brand’s site). All started and not expired. The offer, terms and expiry are quoted exactly as stated, and left out when none is stated.
+              <SectionHeader id="codes-title" label={`${codes.length} coupons`} title="All coupons">
+                Every current promo code from the Feedico affiliate feed, for every merchant it lists (marked Via Feedico, not checked on the merchant’s own site), plus codes published on brands’ own sites and verified there within the last {windowDays} days (marked Verified). Expired codes and codes that have not started are not listed. Offers, terms and dates are quoted exactly as listed, and left out when none is given.
               </SectionHeader>
               {codes.length ? <PromoCodeGrid codes={codes} /> : <p className="deals-empty">No current coupon: none was verified on a brand’s own site in the last {windowDays} days or listed by the Feedico feed in the last 14 days. Older codes are not listed.</p>}
               <p className="deals-empty" data-deal-empty="" hidden>

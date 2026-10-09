@@ -28,7 +28,7 @@ test.afterAll(async () => {
 });
 
 const drops = (page: Page) => page.getByRole("region", { name: "Verified price drops" });
-const codes = (page: Page) => page.getByRole("region", { name: "Latest coupons" });
+const codes = (page: Page) => page.getByRole("region", { name: "All coupons" });
 const viewDeal = (scope: Locator | Page) => scope.getByRole("link", { name: /^View deal\b/ });
 const codeLinkOf = (scope: Locator | Page) => scope.getByRole("link", { name: /^View offer\b/ });
 const copyButton = (scope: Locator | Page) => scope.getByRole("button", { name: /^Cop(y|ied)\b/ });

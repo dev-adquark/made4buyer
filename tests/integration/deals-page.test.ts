@@ -23,7 +23,7 @@ const { default: DealsPage, generateMetadata } = await import("@/app/deals/page"
 
 /**
  * /deals markup, prerendered like tests/integration/public-integrity.test.ts: the three sections
- * ("Verified price drops", "Latest coupons", "Recently verified") with their jump links and
+ * ("Verified price drops", "All coupons", "Recently verified") with their jump links and
  * counts, the filter form and the data-* attributes it filters on, and each card's content — and
  * nothing that is not public (an 8-day-old code, a stale or broken offer).
  */
@@ -98,7 +98,7 @@ async function seedAll() {
 }
 
 describe("/deals: three sections and the filters", () => {
-  it("renders Verified price drops, Latest coupons and Recently verified, each with its item", async () => {
+  it("renders Verified price drops, All coupons and Recently verified, each with its item", async () => {
     await seedAll();
     const markup = await html(DealsPage());
     const text = visibleText(markup);
@@ -107,7 +107,7 @@ describe("/deals: three sections and the filters", () => {
     expect(markup).toMatch(/<section id="drops"[^>]*aria-labelledby="drops-title"/);
     expect(markup).toMatch(/<h2 id="drops-title"[^>]*>Verified price drops<\/h2>/);
     expect(markup).toMatch(/<section id="coupons"[^>]*aria-labelledby="codes-title"/);
-    expect(markup).toMatch(/<h2 id="codes-title"[^>]*>Latest coupons<\/h2>/);
+    expect(markup).toMatch(/<h2 id="codes-title"[^>]*>All coupons<\/h2>/);
     expect(markup).toMatch(/<section id="recent"[^>]*aria-labelledby="prices-title"/);
     expect(markup).toMatch(/<h2 id="prices-title"[^>]*>Recently verified<\/h2>/);
     expect(text).toContain("Price drops (1)");

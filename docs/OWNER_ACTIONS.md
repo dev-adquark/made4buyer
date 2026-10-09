@@ -161,18 +161,22 @@ in the registry only (matched by the merchant's exact website domain). Code: `li
 3. Check it (one request, prints counts only): `FEEDICO_API_KEY=… npx tsx scripts/verify-feedico.ts`,
    or Admin → Jobs → `feedico-coupons` → Run now.
 
-**What it does.** The `feedico-coupons` job runs **once a week** (Friday 11:30 AM IST = 06:00 UTC; on the Vercel Hobby plan it may start any time within that hour) and fetches every
-enabled brand: one request per brand (a second page only above 200 codes), ≈ 100 requests/week, ≈ 430
-/month. It stops at `FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429, well inside the Free
-plan's 1,000. A re-run within 12 hours only retries brands whose fetch failed.
+**What it does.** The `feedico-coupons` job runs **once a week** (Friday 11:30 AM IST = 06:00 UTC) and
+reads Feedico's **whole catalogue of coded coupons — every merchant** — page by page (200 codes per
+page, one request each, up to `FEEDICO_MAX_CATALOG_PAGES` = 50 pages = 10,000 codes). A merchant whose
+website is a registry brand's domain is stored under that brand (its codes also show on that brand's
+review pages); every other merchant under its own name. It stops at `FEEDICO_MONTHLY_REQUEST_BUDGET`
+(600) and on Feedico's own 429. A re-run within 12 hours after a complete read makes no request. After
+a complete read, a stored code Feedico no longer lists is deactivated.
 
 **14-day freshness.** A code is accepted only when Feedico confirmed it (its `fetchedAt`) within the
 last 14 days; a row with no `fetchedAt` is rejected (age unknown). Every run deactivates (INVALID, never
 deleted) each stored Feedico code whose latest Feedico confirmation is older than 14 days, even when the
 fetch itself could not run. A code Feedico confirms again later is reactivated as a candidate.
 
-**What gets published.** Every current Feedico code is shown on the site (homepage coupons, /deals,
-/search, the brand's review pages), labelled **"Via Feedico"**, not "Verified": it is listed by an
+**What gets published.** Every current Feedico code of every merchant is shown on the site (/deals →
+"All coupons", homepage coupons, /search, a registry brand's review pages), any storefront or currency
+(owner decision 2026-10-09: no US-only filter), labelled **"Via Feedico"**, not "Verified": it is listed by an
 affiliate feed, not checked on the brand's own page (owner decision, 2026-10-09). Shown only while it is
 stored as a current candidate, listed in a sync within 14 days, started and unexpired; a code missing
 from two consecutive successful fetches becomes INVALID, a passed end date EXPIRED, disagreeing network

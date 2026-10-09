@@ -498,6 +498,27 @@ export async function verifiedCouponsFor(brand: { brandId?: string | null; merch
   return publicCoupons(rows, now).slice(0, take);
 }
 
+/**
+ * Public Feedico codes of merchants that have no brand in the registry (brandId null), in ONE query.
+ * Each row carries a merchant "brand" built from its own website (name, domain), which the public rule
+ * checks it against exactly like a registry brand.
+ */
+export async function feedMerchantCoupons(now = new Date(), take = 5000): Promise<Array<PublicCouponRow & { merchantBrand: { name: string; slug: string; categories: string[]; officialDomain: string; officialStoreUrl: null } }>> {
+  const rows = await loadCandidates({ brandId: null, sourceUrl: { startsWith: `${feedCouponPrefix()}?` } }, now, take);
+  const withBrand = rows.flatMap((r) => {
+    let domain: string | null = null;
+    try {
+      domain = r.merchantUrl ? new URL(r.merchantUrl).hostname.toLowerCase().replace(/^www\./, "") : null;
+    } catch {
+      domain = null;
+    }
+    if (!domain) return [];
+    const merchantBrand = { name: r.merchant, slug: `m-${domain.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`, categories: [] as string[], officialDomain: domain, officialStoreUrl: null };
+    return [{ ...r, brand: { ...merchantBrand, id: "" }, merchantBrand }];
+  });
+  return publicCoupons(withBrand, now) as typeof withBrand;
+}
+
 /** Public coupons for many brands in ONE query (at most `perBrand` each, newest verification first). */
 export async function verifiedCouponsForBrands(brandIds: string[], now = new Date(), perBrand = 6): Promise<Map<string, PublicCouponRow[]>> {
   const out = new Map<string, PublicCouponRow[]>();
