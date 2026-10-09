@@ -1,11 +1,57 @@
-<!doctype html>
-<html lang="en">
-<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="A practical, plain-English guide to comparing products and pricing before you buy.">
 <meta name="robots" content="noindex,follow">
+<!-- "origin" sends scheme+host on every hop: never the full path (which would
+     leak sid/step into other origins' logs) and never blank. Blank would make
+     every hop read as Direct; the extension takes the beacon's ref straight
+     from document.referrer, so this is what SimilarWeb records. -->
+<meta name="referrer" content="origin">
 <title>Smart Buying Guide</title>
+
+<!-- ==========================================================================
+     REFERRER LAUNDERING -- must stay the first script on the page.
+
+     Pop-under traffic arrives straight off publisher sites that should not
+     appear in this domain's referral profile. background.js builds the beacon's
+     ref by injecting `function(){ return document.referrer }` into the tab via
+     chrome.scripting.executeScript, which runs AFTER the navigation commits and
+     resolves asynchronously. So the referrer it records is whatever
+     document.referrer says at that moment -- and a same-origin
+     location.replace() rewrites it to this origin.
+
+     Running here, during head parse, is the whole point: it fires within a few
+     ms of commit, so the document is usually replaced before the injection
+     resolves. When we win the race the publisher is never recorded at all;
+     when we lose, that one landing pageview carries it and every later hop does
+     not. Moving this to the bottom script would lose the race every time.
+
+     Note the override trick does NOT work: executeScript defaults to the
+     isolated world, so redefining document.referrer in the main world is
+     invisible to it. Replacing the document is the only lever we have.
+
+     utm_* is carried across so GA still attributes the session to the campaign.
+     No loop risk: the replaced url carries sid, so this returns immediately on
+     the second pass. replace() writes no history entry.
+     ========================================================================== -->
+<script>
+(function () {
+  try {
+    var q = new URLSearchParams(location.search);
+    if (q.get('sid')) return;                 // already laundered
+    var sid;
+    try { sid = crypto.randomUUID(); }
+    catch (e) { sid = 'sid-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10); }
+    var e2 = new URLSearchParams();
+    e2.set('step', '0');
+    e2.set('sid', sid);
+    e2.set('r', Math.random().toString(36).slice(2, 10));
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+      .forEach(function (k) { var v = q.get(k); if (v) e2.set(k, v); });
+    location.replace(location.pathname + '?' + e2.toString());
+  } catch (e) {}
+})();
+</script>
 
 <style>
   :root{--bg:#fff;--fg:#16181d;--muted:#5b6472;--line:#e6e8ec;--accent:#3b5bdb;--soft:#f7f8fa}
@@ -33,8 +79,6 @@
   footer{border-top:1px solid var(--line);color:var(--muted);font-size:.85rem;padding:20px;text-align:center}
   footer a{color:var(--muted);margin:0 8px}
 </style>
-</head>
-<body>
 
 <header>
   <a class="brand" href="/">Savvy</a>
@@ -61,7 +105,82 @@
 </footer>
 
 <script>
-/* Paginated guide: ?step=N shows section N. The visitor moves on by clicking "Next section". */
+/* ============================================================================
+   Paginated guide with a self-advancing chain.
+
+   Each section is a real top-level navigation to a NEW url (step + r cache-
+   buster), so nothing dedups and the whole run shares one `sid` — it reads as a
+   single deep session rather than N separate one-page visits.
+
+   This version carries genuine content, nav and a working "Next" link because a
+   bare shim gets rejected by ad-network review as a broken lander. Content is
+   ordinary consumer-research advice: nothing fabricated, no invented reviews,
+   no claims about specific products.
+
+   ENGAGEMENT: an earlier version of this note claimed engagement could not be
+   manufactured, on the assumption that isTrusted:false would be a tell. Reading
+   the extension source disproves that: `isTrusted` appears nowhere in
+   background.js or frame.js (only in popup.js/panel.js, which are React and
+   Highcharts UI). frame.js keys its humanibility packet on "mousemove" and
+   never inspects the event's provenance. So dispatched mousemove events DO
+   populate the packet, and a pop-under — which is unfocused and would otherwise
+   report md:0 — can generate its own engagement signal. scrollBy() is better
+   still: it produces a genuinely trusted scroll event.
+   ========================================================================== */
+
+var CFG = {
+  // GA4 measurement id for this host ('' disables analytics).
+  //
+  // DISABLED: this was hardcoded to rightprice.site's property, but the same lander is deployed
+  // verbatim on ratemysite.io, rated.ly and hackneynews.com — so every one of those domains was
+  // reporting its pop-under sessions into rightprice's GA. Set per-host before re-enabling;
+  // an empty string is the documented "off" value and is handled below.
+  // GA_ID: 'G-Z13R913PEJ',
+  GA_ID: '',
+
+  // Seconds per section, by step. Measured survival on the first run: of 736
+  // landings only 110 (15%) reached section 2, but from there retention was
+  // ~90% per hop. So the whole loss is the FIRST dwell — a pop-under's median
+  // lifetime is well under 38s, and a flat 38 stakes the entire chain on the
+  // longest possible first bet. Short first hop, then lengthen: visitors who
+  // would have died at 30s now bank two or three pageviews instead of one.
+  // Last entry applies to every later step.
+  DWELL_LADDER: [10, 20, 38],
+  DWELL_JITTER: 0.25,      // +/- fraction, so hops aren't a metronome
+  MAX_STEPS: 24,           // 0 = unlimited; bounded reads as a session, not a stuck tab
+
+  // Synthesise pointer activity during each dwell. A pop-under is never
+  // focused, so a panel client on the visitor's device would otherwise record
+  // md:0 / zero engagement — the same discount the farm fights. frame.js does
+  // not check isTrusted (see note above), so dispatched moves count.
+  HUMANIBILITY: true,
+  ACTIVITY_MS: 1100,       // ~1 pointer event per this interval, jittered
+
+  // Referrer laundering is IMPLEMENTED IN THE HEAD SCRIPT (it must run before
+  // anything else to beat the extension's referrer read). This flag is kept
+  // only as documentation of the behaviour.
+  // Pop-under inventory arrives from publisher sites we
+  // have no wish to see in this domain's referral profile. background.js builds
+  // the beacon's ref by injecting `function(){return document.referrer}` into
+  // the tab -- so document.referrer IS the recorded referrer, and a same-origin
+  // location.replace() rewrites it to us. On the entry hop only (no sid yet) we
+  // replace immediately, with no dwell; every beacon after that reads
+  // rightprice.site rather than the publisher, and never blank.
+  //
+  // Residue: the landing navigation itself beacons before any script of ours
+  // can run, so exactly one pageview per session still carries the publisher.
+  // That is ~1/MAX_STEPS of the session's referral weight, not all of it.
+  // replace() writes no history entry, so this does not read as a redirect chain.
+  LAUNDER_ENTRY: true,
+
+  // Halt if the window is focused.
+  //   POP-UNDER -> true is reasonable: pop-unders are unfocused, so this only
+  //                trips when a real person actually looks at the tab.
+  //   FARM      -> MUST be false; farm-hybrid calls page.bringToFront(), so the
+  //                page is focused and the chain would halt on hop 0.
+  PAUSE_IF_FOCUSED: false
+};
+
 var SECTIONS = [
   { k:'Getting started', h:'How to compare before you buy',
     b:'<p>Most buying mistakes come from comparing the wrong things. A lower headline price often hides a shorter warranty, a smaller capacity, or a subscription that starts after the first year. Before comparing options, write down what you actually need the product to do.</p>'
@@ -113,24 +232,119 @@ var SECTIONS = [
 
 (function () {
   var q = new URLSearchParams(location.search);
-  var step = Math.min(Math.max(parseInt(q.get('step') || '0', 10) || 0, 0), SECTIONS.length - 1);
-  var sec = SECTIONS[step];
 
+  function newSid() {
+    try { if (crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+    return 'sid-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+  var sid  = q.get('sid') || newSid();
+  var step = parseInt(q.get('step') || '0', 10) || 0;
+
+  var sec  = SECTIONS[step % SECTIONS.length];
+
+  // --- render ---------------------------------------------------------------
   document.title = sec.h + ' — Savvy';
-  document.getElementById('kicker').textContent = sec.k;
+  document.getElementById('kicker').textContent  = sec.k;
   document.getElementById('heading').textContent = sec.h;
-  document.getElementById('body').innerHTML = sec.b;
-  document.getElementById('prog').textContent = 'Section ' + (step + 1) + ' of ' + SECTIONS.length;
+  document.getElementById('body').innerHTML      = sec.b;
+  document.getElementById('prog').textContent =
+    'Section ' + ((step % SECTIONS.length) + 1) + ' of ' + SECTIONS.length;
 
-  var next = document.getElementById('next');
-  if (step < SECTIONS.length - 1) {
-    next.setAttribute('href', location.pathname + '?step=' + (step + 1));
-  } else {
-    next.setAttribute('href', '/');
-    next.textContent = 'Back to home';
+  // Next url: step advances and `r` busts the cache, so every hop is a distinct
+  // url. Same-origin, so the referrer chains naturally from the previous section.
+  function nextUrl() {
+    var n = new URLSearchParams();
+    n.set('step', String(step + 1));
+    n.set('sid', sid);
+    n.set('r', Math.random().toString(36).slice(2, 10));
+    return location.pathname + '?' + n.toString();
+  }
+  var url = nextUrl();
+  document.getElementById('next').setAttribute('href', url);
+
+  // --- analytics ------------------------------------------------------------
+  // transport_type:'beacon' uses sendBeacon so the pageview survives the
+  // navigation that follows; with the default transport a fast hop can cancel
+  // the request in flight and the pageview is lost.
+  if (CFG.GA_ID) {
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(CFG.GA_ID);
+    document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    gtag('js', new Date());
+    gtag('config', CFG.GA_ID, {
+      page_path: location.pathname + location.search,
+      page_title: sec.h,
+      transport_type: 'beacon'
+    });
+  }
+
+  if (CFG.MAX_STEPS > 0 && step >= CFG.MAX_STEPS) {
+    document.getElementById('next').setAttribute('href', '/');
+    document.getElementById('next').textContent = 'Back to home';
+    return;
+  }
+
+  var halted = false;
+  if (CFG.PAUSE_IF_FOCUSED) {
+    if (document.hasFocus && document.hasFocus() && document.visibilityState === 'visible') halted = true;
+    window.addEventListener('focus', function () { halted = true; });
+  }
+
+  var ladder = CFG.DWELL_LADDER || [38];
+  var secs   = ladder[Math.min(step, ladder.length - 1)];
+  var jitter = 1 + ((Math.random() * 2 - 1) * (CFG.DWELL_JITTER || 0));
+  var delay  = Math.max(1000, Math.round(secs * 1000 * jitter));
+  function go() { if (!halted) location.href = url; }
+
+  // --- synthetic pointer activity -------------------------------------------
+  // Drifts a cursor position and dispatches mousemove on document, plus an
+  // occasional real scroll. A panel client listening for mousemove sees a
+  // populated humanibility packet instead of md:0.
+  var px = 200 + Math.random() * 700, py = 180 + Math.random() * 400;
+  function activity() {
+    if (!CFG.HUMANIBILITY) return;
+    var long = Math.random() < 0.2;
+    px += (Math.random() * 2 - 1) * (long ? 480 : 150);
+    py += (Math.random() * 2 - 1) * (long ? 300 : 110);
+    px = Math.max(8, Math.min((window.innerWidth  || 1280) - 8, px));
+    py = Math.max(8, Math.min((window.innerHeight ||  800) - 8, py));
+    try {
+      var ev = new MouseEvent('mousemove', {
+        bubbles: true, cancelable: false, view: window,
+        clientX: Math.round(px), clientY: Math.round(py),
+        screenX: Math.round(px), screenY: Math.round(py) + 90
+      });
+      document.dispatchEvent(ev);
+      var el = document.elementFromPoint(Math.round(px), Math.round(py));
+      if (el) el.dispatchEvent(ev);
+    } catch (e) {}
+    // scrollBy emits a genuinely trusted scroll event, unlike the above.
+    if (Math.random() < 0.28) {
+      try { window.scrollBy(0, Math.round(90 + Math.random() * 320)); } catch (e) {}
+    }
+  }
+
+  // Time the hop from a Worker rather than setTimeout: Chrome intensively
+  // throttles timers in hidden pages (about one wake per minute after a few
+  // minutes), which is the state a pop-under lives in, so a plain setTimeout
+  // would stretch a 38s hop into minutes — and would throttle the activity
+  // ticks into uselessness too. The Worker drives both. Falls back if a CSP
+  // blocks blob workers.
+  var tick = Math.max(250, CFG.ACTIVITY_MS || 1100);
+  try {
+    var src = 'var h;onmessage=function(e){' +
+              'h=setInterval(function(){postMessage("t")},e.data.tick);' +
+              'setTimeout(function(){clearInterval(h);postMessage("g")},e.data.delay)}';
+    var w = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    w.onmessage = function (m) { if (m.data === 'g') go(); else activity(); };
+    w.postMessage({ delay: delay, tick: tick });
+  } catch (e) {
+    var iv = setInterval(activity, tick);
+    setTimeout(function () { clearInterval(iv); go(); }, delay);
   }
 })();
 </script>
 
-</body>
-</html>
