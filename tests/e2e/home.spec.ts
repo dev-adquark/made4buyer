@@ -366,3 +366,16 @@ test("home: with nothing verified the deal and coupon rails are absent", async (
   const text = await page.locator("body").innerText();
   for (const gone of [FIX.valid.product, FIX.codes.verified, extraProduct(0).name, extraCode(0).code]) expect(text).not.toContain(gone);
 });
+
+test("home: unique title, meta description, Open Graph and a JSON-LD block in <head>", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveTitle(/Made4Buyers/);
+  await expect(page.locator('head meta[name="description"]')).toHaveAttribute("content", /.{40,}/);
+  for (const p of ["og:title", "og:description", "og:image"]) await expect(page.locator(`head meta[property="${p}"]`)).toHaveAttribute("content", /.+/);
+  const ld = await page.locator('head script[type="application/ld+json"]').allTextContents();
+  expect(ld.length).toBeGreaterThan(0);
+  const graph = (JSON.parse(ld[0]) as { "@graph": Array<{ "@type": string }> })["@graph"];
+  expect(graph.map((n) => n["@type"]).sort()).toEqual(["Organization", "WebSite"]);
+  // One WebSite block on the page (the head one), not a second copy in the body.
+  expect(await page.locator('body script[type="application/ld+json"]').count()).toBe(0);
+});

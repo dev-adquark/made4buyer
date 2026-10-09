@@ -6,7 +6,6 @@ import EmptyState from "@/components/empty-state";
 import HomeCouponCard from "@/components/home-coupon-card";
 import HomeDealCard from "@/components/home-deal-card";
 import HomeRail from "@/components/home-rail";
-import JsonLd from "@/components/json-ld";
 import ReviewCard, { FeatureStory } from "@/components/review-card";
 import SafeImg from "@/components/safe-img";
 import SearchCombobox from "@/components/search-combobox";
@@ -14,7 +13,6 @@ import SectionHeader from "@/components/section-header";
 import SponsoredSlot from "@/components/sponsored-slot";
 import Ticker, { type TickerItem } from "@/components/ticker";
 import TrustLabel from "@/components/trust-label";
-import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { dealImage, type DealImage } from "@/lib/images/deal-image";
 import { placeholderPath } from "@/lib/pipeline/images";
@@ -89,7 +87,6 @@ export default async function Home() {
   const railDrops = verified.drops.slice(0, RAIL_SIZE);
   const railCodes = verified.codes.slice(0, RAIL_SIZE);
   const dealImages = await dealImagesFor(railDrops.map((d) => d.id)).catch(() => new Map<string, DealImage>());
-  const site = config.siteUrl();
   const lead = reviews[0];
   const leadImage = lead ? await resolveCardImage(lead) : null;
   const heroDeal = deals[0];
@@ -112,7 +109,6 @@ export default async function Home() {
 
   return (
     <main className="home">
-      <JsonLd data={{ "@context": "https://schema.org", "@type": "WebSite", name: "Made4Buyers", url: site, potentialAction: { "@type": "SearchAction", target: `${site}/search?q={search_term_string}`, "query-input": "required name=search_term_string" } }} />
 
       {/* ── The statement ── */}
       <section className="tear-hero" aria-labelledby="hero-title">

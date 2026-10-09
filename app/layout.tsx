@@ -8,6 +8,7 @@ import SiteFooter from "@/components/site-footer";
 import SiteHeader from "@/components/site-header";
 import EditorialCursor from "@/components/editorial-cursor";
 import { CategoryNamesProvider } from "@/components/category-names";
+import JsonLd from "@/components/json-ld";
 import { config } from "@/lib/config";
 import { gscVerificationMetadata } from "@/lib/gsc";
 import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
@@ -51,9 +52,27 @@ const categories = CATEGORIES.map((c, i) => ({
 // Slug → name for client search UIs (keeps lib/taxonomy/definitions out of the client bundle).
 const categoryNames: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.slug, c.name]));
 
+/**
+ * Site-wide schema.org in <head> (crawlers and SEO checkers read it there): the WebSite with its
+ * search action, and the Organization that publishes it. Page-specific JSON-LD stays on its page.
+ */
+function siteJsonLd() {
+  const site = config.siteUrl();
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "Organization", "@id": `${site}/#organization`, name: "Made4Buyers", url: site, logo: `${site}/icon.svg` },
+      { "@type": "WebSite", "@id": `${site}/#website`, name: "Made4Buyers", url: site, publisher: { "@id": `${site}/#organization` }, inLanguage: "en", potentialAction: { "@type": "SearchAction", target: `${site}/search?q={search_term_string}`, "query-input": "required name=search_term_string" } },
+    ],
+  };
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${reading.variable} ${ui.variable} ${mono.variable}`}>
+      <head>
+        <JsonLd data={siteJsonLd()} />
+      </head>
       <body>
         <CategoryNamesProvider names={categoryNames}>
           <a className="skip-link" href="#main">
