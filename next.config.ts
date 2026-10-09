@@ -53,7 +53,12 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     // Legacy review URLs → canonical /review/{slug}.
-    return [{ source: "/reviews/:slug", destination: "/review/:slug", permanent: true }];
+    // Common legal-page URLs → the canonical /privacy and /terms.
+    const legal = [
+      ...["/privacy-policy", "/privacy-notice", "/legal/privacy", "/policies/privacy", "/policies/privacy-policy"].map((source) => ({ source, destination: "/privacy", permanent: true })),
+      ...["/terms-of-use", "/terms-of-service", "/terms-and-conditions", "/tos", "/legal/terms", "/policies/terms", "/policies/terms-of-service"].map((source) => ({ source, destination: "/terms", permanent: true })),
+    ];
+    return [{ source: "/reviews/:slug", destination: "/review/:slug", permanent: true }, ...legal];
   },
 };
 

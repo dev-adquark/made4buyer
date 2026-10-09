@@ -379,3 +379,21 @@ test("home: unique title, meta description, Open Graph and a JSON-LD block in <h
   // One WebSite block on the page (the head one), not a second copy in the body.
   expect(await page.locator('body script[type="application/ld+json"]').count()).toBe(0);
 });
+
+test("legal pages resolve, common legal URLs redirect to them, and an unknown path is a real 404", async ({ page, request }) => {
+  for (const [path, heading] of [["/privacy", "Privacy policy"], ["/terms", "Terms of use"]] as const) {
+    const res = await page.goto(path);
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
+  }
+  for (const [from, to] of [["/privacy-policy", "/privacy"], ["/terms-of-service", "/terms"], ["/terms-and-conditions", "/terms"]]) {
+    const r = await request.get(from, { maxRedirects: 0 });
+    expect(r.status(), from).toBe(308);
+    expect(r.headers().location, from).toBe(to);
+  }
+  await page.goto("/");
+  await expect(page.locator("footer").getByRole("link", { name: "Privacy policy" })).toHaveAttribute("href", "/privacy");
+  await expect(page.locator("footer").getByRole("link", { name: "Terms of use" })).toHaveAttribute("href", "/terms");
+  const missing = await request.get("/this-path-does-not-exist-xyz");
+  expect(missing.status()).toBe(404);
+});

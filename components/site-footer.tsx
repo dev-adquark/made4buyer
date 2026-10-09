@@ -61,8 +61,8 @@ export default async function SiteFooter({ categories: taxonomy }: { categories:
           <ul>
             <li><Link href="/about">About &amp; method</Link></li>
             <li><Link href="/contact">Contact</Link></li>
-            <li><Link href="/privacy">Privacy</Link></li>
-            <li><Link href="/terms">Terms</Link></li>
+            <li><Link href="/privacy">Privacy policy</Link></li>
+            <li><Link href="/terms">Terms of use</Link></li>
             <li><Link href="/disclosure">Affiliate disclosure</Link></li>
           </ul>
         </nav>
