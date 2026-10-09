@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 import { Anybody, IBM_Plex_Mono, Newsreader, Schibsted_Grotesk } from "next/font/google";
 import ExternalAnalytics from "@/components/external-analytics";
+import GoogleAnalytics from "@/components/google-analytics";
 import PageViewTracker from "@/components/page-view-tracker";
 import RevealProvider from "@/components/reveal-provider";
 import SiteFooter from "@/components/site-footer";
@@ -17,11 +18,11 @@ import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
 // on desktop and iOS, Roboto/Noto Serif on Android) instead of next/font's automatic Arial/Times
 // one, which assumes the default width and weight: with the condensed Anybody, bold Schibsted and
 // Plex Mono that reflowed the page on swap (review page CLS 0.28).
-const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", axes: ["wdth"], adjustFontFallback: false, fallback: ["M4B Display Fallback", "M4B Display Fallback Roboto", "Arial", "sans-serif"] });
-// Only the display face is preloaded (masthead wordmark and page titles). The reading face (ledes,
-// the LCP text on most pages) and the UI face are not: with display "swap" the LCP text paints at
-// once in its measured fallback, and every preload competes with the document, CSS and scripts on
-// the critical path (Lighthouse counts it into the LCP). The fallbacks keep the swap shift-free.
+const display = Anybody({ subsets: ["latin"], variable: "--font-anybody", display: "swap", preload: false, axes: ["wdth"], adjustFontFallback: false, fallback: ["M4B Display Fallback", "M4B Display Fallback Roboto", "Arial", "sans-serif"] });
+// No face is preloaded: with display "swap" every text paints at once in its measured fallback, and
+// each preload (the display face alone is 57 KB) competes with the document, CSS and scripts on the
+// critical path, which Lighthouse counts into the LCP (3.4 s → 3.2 s without it). The measured
+// fallbacks keep the swap shift-free.
 const reading = Newsreader({ subsets: ["latin"], variable: "--font-newsreader", display: "swap", style: ["normal", "italic"], preload: false, adjustFontFallback: false, fallback: ["M4B Read Fallback", "M4B Read Fallback Noto", "Georgia", "serif"] });
 const ui = Schibsted_Grotesk({ subsets: ["latin"], variable: "--font-schibsted", display: "swap", preload: false, adjustFontFallback: false, fallback: ["M4B UI Fallback", "M4B UI Fallback Roboto", "Arial", "sans-serif"] });
 const mono = IBM_Plex_Mono({ subsets: ["latin"], variable: "--font-plex-mono", display: "swap", weight: ["400", "500"], preload: false, adjustFontFallback: false, fallback: ["M4B Mono Fallback", "ui-monospace", "monospace"] });
@@ -82,6 +83,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PageViewTracker />
           <RevealProvider />
           <ExternalAnalytics />
+          <GoogleAnalytics />
           <EditorialCursor />
           <div id="main">{children}</div>
           <SiteFooter categories={categories} />

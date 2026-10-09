@@ -386,10 +386,13 @@ test("legal pages resolve, common legal URLs redirect to them, and an unknown pa
     expect(res?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
   }
-  for (const [from, to] of [["/privacy-policy", "/privacy"], ["/terms-of-service", "/terms"], ["/terms-and-conditions", "/terms"]]) {
+  // Common legal URLs serve the page directly (no redirect), canonical to /privacy and /terms.
+  for (const [from, heading, canonical] of [["/privacy-policy", "Privacy policy", "/privacy"], ["/terms-of-service", "Terms of use", "/terms"], ["/terms-and-conditions", "Terms of use", "/terms"]]) {
     const r = await request.get(from, { maxRedirects: 0 });
-    expect(r.status(), from).toBe(308);
-    expect(r.headers().location, from).toBe(to);
+    expect(r.status(), from).toBe(200);
+    const html = await r.text();
+    expect(html, from).toContain(`<h1>${heading}</h1>`);
+    expect(html, from).toMatch(new RegExp(`rel="canonical" href="[^"]*${canonical}"`));
   }
   await page.goto("/");
   await expect(page.locator("footer").getByRole("link", { name: "Privacy policy" })).toHaveAttribute("href", "/privacy");
