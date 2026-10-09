@@ -277,7 +277,16 @@ export default async function Home() {
               </HomeRail>
             )}
             {railCodes.length > 0 && (
-              <HomeRail id="home-coupons" label="Latest coupons" title={`Latest coupons (${verified.codes.length})`}>
+              <HomeRail
+                id="home-coupons"
+                label="Latest coupons"
+                title="Latest coupons"
+                action={
+                  <Link className="arrow-link" href="/coupons">
+                    All {verified.codes.length} coupons
+                  </Link>
+                }
+              >
                 {railCodes.map((c) => (
                   <li key={c.id}>
                     <HomeCouponCard c={c} />

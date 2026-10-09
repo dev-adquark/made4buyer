@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { feedicoDate, feedicoSourceUrl, normalizeFeedicoRows, parseFeedicoPage, type FeedicoCouponRow } from "@/lib/commerce/feedico";
-import { couponDealStatus, publicCoupons } from "@/lib/commerce/deal-status";
+import { couponDealStatus, nonUsFeedMarket, publicCoupons } from "@/lib/commerce/deal-status";
 import { toPromoCode } from "@/lib/public/deals";
 
 // SAMPLE rows shaped like POST /api/v1/catalog/coupons (feedico.io/openapi-customer.yaml v1.4).
@@ -68,11 +68,29 @@ describe("normalizeFeedicoRows", () => {
     expect(clash.coupons[0].conflict).toMatch(/disagree/);
   });
 
-  it("lists every storefront's codes (owner decision 2026-10-09: no US-only filter)", () => {
+  it("the site lists US coupons only: the sync stores every storefront, the display drops non-US ones", () => {
     const n = normalizeFeedicoRows([row(), row({ id: "uk", code: "UKSAVE60", title: "save £60", merchantWebsiteUrl: "https://uk.acme.com" })], brand, NOW);
-    expect(n.coupons.map((c) => c.code)).toEqual(["SAVE20", "UKSAVE60"]);
-    const shown = toPromoCode({ id: "u", code: "UKSAVE60", discount: "save £60", eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://uk.acme.com", observedAt: NOW }, { name: "Acme", slug: "acme", categories: [], officialDomain: "acme.com", officialStoreUrl: null });
-    expect(shown).toMatchObject({ code: "UKSAVE60", viaFeed: true, useUrl: "https://uk.acme.com/" });
+    expect(n.coupons.map((c) => c.code)).toEqual(["SAVE20", "UKSAVE60"]); // sync logic unchanged
+    const b = { name: "Acme", slug: "acme", categories: [], officialDomain: "acme.com", officialStoreUrl: null };
+    const promo = (over: Record<string, unknown>) => toPromoCode({ id: "u", code: "UKSAVE60", discount: null, eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://www.acme.com", observedAt: NOW, ...over }, b);
+    expect(promo({ merchantUrl: "https://uk.acme.com" })).toBeNull();
+    expect(promo({ discount: "save £60" })).toBeNull();
+    expect(promo({ merchant: "Acme UK" })).toBeNull();
+    expect(promo({})).toMatchObject({ code: "UKSAVE60", viaFeed: true });
+  });
+
+  it("recognises non-US storefronts, programmes and currencies; US, worldwide and global stay", () => {
+    expect(nonUsFeedMarket("https://uk.jackery.com", null)).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://www.shop.co.uk", null)).toMatch(/non-US country domain \(\.co\.uk\)/);
+    expect(nonUsFeedMarket("https://www.brand.de", null)).toMatch(/\.de/);
+    expect(nonUsFeedMarket("https://www.acme.com/en-gb/", null)).toMatch(/non-US storefront/);
+    expect(nonUsFeedMarket("https://www.acme.com", null, "Acme DE")).toMatch(/non-US programme \(DE\)/);
+    expect(nonUsFeedMarket("https://www.acme.com", "Save €20 on orders")).toMatch(/non-USD/);
+    expect(nonUsFeedMarket("https://www.acme.com", "C$15 off")).toMatch(/non-USD/);
+    expect(nonUsFeedMarket("https://www.acme.com", "$25 off orders over $200", "Willwork Jewelry US")).toBeNull();
+    expect(nonUsFeedMarket("https://www.aliexpress.com", "5% off", "AliExpress WW")).toBeNull();
+    expect(nonUsFeedMarket("https://shop.io", null, "Harfington Many GEOs")).toBeNull();
+    expect(nonUsFeedMarket("https://www.acme.com/us/", null)).toBeNull();
   });
 
   it("a fresh Feedico code is public in its own right (tier 5); stale, expired, invalid or conflicting ones are not", () => {

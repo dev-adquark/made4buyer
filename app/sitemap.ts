@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [
       ...staticEntries,
       ...hubs,
+      { url: `${base}/coupons`, changeFrequency: "daily" as const },
       ...categories.map((c) => ({ url: `${base}/category/${c.categorySlug}`, lastModified: c._max.updatedAt ?? undefined, changeFrequency: "daily" as const })),
       ...products.map((p) => ({ url: `${base}/product/${p.slug}`, lastModified: p.updatedAt, changeFrequency: "weekly" as const })),
       ...brands.map((b) => ({ url: `${base}/brand/${b.slug}`, lastModified: b.updatedAt ?? undefined, changeFrequency: "weekly" as const })),

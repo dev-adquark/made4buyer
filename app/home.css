@@ -36,6 +36,7 @@
 /* ── Rails (components/home-rail.tsx) ── */
 .home .hr + .hr { margin-top: clamp(16px, 2.2vw, 26px); }
 .home .hr-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 8px; }
+.home .hr-head-start { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
 .home .hr-title { margin: 0; font: 500 12px/1.3 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink); }
 .home .hr-nav { display: flex; gap: 6px; flex: none; }
 .home .hr-nav:not([data-ready]) { visibility: hidden; }

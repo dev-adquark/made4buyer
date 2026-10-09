@@ -97,8 +97,9 @@ describe("Feedico coupon feed: the whole catalogue", () => {
     // A registry brand's codes (including its UK storefront) are its own; other merchants keep their name.
     expect((await feedRows(brand.id)).map((c) => c.code)).toEqual(["FREESHIP", "SAVE20", "UKSAVE60"]);
     expect(await db.commerceCoupon.findFirst({ where: { code: "BGACCES5" } })).toMatchObject({ brandId: null, merchant: "Banggood", status: "UNVERIFIED", merchantUrl: "https://www.banggood.com" });
+    // US coupons only on the site: the UK storefront's code is stored but not shown.
     const shown = await loadPromoCodes();
-    expect(shown.map((c) => [c.brandName, c.code]).sort()).toEqual([["Acme", "FREESHIP"], ["Acme", "SAVE20"], ["Acme", "UKSAVE60"], ["Banggood", "BGACCES5"]]);
+    expect(shown.map((c) => [c.brandName, c.code]).sort()).toEqual([["Acme", "FREESHIP"], ["Acme", "SAVE20"], ["Banggood", "BGACCES5"]]);
     expect(shown.find((c) => c.code === "BGACCES5")).toMatchObject({ viaFeed: true, useUrl: "https://www.banggood.com/", sourceUrl: null });
     expect((await verifiedCouponsFor({ brandId: brand.id })).map((c) => c.code).sort()).toEqual(["FREESHIP", "SAVE20", "UKSAVE60"]);
     const raw = await db.commerceRawRecord.findFirst({ where: { url: { contains: "/api/v1/catalog/coupons?page=1" } } });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   decodeCategoryState,
+  decodeCouponsState,
+  encodeCouponsState,
+  parseCouponsQuery,
   decodeGuidesState,
   decodeMatchState,
   decodeReviewsState,
@@ -105,5 +108,24 @@ describe("listing state parsing mirrors the previous searchParams handling", () 
     const picks = { category: "laptops", intent: "any" };
     expect(decodeMatchState(encodeMatchState(picks), isCategory)).toEqual(picks);
     expect(decodeMatchState("category.bogus", isCategory)).toBeNull();
+  });
+});
+
+describe("/coupons paging (60 per page, cached per page)", () => {
+  const go = (u: string) => {
+    const url = new URL(u, "https://x.test");
+    return resolveListingRoute(url.pathname, url.searchParams, () => false);
+  };
+  it("page 1 is the static page; ?page=N is rewritten to a cached state; internal URLs are blocked", () => {
+    expect(go("/coupons")).toEqual({ kind: "static" });
+    expect(go("/coupons?page=1")).toEqual({ kind: "static" });
+    expect(go("/coupons?page=2")).toEqual({ kind: "rewrite", pathname: "/coupons/v/page.2~noindex" });
+    expect(go("/coupons/v/page.2~noindex")).toEqual({ kind: "blocked" });
+  });
+  it("decodes only the canonical spelling of a state", () => {
+    expect(decodeCouponsState("page.2~noindex")).toEqual({ page: 2, noindex: true });
+    expect(decodeCouponsState(encodeCouponsState(parseCouponsQuery({ page: "7" })))).toEqual({ page: 7, noindex: true });
+    expect(decodeCouponsState("page.02~noindex")).toBeNull();
+    expect(decodeCouponsState("sort.x")).toBeNull();
   });
 });

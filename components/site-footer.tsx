@@ -36,6 +36,7 @@ export default async function SiteFooter({ categories: taxonomy }: { categories:
           <ul>
             <li><Link href="/reviews">Reviews</Link></li>
             <li><Link href="/deals">Deals</Link></li>
+            <li><Link href="/coupons">Coupons</Link></li>
             <li><Link href="/compare">Compare</Link></li>
             <li><Link href="/guides">Guides</Link></li>
             <li><Link href="/match">Find my match</Link></li>

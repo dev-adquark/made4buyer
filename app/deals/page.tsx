@@ -19,8 +19,8 @@ import "./deals.css";
  * Deals, in three sections, every item verified (lib/public/deals.ts; the rules live in
  * lib/commerce/deal-status.ts):
  *   - Verified price drops: the page states a current and a higher previous price, checked within 48 h.
- *   - All coupons: every current code of every merchant in the Feedico affiliate feed (labelled "Via
- *     Feedico"), and codes on brands' own sites verified within the last 7 days.
+ *   - Latest coupons: the newest 24 (every coupon is on /coupons): Feedico affiliate-feed codes (labelled "Via
+ *     Feedico", US only), and codes on brands' own sites verified within the last 7 days.
  *   - Recently verified: current prices checked within 48 h whose page states no previous price
  *     (labelled as prices, never as deals).
  * Cached (ISR, 5 minutes; the data is tagged "deals" so the commerce engine refreshes it on demand).
@@ -68,21 +68,26 @@ function options(entries: Array<[string, string]>): Array<{ value: string; label
   return [...counts.entries()].map(([value, { label, count }]) => ({ value, label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
+/** Coupons shown on /deals; all of them are on /coupons (60 per page). */
+const DEALS_COUPON_PREVIEW = 24;
+
 export default async function Deals() {
   await prerenderNeedsDatabase();
   const [deals, prices] = await Promise.all([officialDeals(), recentlyVerifiedPrices().catch(() => [])]);
   const { drops, codes } = deals;
+  // The newest coupons only (every coupon is on /coupons, 60 per page): /deals stays light.
+  const shownCodes = codes.slice(0, DEALS_COUPON_PREVIEW);
   const checkedAt = [deals.checkedAt, ...prices.map((p) => p.observedAt)].filter((x): x is string => Boolean(x)).sort().at(-1) ?? null;
   const site = config.siteUrl();
-  const ld = dealsJsonLd(deals, site);
+  const ld = dealsJsonLd({ ...deals, codes: shownCodes }, site);
   const windowDays = couponMaxAgeDays();
-  const all = [...drops, ...codes, ...prices];
+  const all = [...drops, ...shownCodes, ...prices];
   const categoryOptions = options(all.flatMap((d) => d.categories.map((c) => [c, categoryName(c) ?? ""] as [string, string])));
   const brandOptions = options(all.flatMap((d) => (d.brandSlug && d.brandName ? [[d.brandSlug, d.brandName] as [string, string]] : [])));
   const sellerOptions = options([
     ...drops.map((d) => [d.sellerDomain ?? "", d.official ? `${d.brandName ?? d.seller} (official)` : d.seller] as [string, string]),
     ...prices.map((p) => [p.sellerDomain ?? "", p.official ? `${p.brandName ?? p.seller} (official)` : p.seller] as [string, string]),
-    ...codes.map((c) => [c.sellerDomain ?? "", `${c.brandName} (official)`] as [string, string]),
+    ...shownCodes.map((c) => [c.sellerDomain ?? "", c.viaFeed ? c.brandName : `${c.brandName} (official)`] as [string, string]),
   ]);
   // No price drop and no coupon: the page says so plainly (current prices, if any, still follow; they are not deals).
   const noDeals = drops.length + codes.length === 0;
@@ -138,10 +143,21 @@ export default async function Deals() {
 
           <section id="coupons" className="section deals-section" aria-labelledby="codes-title" data-deal-section="">
             <div className="wrap">
-              <SectionHeader id="codes-title" label={`${codes.length} coupons`} title="All coupons">
-                Every current promo code from the Feedico affiliate feed, for every merchant it lists (marked Via Feedico, not checked on the merchant’s own site), plus codes published on brands’ own sites and verified there within the last {windowDays} days (marked Verified). Expired codes and codes that have not started are not listed. Offers, terms and dates are quoted exactly as listed, and left out when none is given.
+              <SectionHeader
+                id="codes-title"
+                label={`${codes.length} coupons`}
+                title="Latest coupons"
+                action={
+                  codes.length > shownCodes.length ? (
+                    <Link className="arrow-link" href="/coupons">
+                      See all {codes.length} coupons
+                    </Link>
+                  ) : undefined
+                }
+              >
+                The newest US coupons: codes from the Feedico affiliate feed (marked Via Feedico, not checked on the merchant’s own site), listed within the last 14 days, and codes published on brands’ own sites and verified there within the last {windowDays} days (marked Verified). Expired and not-yet-started codes are not listed.
               </SectionHeader>
-              {codes.length ? <PromoCodeGrid codes={codes} /> : <p className="deals-empty">No current coupon: none was verified on a brand’s own site in the last {windowDays} days or listed by the Feedico feed in the last 14 days. Older codes are not listed.</p>}
+              {codes.length ? <PromoCodeGrid codes={shownCodes} /> : <p className="deals-empty">No current coupon: none was verified on a brand’s own site in the last {windowDays} days or listed by the Feedico feed in the last 14 days. Older codes are not listed.</p>}
               <p className="deals-empty" data-deal-empty="" hidden>
                 No coupon matches these filters.
               </p>

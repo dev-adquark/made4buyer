@@ -469,6 +469,43 @@ export function isFeedCoupon(sourceUrl: string | null | undefined): boolean {
   return Boolean(sourceUrl?.startsWith(`${feedCouponPrefix()}?`));
 }
 
+/** Country/region subdomains of non-US storefronts (uk.brand.com, ca.brand.com, eu.brand.com …). */
+const NON_US_HOST_LABEL = /^(uk|gb|ca|au|nz|ie|de|fr|es|it|nl|be|at|ch|se|dk|no|fi|pl|pt|cz|eu|europe|jp|kr|cn|hk|tw|sg|my|ph|th|id|in|ae|sa|za|mx|br|ar|cl|co|intl)$/i;
+/** A path locale that is not US/English: /uk/, /en-gb/, /de-de/, /fr/ … */
+const NON_US_PATH = /^\/(?!us\/|en\/|en-us\/|en_us\/)([a-z]{2}(?:[-_][a-z]{2})?)\//i;
+/** Country-code top-level domains used generically (.co, .io …) count as global, not foreign. */
+const GENERIC_CCTLD = new Set(["us", "co", "io", "ai", "me", "tv", "ly", "so", "gg", "to", "fm", "sh", "cc", "ws", "la", "app", "dev", "xyz", "store", "shop"]);
+/** A region named in the merchant's programme name: "Acme UK", "Brand DE", "Shop (EU)". US/WW/global stay. */
+const NON_US_NAME = /(?:^|[\s(\-–|/])(UK|GB|DE|FR|IT|ES|NL|BE|AT|CH|SE|DK|NO|FI|PL|PT|IE|EU|AU|NZ|CA|JP|KR|IN|SG|HK|MX|BR|AE|SA|ZA|CN|TW|MY|PH|TH|CZ|RO|HU|GR|TR|IL|AR|CL|EUROPE|AUSTRALIA|CANADA|GERMANY|FRANCE|ITALY|SPAIN|INDIA)(?=$|[\s)\-–|/,])/;
+/** Currency other than USD stated in the offer text. */
+const NON_USD_TEXT = /[£€¥₹]|\b(?:GBP|EUR|CAD|AUD|NZD|JPY|INR|CHF|SEK|DKK|NOK|PLN|MXN|BRL|AED|SGD|HKD)\b|\b(?:C|A|NZ|S|HK)\$/;
+
+/**
+ * Why a feed code is not for the US market (null = it is): the merchant is a country storefront
+ * (subdomain, path locale or country domain), its programme names a non-US region, or the offer states
+ * a non-USD currency. The site lists US coupons only (owner decision, 2026-10-09).
+ */
+export function nonUsFeedMarket(merchantUrl: string | null | undefined, text: string | null | undefined, merchant?: string | null): string | null {
+  if (merchantUrl) {
+    try {
+      const u = new URL(/^https?:\/\//i.test(merchantUrl) ? merchantUrl : `https://${merchantUrl}`);
+      const host = u.hostname.toLowerCase().replace(/^www\./, "");
+      const labels = host.split(".");
+      if (labels.length > 2 && NON_US_HOST_LABEL.test(labels[0])) return `non-US storefront (${u.hostname})`;
+      const tld = labels.at(-1) ?? "";
+      const second = labels.at(-2) ?? "";
+      if (tld.length === 2 && !GENERIC_CCTLD.has(tld)) return `non-US country domain (.${["co", "com", "net", "org"].includes(second) ? `${second}.` : ""}${tld})`;
+      if (NON_US_PATH.test(`${u.pathname.replace(/\/?$/, "/")}`)) return `non-US storefront (${u.hostname}${u.pathname})`;
+    } catch {
+      /* unparsable: decided by the name and the text */
+    }
+  }
+  const region = merchant?.match(NON_US_NAME);
+  if (region) return `non-US programme (${region[1]})`;
+  const m = text?.match(NON_USD_TEXT);
+  return m ? `non-USD offer (${m[0]})` : null;
+}
+
 export function couponSourceTier(sourceUrl: string | null | undefined, brand: DealBrandInput, approved: readonly ApprovedCouponSource[] = []): CouponSourceTier | null {
   if (isFeedCoupon(sourceUrl)) return 5;
   const host = sourceUrl ? hostOf(sourceUrl) : null;

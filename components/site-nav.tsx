@@ -29,6 +29,7 @@ export function byDepartment(categories: NavCategory[]) {
 const BEFORE: Array<[string, string]> = [["/reviews", "Reviews"]];
 const LINKS: Array<[string, string, boolean?]> = [
   ["/deals", "Deals"],
+  ["/coupons", "Coupons", true],
   ["/compare", "Compare"],
   ["/guides", "Guides"],
 ];

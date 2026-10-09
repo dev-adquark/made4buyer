@@ -1,5 +1,5 @@
 /**
- * Cacheable listing pages (category, /reviews, /guides, /match, /compare, /search).
+ * Cacheable listing pages (category, /reviews, /guides, /coupons, /match, /compare, /search).
  *
  * The public URLs keep their query strings (`/category/laptops?brand=dell&page=2`). The default,
  * unfiltered view of each page is a static (ISR) page that never reads the query string. A request
@@ -215,10 +215,33 @@ export function searchQueryText(query: RawQuery): string {
 }
 
 // ---------------------------------------------------------------------------------------------
+// /coupons
+
+export type CouponsState = { page: number; noindex: boolean };
+
+export function parseCouponsQuery(query: RawQuery): CouponsState {
+  const page = rawParam(query, "page");
+  return { page: clampPage(page), noindex: rawNoindexPage(page) };
+}
+
+export const DEFAULT_COUPONS_STATE: CouponsState = parseCouponsQuery({});
+
+export function encodeCouponsState(s: CouponsState): string {
+  return encodeEntries([["page", s.page > 1 ? s.page : undefined], ["noindex", s.noindex]]);
+}
+
+export function decodeCouponsState(segment: string): CouponsState | null {
+  const m = decodeEntries(segment);
+  if (!m || [...m.keys()].some((k) => !["page", "noindex"].includes(k))) return null;
+  const state: CouponsState = { page: clampPage(m.get("page")), noindex: m.has("noindex") };
+  return encodeCouponsState(state) === decodeSegment(segment) ? state : null;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Routing decision (proxy.ts)
 
 /** Internal route prefixes: reachable only through the proxy's rewrite. */
-export const INTERNAL_ROUTE_PATTERNS = [/^\/category\/[^/]+\/(v|q)(\/|$)/, /^\/(reviews|guides|match)\/v(\/|$)/, /^\/(compare|search)\/q\/?$/];
+export const INTERNAL_ROUTE_PATTERNS = [/^\/category\/[^/]+\/(v|q)(\/|$)/, /^\/(reviews|guides|match|coupons)\/v(\/|$)/, /^\/(compare|search)\/q\/?$/];
 
 export type ListingRoute = { kind: "static" } | { kind: "rewrite"; pathname: string } | { kind: "blocked" };
 
@@ -244,6 +267,10 @@ export function resolveListingRoute(pathname: string, query: URLSearchParams, is
   if (pathname === "/guides") {
     const seg = encodeGuidesState(parseGuidesQuery(query));
     return seg ? { kind: "rewrite", pathname: `/guides/v/${seg}` } : { kind: "static" };
+  }
+  if (pathname === "/coupons") {
+    const seg = encodeCouponsState(parseCouponsQuery(query));
+    return seg ? { kind: "rewrite", pathname: `/coupons/v/${seg}` } : { kind: "static" };
   }
   if (pathname === "/match") {
     const seg = encodeMatchState(parseMatchQuery(query, isCategory));

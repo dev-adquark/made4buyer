@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * shift+wheel all work without JavaScript); the Prev/Next buttons, arrow-key paging and mouse
  * drag are progressive enhancements. The vertical wheel is never captured.
  */
-export default function HomeRail({ id, label, title, children }: { id: string; label: string; title?: React.ReactNode; children: React.ReactNode }) {
+export default function HomeRail({ id, label, title, action, children }: { id: string; label: string; title?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   const track = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
   const [edges, setEdges] = useState({ start: true, end: true });
@@ -117,7 +117,16 @@ export default function HomeRail({ id, label, title, children }: { id: string; l
   return (
     <div className="hr">
       <div className="hr-head">
-        {title ? <h3 className="hr-title">{title}</h3> : <span />}
+        {action ? (
+          <div className="hr-head-start">
+            {title ? <h3 className="hr-title">{title}</h3> : null}
+            {action}
+          </div>
+        ) : title ? (
+          <h3 className="hr-title">{title}</h3>
+        ) : (
+          <span />
+        )}
         <div className="hr-nav" data-ready={ready && scrollable ? "" : undefined}>
           <button type="button" className="hr-btn" aria-controls={id} aria-label={`Previous: ${label}`} disabled={!ready || edges.start} onClick={() => page(-1)}>
             <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">

@@ -198,7 +198,9 @@ test("home: the price-drop and coupon rails list every verified item and nothing
   await expect(codes.locator(".hr-list > li")).toHaveCount(1 + EXTRA_CODES);
   const listed = await codes.locator("code").allTextContents();
   expect([...listed].sort()).toEqual([FIX.codes.verified, ...Array.from({ length: EXTRA_CODES }, (_, i) => extraCode(i).code)].sort());
-  await expect(page.getByRole("heading", { name: `Latest coupons (${1 + EXTRA_CODES})` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latest coupons", exact: true })).toBeVisible();
+  // A small rail on the homepage; every coupon is on /coupons.
+  await expect(page.getByRole("link", { name: `All ${1 + EXTRA_CODES} coupons` })).toHaveAttribute("href", "/coupons");
 
   const text = await section.innerText();
   for (const hidden of [...HIDDEN_TEXT, OLD_CODE]) expect(text, `"${hidden}" must not be listed`).not.toContain(hidden);
