@@ -16,7 +16,7 @@ describe("Google Analytics 4", () => {
     expect(gaMeasurementId()).toBe("G-ABC123XYZ9");
     const el = GoogleAnalytics() as { props: { children: Array<{ props: { src?: string; children?: string; strategy: string } }> } };
     const [src, init] = el.props.children;
-    expect(src.props).toMatchObject({ src: "https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ9", strategy: "afterInteractive" });
+    expect(src.props).toMatchObject({ src: "https://www.googletagmanager.com/gtag/js?id=G-ABC123XYZ9", strategy: "lazyOnload" });
     expect(init.props.children).toContain("gtag('config','G-ABC123XYZ9')");
     r();
   });
