@@ -146,6 +146,10 @@ export const config = {
     runTimeoutSecs: () => num("APIFY_RUN_TIMEOUT_SECS", 1800, 60, 7200),
     memoryMb: () => num("APIFY_MEMORY_MB", 2048, 256, 8192),
     maxItemsPerCollect: () => num("APIFY_MAX_ITEMS_PER_COLLECT", 100, 1, 1000),
+    /** Hard monthly cap (USD, UTC month) for review-scraping runs (lib/pipeline/review-budget.ts). */
+    reviewMonthlyBudgetUsd: () => num("REVIEW_SCRAPE_MONTHLY_BUDGET_USD", 10, 0, 10_000),
+    /** Expected cost of one review run, counted for runs whose usage Apify has not reported yet. */
+    reviewRunEstimateUsd: () => num("REVIEW_SCRAPE_RUN_ESTIMATE_USD", 0.5, 0.01, 1_000),
   },
 
   /**

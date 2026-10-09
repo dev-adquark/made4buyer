@@ -5,7 +5,9 @@ import { db } from "@/lib/db";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
+import { LockHeldError, withLock } from "@/lib/jobs/lock";
 import { recordFailure, resolveFailures } from "./failures";
+import { recordReviewRunUsage, reviewScrapeBudget } from "./review-budget";
 import { runIngestion, type IngestSummary } from "./ingest";
 import { recordSourceFailure, recordSourceRun } from "./source-health";
 
@@ -372,7 +374,7 @@ export function mapApifyItem(item: ApifyItem, source: Pick<ReviewSource, "slug" 
 
 // ── Apify API ────────────────────────────────────────────────────────────
 
-type ApifyRunData = { id: string; status: string; defaultDatasetId?: string; finishedAt?: string | null; statusMessage?: string | null };
+type ApifyRunData = { id: string; status: string; defaultDatasetId?: string; finishedAt?: string | null; statusMessage?: string | null; usageTotalUsd?: number | null };
 
 async function apifyRequest<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown } = {}): Promise<T> {
   const token = config.apify.token();
@@ -429,7 +431,28 @@ export async function actorInputFields(): Promise<string[] | null> {
 const ACTIVE = ["READY", "RUNNING"];
 const FAILED = ["FAILED", "ABORTED", "TIMED-OUT", "TIMING-OUT", "ABORTING"];
 
+/**
+ * Starts one review run for a source, under the review-scraping spending cap: the budget check, the
+ * Apify call and the run's record happen under one lock, so concurrent or repeated triggers (every
+ * scheduler, Admin "Run now") cannot each pass the check before any of them is recorded. Fail closed:
+ * a budget that cannot be read, or a lock held by another start, starts nothing.
+ */
 export async function startSourceRun(source: ReviewSource, trigger: string): Promise<{ status: string; runId?: string; reason?: string }> {
+  try {
+    return await withLock(REVIEW_BUDGET_LOCK, 2 * 60_000, () => startSourceRunUnderCap(source, trigger));
+  } catch (error) {
+    if (error instanceof LockHeldError) {
+      log.warn("api call skipped", { stage: "API_GUARD", api: "apify", unit: `start:source:${source.id}`, trigger, code: "REVIEW_BUDGET_BUSY", reason: "another review run is being started; this trigger starts nothing" });
+      return { status: "SKIPPED", reason: "REVIEW_BUDGET_BUSY: another review run is being started" };
+    }
+    log.warn("api call skipped", { stage: "API_GUARD", api: "apify", unit: `start:source:${source.id}`, trigger, code: "REVIEW_BUDGET_UNVERIFIED", reason: String(error).slice(0, 200) });
+    return { status: "BUDGET_UNVERIFIED", reason: `review-scraping budget could not be verified: ${String(error).slice(0, 200)}` };
+  }
+}
+
+const REVIEW_BUDGET_LOCK = "apify-review-budget";
+
+async function startSourceRunUnderCap(source: ReviewSource, trigger: string): Promise<{ status: string; runId?: string; reason?: string }> {
   const active = await db.apifyRun.findFirst({ where: { sourceId: source.id, status: { in: [...ACTIVE, "SUCCEEDED", "COLLECTING"] } } });
   if (active) return { status: "SKIPPED", reason: `run ${active.apifyRunId} is still ${active.status}` };
   for (const url of source.startUrls) {
@@ -452,10 +475,22 @@ export async function startSourceRun(source: ReviewSource, trigger: string): Pro
       trigger,
       config: [() => (apifyConfigured() ? null : { code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured" })],
       params: () => (source.startUrls.length && source.startUrls.every((u) => /^https?:\/\//i.test(u)) ? null : { code: "INVALID_PARAMS", reason: `source ${source.slug} has no valid start URLs` }),
+      budget: [
+        async () => {
+          let b: Awaited<ReturnType<typeof reviewScrapeBudget>>;
+          try {
+            b = await reviewScrapeBudget();
+          } catch (error) {
+            // Fail closed: no verified spend, no paid run.
+            return { code: "BUDGET_UNVERIFIED", reason: `review-scraping spend could not be read: ${String(error).slice(0, 160)}` };
+          }
+          return b.allowed ? null : { code: "BUDGET_EXHAUSTED", reason: `review-scraping budget would be exceeded: spent ≈$${b.spentUsd.toFixed(2)} (${b.unknownRuns} run(s) at ≈$${b.perRunUsd.toFixed(2)} not yet reported) + this run ≈$${b.perRunUsd.toFixed(2)} of $${b.budgetUsd.toFixed(2)} (REVIEW_SCRAPE_MONTHLY_BUDGET_USD)` };
+        },
+      ],
       call: () => apifyRequest<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body: buildActorInput(source) }),
       validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
     });
-    if (guarded.status === "SKIPPED") return { status: "SKIPPED", reason: `${guarded.code}: ${guarded.reason}` };
+    if (guarded.status === "SKIPPED") return { status: guarded.code === "BUDGET_EXHAUSTED" || guarded.code === "BUDGET_UNVERIFIED" ? guarded.code : "SKIPPED", reason: `${guarded.code}: ${guarded.reason}` };
     if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
     const { data } = guarded.value;
     if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
@@ -495,6 +530,8 @@ async function refreshRun(run: ApifyRun): Promise<ApifyRun> {
   // One status read per run per job invocation (reused by every later step of the same invocation).
   const { data } = await onceInInvocation(`apify:status:${run.apifyRunId}`, () => apifyRequest<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId)}`));
   if (!data?.status) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify run status missing");
+  // What the run cost so far (final once it has ended): counted against the review-scraping cap.
+  await recordReviewRunUsage(run.apifyRunId, data.usageTotalUsd, run.startedAt);
   return db.apifyRun.update({ where: { id: run.id }, data: { status: data.status, datasetId: data.defaultDatasetId ?? run.datasetId, finishedAt: data.finishedAt ? new Date(data.finishedAt) : run.finishedAt, error: FAILED.includes(data.status) ? (data.statusMessage ?? data.status).slice(0, 500) : null } });
 }
 

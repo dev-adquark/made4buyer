@@ -4,6 +4,7 @@ import { log } from "@/lib/log";
 import { runImageBackfill, type ImageBackfillResult } from "@/lib/jobs/image-backfill";
 import { persistPageRenderModel } from "@/lib/pipeline/render-model";
 import { revalidateReviewPaths } from "@/lib/pipeline/revalidate-paths";
+import { stockPhotoStillRelevant } from "@/lib/pipeline/images";
 import { loadSourceContent, runImageStage } from "@/lib/pipeline/stages";
 import { revalidateCommerce } from "@/lib/commerce/revalidate";
 import { runDealCardImages, type DealCardImagesResult } from "./deal-card-images";
@@ -21,7 +22,10 @@ import { commerceEngineOn } from "@/lib/commerce/admin-actions";
  *    brand's own / an identity-matched retailer's product page photo from the commerce engine);
  *  - a category photo on a single-product page (daily: a photo of its type may be found);
  *  - our placeholder graphic, on EVERY run (not once a day): with on-topic photo reuse the stock
- *    pool never runs dry, so a placeholder only remains while no provider can answer.
+ *    pool never runs dry, so a placeholder only remains while no provider can answer;
+ *  - a stored stock photo that fails TODAY's relevance rule (the display guard hides it and the page
+ *    shows the category photo instead), whenever it was chosen: a rule tightened after the photo was
+ *    picked must not leave the page on the category photo for good.
  *
  * Idempotent: corrected pages no longer match the query (or match again only after their gate).
  */
@@ -86,6 +90,20 @@ export async function runHeroCorrection(trigger: string, opts: { limit?: number;
     take: opts.limit ?? 200,
     select: { id: true, sourceType: true, providerPhotoId: true, enrichmentStatus: true, review: true },
   });
+  // Stored stock photos the pages hide (same relevance rule as the render model), not already targeted.
+  const targeted = new Set(targets.map((t) => t.id));
+  const stock = await db.imageAsset.findMany({
+    where: { isPrimary: true, sourceType: "ENRICHMENT_SERVICE", id: { notIn: [...targeted] } },
+    select: { id: true, sourceType: true, providerPhotoId: true, enrichmentStatus: true, altText: true, searchQuery: true, imageType: true, review: true },
+    take: 2000,
+  });
+  const singles = new Set((await db.contentEntity.findMany({ where: { role: "PRIMARY", normalizedReviewId: { in: stock.map((a) => a.review.id) } }, select: { normalizedReviewId: true } })).map((c) => c.normalizedReviewId));
+  const hidden = stock.filter((a) => {
+    const r = a.review;
+    const singleProduct = (r.kind ?? "REVIEW") === "REVIEW" || singles.has(r.id);
+    return !stockPhotoStillRelevant(a.altText, { productName: r.productName, title: r.canonicalTitle, categorySlug: r.categorySlug, subcategorySlug: r.subcategorySlug, singleProduct, searchQuery: a.searchQuery, imageType: a.imageType });
+  });
+  targets.push(...hidden.slice(0, Math.max(0, (opts.limit ?? 200) - targets.length)));
   for (const t of targets) {
     out.checked++;
     const review = t.review;
