@@ -188,9 +188,11 @@ test("home: the price-drop and coupon rails list every verified item and nothing
 
   const drops = dropsRail(page);
   await expect(drops).toBeVisible();
-  await expect(drops.locator(".hr-list > li")).toHaveCount(1 + EXTRA_DROPS);
-  await expect(drops).toContainText(FIX.valid.product);
-  for (let i = 0; i < EXTRA_DROPS; i++) await expect(drops).toContainText(extraProduct(i).name);
+  // The rail shows at most 8 cards (every drop is on /deals); the heading counts all of them.
+  await expect(drops.locator(".hr-list > li")).toHaveCount(Math.min(8, 1 + EXTRA_DROPS));
+  const allDrops = [FIX.valid.product, ...Array.from({ length: EXTRA_DROPS }, (_, i) => extraProduct(i).name)];
+  const shownDrops = await drops.locator(".hr-list > li").allInnerTexts();
+  for (const t of shownDrops) expect(allDrops.some((n) => t.includes(n)), t.slice(0, 60)).toBe(true);
   await expect(page.getByRole("heading", { name: `Price drops (${1 + EXTRA_DROPS})` })).toBeVisible();
 
   const codes = codesRail(page);

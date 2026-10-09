@@ -51,7 +51,8 @@ function SpecRows({ rows }: { rows: Array<[string, string | null | undefined]> }
 }
 
 /** How many cards each homepage rail holds (the rest are one click away on /deals). */
-const RAIL_SIZE = 12;
+/** Cards per homepage rail (every item is on /deals and /coupons): a lighter homepage, faster first paint. */
+const RAIL_SIZE = 8;
 
 /**
  * Each offer's product photo from the brand's own product page (lib/images/deal-image.ts decides what
@@ -101,10 +102,11 @@ export default async function Home() {
     { key: "cmp", title: "Comparisons", items: comparisons, href: "/reviews?type=comparison", more: "All comparisons" },
   ].filter((c) => c.items.length > 0);
   const tickerItems: TickerItem[] = [
-    ...reviews.map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
+    // At most 16 items (6 reviews, 4 prices, 2 guides, 4 categories): the ticker is a teaser, not an index.
+    ...reviews.slice(0, 6).map((r) => ({ key: `r-${r.id}`, href: `/review/${r.slug}`, label: "Latest review", text: r.productName, slug: r.categorySlug })),
     ...deals.slice(0, 4).map((d) => ({ key: `d-${d.offerId}`, href: `/review/${d.review.slug}#deal`, label: "Current price", text: `${d.review.productName}${money(d.price, d.currency) ? ` ${money(d.price, d.currency)}` : ""}`, slug: d.review.categorySlug })),
-    ...guides.map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "Guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
-    ...activeCats.map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
+    ...guides.slice(0, 2).map((g) => ({ key: `g-${g.id}`, href: `/review/${g.slug}`, label: g.kind === "AI_GUIDE" ? "Guide" : "Buying guide", text: g.productName, slug: g.categorySlug })),
+    ...activeCats.slice(0, 4).map((c) => ({ key: `c-${c.slug}`, href: `/category/${c.slug}`, label: c.reviews ? `${c.reviews} ${c.reviews === 1 ? "review" : "reviews"}` : "Category", text: c.name, slug: c.slug })),
   ];
 
   return (
