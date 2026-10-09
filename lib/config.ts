@@ -161,8 +161,8 @@ export const config = {
     minRefetchHours: () => num("FEEDICO_MIN_REFETCH_HOURS", 12, 1, 144),
     brandsPerRun: () => num("FEEDICO_BRANDS_PER_RUN", 200, 1, 500),
     maxPagesPerBrand: () => num("FEEDICO_MAX_PAGES_PER_BRAND", 2, 1, 5),
-    /** Catalogue pages (200 codes each) read per sync: the whole catalogue up to this many requests. */
-    maxCatalogPages: () => num("FEEDICO_MAX_CATALOG_PAGES", 50, 1, 250),
+    /** Catalogue pages (200 codes each) read per sync, besides one request per registry brand (15 + ~100 ≈ 115/week, inside the Free plan). */
+    maxCatalogPages: () => num("FEEDICO_MAX_CATALOG_PAGES", 15, 1, 250),
     /** Freshness: a code Feedico has not confirmed (fetchedAt) within this many days is rejected and deactivated. At most 14. */
     maxFeedAgeDays: () => num("FEEDICO_MAX_FEED_AGE_DAYS", 14, 1, 14),
   },

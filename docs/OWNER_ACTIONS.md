@@ -161,13 +161,18 @@ in the registry only (matched by the merchant's exact website domain). Code: `li
 3. Check it (one request, prints counts only): `FEEDICO_API_KEY=… npx tsx scripts/verify-feedico.ts`,
    or Admin → Jobs → `feedico-coupons` → Run now.
 
-**What it does.** The `feedico-coupons` job runs **once a week** (Friday 11:30 AM IST = 06:00 UTC) and
-reads Feedico's **whole catalogue of coded coupons — every merchant** — page by page (200 codes per
-page, one request each, up to `FEEDICO_MAX_CATALOG_PAGES` = 50 pages = 10,000 codes). A merchant whose
-website is a registry brand's domain is stored under that brand (its codes also show on that brand's
-review pages); every other merchant under its own name. It stops at `FEEDICO_MONTHLY_REQUEST_BUDGET`
-(600) and on Feedico's own 429. A re-run within 12 hours after a complete read makes no request. After
-a complete read, a stored code Feedico no longer lists is deactivated.
+**What it does.** The `feedico-coupons` job runs **once a week** (Friday 11:30 AM IST = 06:00 UTC):
+1. reads the first `FEEDICO_MAX_CATALOG_PAGES` (15) pages of Feedico's catalogue of coded coupons —
+   200 codes per page, **every merchant** — one request per page;
+2. asks Feedico once for each registry brand by name, so a brand's codes are always read in full.
+
+Feedico lists ~90,000 codes (2026-10-09); reading all of them weekly (~450 requests) does not fit the
+Free plan, so each sync reads 15 pages + ~100 brand queries ≈ 115 requests (≤ 600/month with five
+Fridays). A merchant whose website is a registry brand's domain is stored under that brand (its codes
+also show on that brand's review pages); every other merchant under its own name. It stops at
+`FEEDICO_MONTHLY_REQUEST_BUDGET` (600) and on Feedico's own 429; a re-run within 12 hours is a no-op.
+A code is deactivated as "no longer listed" only where the read was complete (a brand whose codes all
+fit its query, or the whole catalogue); merchants the sync did not reach age out by the 14-day rule.
 
 **14-day freshness.** A code is accepted only when Feedico confirmed it (its `fetchedAt`) within the
 last 14 days; a row with no `fetchedAt` is rejected (age unknown). Every run deactivates (INVALID, never

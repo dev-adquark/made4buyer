@@ -36,7 +36,10 @@ async function startStub(): Promise<Stub> {
       // The whole coded-coupon catalogue, paged like Feedico (page, pageSize ≤ 200).
       const page = Number(body.page ?? 1);
       const size = Number(body.pageSize ?? 50);
-      send(200, { ok: true, recordCount: stub.catalog.length, page, pageSize: size, availableProviders: ["cj_affiliate"], coupons: stub.catalog.slice((page - 1) * size, page * size) });
+      // firmName: Feedico's substring filter on brand name, title, description or code.
+      const term = typeof body.firmName === "string" ? body.firmName.toLowerCase() : "";
+      const list = term ? stub.catalog.filter((r) => ["brandName", "title", "description", "code"].some((k) => String((r as Record<string, unknown>)[k] ?? "").toLowerCase().includes(term))) : stub.catalog;
+      send(200, { ok: true, recordCount: list.length, page, pageSize: size, availableProviders: ["cj_affiliate"], coupons: list.slice((page - 1) * size, page * size) });
     });
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -86,9 +89,11 @@ describe("Feedico coupon feed: the whole catalogue", () => {
       row({ id: "x1", brandName: "No Site", code: "NOSITE10", merchantWebsiteUrl: null }),
     ];
     const r = await runFeedicoSync("test");
-    expect(r).toMatchObject({ status: "OK", requests: 1, recordCount: 5, pages: 1, complete: true, fetchedRows: 5, coupons: 4, dropped: 1 });
+    // One catalogue page + one query for the registry brand (Acme).
+    expect(r).toMatchObject({ status: "OK", requests: 2, recordCount: 5, pages: 1, complete: true, fetchedRows: 5, coupons: 4, dropped: 1 });
     expect(stub.requests[0]).toMatchObject({ auth: `Bearer ${KEY}`, body: { page: 1, pageSize: 200 } });
     expect(stub.requests[0].body.firmName).toBeUndefined();
+    expect(stub.requests[1].body).toMatchObject({ page: 1, pageSize: 200, firmName: "Acme" });
     // A registry brand's codes (including its UK storefront) are its own; other merchants keep their name.
     expect((await feedRows(brand.id)).map((c) => c.code)).toEqual(["FREESHIP", "SAVE20", "UKSAVE60"]);
     expect(await db.commerceCoupon.findFirst({ where: { code: "BGACCES5" } })).toMatchObject({ brandId: null, merchant: "Banggood", status: "UNVERIFIED", merchantUrl: "https://www.banggood.com" });
@@ -102,14 +107,16 @@ describe("Feedico coupon feed: the whole catalogue", () => {
     expect(source).toMatchObject({ kind: "COUPON_FEED", enabled: true, termsStatus: "APPROVED", crawlStatus: "OK", consecutiveFailures: 0 });
   });
 
-  it("reads every page of the catalogue (200 per page), one request each", async () => {
+  it("reads every page of the catalogue (200 per page), one request each, plus one per registry brand", async () => {
+    await addBrand();
     stub.catalog = Array.from({ length: 450 }, (_, i) => row({ id: `c${i}`, brandName: `Shop ${i}`, code: `CODE${1000 + i}`, merchantWebsiteUrl: `https://shop${i}.com` }));
     const r = await runFeedicoSync("test");
-    expect(r).toMatchObject({ status: "OK", requests: 3, pages: 3, complete: true, fetchedRows: 450, coupons: 450, merchants: 450, deactivated: 0 });
-    expect(stub.requests.map((q) => q.body.page)).toEqual([1, 2, 3]);
+    expect(r).toMatchObject({ status: "OK", requests: 4, pages: 3, complete: true, fetchedRows: 450, coupons: 450, merchants: 450, deactivated: 0 });
+    expect(stub.requests.map((q) => [q.body.page, q.body.firmName ?? null])).toEqual([[1, null], [2, null], [3, null], [1, "Acme"]]);
   });
 
   it("still never lists expired, not-yet-started or non-code rows", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.catalog = [
       row({ id: "a", code: "ENDED5", endsAt: new Date(Date.now() - 86_400_000).toISOString() }),
       row({ id: "b", code: "LATER5", startsAt: new Date(Date.now() + 5 * 86_400_000).toISOString() }),
@@ -122,10 +129,11 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("is idempotent: a second run within 12 hours makes no request and changes nothing", async () => {
+    await addBrand();
     stub.catalog = [row()];
     await runFeedicoSync("test");
     expect(await runFeedicoSync("test")).toMatchObject({ status: "NOT_DUE" });
-    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests).toHaveLength(2);
     expect(await db.commerceCoupon.count()).toBe(1);
   });
 
@@ -151,16 +159,18 @@ describe("Feedico coupon feed: the whole catalogue", () => {
     expect(await db.commerceCoupon.count()).toBe(2);
   });
 
-  it("an incomplete read (page limit) deactivates nothing", async () => {
+  it("an incomplete catalogue read does not deactivate a merchant it did not reach (a fully read registry brand is still checked)", async () => {
     await addBrand();
-    stub.catalog = [row()];
+    stub.catalog = [row(), row({ id: "b1", brandName: "Banggood CJ Affiliate Program", code: "BGACCES5", merchantWebsiteUrl: "https://www.banggood.com" })];
     await runFeedicoSync("test");
-    stub.catalog = Array.from({ length: 300 }, (_, i) => row({ id: `n${i}`, brandName: `Shop ${i}`, code: `NEW${1000 + i}`, merchantWebsiteUrl: `https://shop${i}.com` }));
+    // 300 other merchants first: page 1 (the page limit) no longer reaches Banggood or Acme.
+    stub.catalog = [...Array.from({ length: 300 }, (_, i) => row({ id: `n${i}`, brandName: `Shop ${i}`, code: `NEW${1000 + i}`, merchantWebsiteUrl: `https://shop${i}.com` })), row(), row({ id: "b1", brandName: "Banggood CJ Affiliate Program", code: "BGACCES5", merchantWebsiteUrl: "https://www.banggood.com" })];
     const cap = withEnv({ FEEDICO_MAX_CATALOG_PAGES: "1" });
     const r = await runFeedicoSync("test", { force: true });
     cap();
     expect(r).toMatchObject({ complete: false, pages: 1, invalidated: 0 });
-    expect(await db.commerceCoupon.findFirst({ where: { code: "SAVE20" } })).toMatchObject({ status: "UNVERIFIED" });
+    expect(await db.commerceCoupon.findFirst({ where: { code: "BGACCES5" } })).toMatchObject({ status: "UNVERIFIED" }); // not reached: kept
+    expect(await db.commerceCoupon.findFirst({ where: { code: "SAVE20" } })).toMatchObject({ status: "UNVERIFIED" }); // re-read by the Acme query
   });
 
   it("only accepts codes Feedico confirmed within 14 days (no date = rejected) and deactivates older stored ones", async () => {
@@ -175,14 +185,15 @@ describe("Feedico coupon feed: the whole catalogue", () => {
     expect(r).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", deactivated: 1 });
   });
 
-  it("two triggers at once read each page once (no duplicate request)", async () => {
+  it("two triggers at once read each page and each brand once (no duplicate request)", async () => {
     await addBrand(); // a seeded registry (seeding an empty one is a one-time first-run step)
     stub.catalog = [row()];
     await Promise.all([runFeedicoSync("cron-a"), runFeedicoSync("cron-b")]);
-    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests.map((q) => q.body.firmName ?? "catalogue").sort()).toEqual(["Acme", "catalogue"]);
   });
 
   it("a rejected key stops the run, makes one request and changes no coupon", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.catalog = [row()];
     await runFeedicoSync("test");
     const before = await db.commerceCoupon.findMany();
@@ -196,6 +207,7 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("Feedico's quota answer (429) ends the month: the next run makes no request", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.mode = "429";
     expect(await runFeedicoSync("test")).toMatchObject({ status: "BUDGET_EXHAUSTED", requests: 1 });
     stub.mode = "ok";
@@ -205,6 +217,7 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("stops at FEEDICO_MONTHLY_REQUEST_BUDGET, counting attempts before they are made", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.catalog = Array.from({ length: 450 }, (_, i) => row({ id: `c${i}`, code: `CODE${1000 + i}` }));
     const cap = withEnv({ FEEDICO_MONTHLY_REQUEST_BUDGET: "2" });
     const r = await runFeedicoSync("test");
@@ -214,6 +227,7 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("a server error is not retried (one request) and keeps the last good data", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.catalog = [row()];
     await runFeedicoSync("test");
     stub.mode = "500";
@@ -222,6 +236,7 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("a malformed response is rejected whole and changes nothing", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     stub.mode = "malformed";
     const r = await runFeedicoSync("test");
     expect(r.failures?.[0].error).toMatch(/RESPONSE_INVALID/);
@@ -229,6 +244,7 @@ describe("Feedico coupon feed: the whole catalogue", () => {
   });
 
   it("does nothing while the source is disabled in Admin", async () => {
+    await addBrand("Zed", "zed.example"); // a registry without the 100 seed brands
     await runFeedicoSync("test"); // creates the source
     await db.commerceSource.update({ where: { slug: "feedico" }, data: { enabled: false } });
     stub.requests.length = 0;

@@ -49,6 +49,8 @@ const STATE_KEY = "feedico:state";
 const COUPON_PURPOSE = "COUPON";
 const ACTOR = "feedico:catalog/coupons";
 const PAGE_SIZE = 200;
+/** 2: catalogue pages + one query per registry brand (version 1 read catalogue pages only). */
+const SYNC_VERSION = 2;
 const FEEDICO_SOURCE_NOTES = "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Public, labelled \"Via Feedico\", while listed within 14 days; a code verified on the brand's own page is shown as the official one.";
 const OLD_SOURCE_NOTES_PREFIX = "Affiliate-network promo codes via the Feedico catalogue API (POST /api/v1/catalog/coupons). Admin candidates only";
 
@@ -235,7 +237,7 @@ export function normalizeFeedicoRows(rows: FeedicoCouponRow[], brand: FeedicoBra
 // ── State (request budget, per-brand freshness) ──────────────────────────
 
 type BrandState = { at: string; ok: boolean; codes?: number; error?: string };
-type FeedicoState = { month: string; requests: number; quotaExceeded?: boolean; brands: Record<string, BrandState>; catalogAt?: string; catalogComplete?: boolean; recordCount?: number };
+type FeedicoState = { month: string; requests: number; quotaExceeded?: boolean; brands: Record<string, BrandState>; catalogAt?: string; catalogComplete?: boolean; recordCount?: number; syncVersion?: number };
 
 const monthOf = (d: Date) => d.toISOString().slice(0, 7);
 
@@ -381,8 +383,9 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   base.requestsThisMonth = state.requests;
   if (state.quotaExceeded) return { ...base, status: "BUDGET_EXHAUSTED", reason: `Feedico reported its monthly quota exceeded for ${state.month}; the next sync runs next month` };
   if (state.requests >= budget) return { ...base, status: "BUDGET_EXHAUSTED", reason: `${state.requests} of ${budget} Feedico requests used in ${state.month} (FEEDICO_MONTHLY_REQUEST_BUDGET)` };
-  // A re-run within FEEDICO_MIN_REFETCH_HOURS after a complete read is a no-op.
-  if (!opts.force && state.catalogAt && state.catalogComplete && now.getTime() - Date.parse(state.catalogAt) < config.feedico.minRefetchHours() * 3_600_000) {
+  // A re-run within FEEDICO_MIN_REFETCH_HOURS after a successful read is a no-op.
+  // Only a read by this version of the sync (catalogue pages + every registry brand) counts.
+  if (!opts.force && state.syncVersion === SYNC_VERSION && state.catalogAt && now.getTime() - Date.parse(state.catalogAt) < config.feedico.minRefetchHours() * 3_600_000) {
     return { ...base, status: "NOT_DUE", reason: `The Feedico catalogue was read within the last ${config.feedico.minRefetchHours()} hours` };
   }
 
@@ -401,10 +404,10 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
    * and an idempotency marker per (page, previous read) are checked first; the attempt is counted before
    * it is made; no retry. A duplicate trigger finds the marker and makes no request.
    */
-  const request = async (page: number) => {
+  const request = async (page: number, firmName?: string) => {
     const guarded = await guardedApiCall({
       api: "feedico",
-      unit: `catalog:page${page}`,
+      unit: firmName ? `brand:${firmName}` : `catalog:page${page}`,
       idempotencyBasis: basis,
       markerTtlMs: 7 * 86_400_000,
       trigger,
@@ -415,7 +418,7 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
         state.requests++;
         out.requests++;
         await writeState(state);
-        return fetchFeedicoCoupons({ page, pageSize: PAGE_SIZE });
+        return fetchFeedicoCoupons(firmName ? { page, pageSize: PAGE_SIZE, firmName } : { page, pageSize: PAGE_SIZE });
       },
     });
     if (guarded.status === "SKIPPED") return { ok: false as const, error: { kind: guarded.code === "QUOTA_EXCEEDED" ? ("QUOTA_EXCEEDED" as const) : ("SKIPPED" as const), status: 0, message: `${guarded.code}: ${guarded.reason}` }, local: true };
@@ -445,20 +448,56 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
       update: {},
     });
     pages.push({ page, rows: res.page.coupons, rawId: raw.id });
-    if (page * PAGE_SIZE >= recordCount || res.page.coupons.length < PAGE_SIZE) {
+    // Complete only when every listed code was read (a short page is not the end: Feedico may return
+    // fewer than pageSize rows on a page while more pages follow).
+    if (page * PAGE_SIZE >= recordCount) {
       complete = true;
       break;
     }
+    if (!res.page.coupons.length) break;
   }
   if (error) failures.push({ brand: "catalogue", error: `${error.kind}: ${error.message}` });
+
+  // ── Every registry brand, by name: its codes are always read in full (the catalogue is too large
+  //    to read entirely within the Free plan). One request per brand, no retry. ──
+  const fullyRead = new Set<string>(); // source URLs whose codes were read completely
+  if (!error) {
+    for (const b of brands) {
+      if (Date.now() > deadline) break;
+      const res = await request(1, b.name);
+      if (!res.ok) {
+        if (res.error.kind === "SKIPPED") continue;
+        if (res.error.kind === "QUOTA_EXCEEDED" && !res.local) state.quotaExceeded = true;
+        failures.push({ brand: b.slug, error: `${res.error.kind}: ${res.error.message}` });
+        if (res.error.kind === "AUTH_FAILED" || res.error.kind === "QUOTA_EXCEEDED") {
+          error = res.error;
+          break;
+        }
+        continue;
+      }
+      const url = `${config.feedico.baseUrl()}/api/v1/catalog/coupons?brand=${encodeURIComponent(b.slug)}`;
+      const payload = { provider: "feedico", endpoint: "POST /api/v1/catalog/coupons", firmName: b.name, recordCount: res.page.recordCount, fetchedAt: now.toISOString(), rows: res.page.coupons };
+      const raw = await db.commerceRawRecord.upsert({
+        where: { runId_url: { runId: run.id, url } },
+        create: { runId: run.id, url, purpose: COUPON_PURPOSE, payload: payload as Prisma.InputJsonValue, contentHash: sha256(JSON.stringify(res.page.coupons)), fetchedAt: now },
+        update: {},
+      });
+      pages.push({ page: 0, rows: res.page.coupons, rawId: raw.id });
+      if (res.page.recordCount <= PAGE_SIZE) fullyRead.add(feedicoSourceUrl(b));
+    }
+  }
 
   // ── Store every merchant's codes (only what was read; nothing invented) ──
   const groups = new Map<string, { brand: FeedicoBrand; rows: FeedicoCouponRow[] }>();
   // Each code is stored with the raw page it was read from (the 14-day sweep reads its confirmation date there).
   const pageOf = new Map<string, { rawId: string; seen: number }>();
   let fetchedRows = 0;
+  const seenIds = new Set<string>();
   for (const p of pages) {
     for (const r of p.rows) {
+      // The same Feedico row can come back from the catalogue and from a brand query: count it once.
+      if (seenIds.has(r.id)) continue;
+      seenIds.add(r.id);
       fetchedRows++;
       const domain = domainOf(r.merchantWebsiteUrl);
       if (!domain) {
@@ -499,11 +538,12 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   }
 
   // ── A complete read: codes Feedico no longer lists are deactivated (never deleted) ──
-  if (complete && !error) {
-    const stale = await db.commerceCoupon.findMany({ where: { sourceUrl: { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons?` }, status: { notIn: ["INVALID", "EXPIRED"] } }, select: { id: true, merchant: true, code: true, sourceUrl: true, status: true } });
+  // Only where the read was complete: the whole catalogue, or a brand whose codes all fit one page.
+  if (!error && (complete || fullyRead.size)) {
+    const stale = await db.commerceCoupon.findMany({ where: { sourceUrl: complete ? { startsWith: `${config.feedico.baseUrl()}/api/v1/catalog/coupons?` } : { in: [...fullyRead] }, status: { notIn: ["INVALID", "EXPIRED"] } }, select: { id: true, merchant: true, code: true, sourceUrl: true, status: true } });
     for (const c of stale) {
       if (listed.has(`${c.merchant}\u0000${c.code}\u0000${c.sourceUrl}`)) continue;
-      const evidence = `No longer listed in the Feedico catalogue (complete read of ${recordCount} codes at ${now.toISOString()})`;
+      const evidence = `No longer listed in the Feedico catalogue (${complete ? `complete read of ${recordCount} codes` : "complete read of this brand's codes"} at ${now.toISOString()})`;
       await db.commerceCoupon.update({ where: { id: c.id }, data: { status: "INVALID", verificationEvidence: evidence } });
       await commerceAudit("COUPON_INVALIDATED", "commerce_coupon", c.id, { before: { status: c.status }, after: { status: "INVALID" }, metadata: { code: c.code, evidence } });
       out.invalidated++;
@@ -514,7 +554,7 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   out.fetchedRows = fetchedRows;
   out.merchants = groups.size;
   out.recordCount = recordCount;
-  out.pages = pages.length;
+  out.pages = pages.filter((p) => p.page > 0).length;
   out.complete = complete;
   out.requestsThisMonth = state.requests;
   if (failures.length) out.failures = failures;
@@ -525,6 +565,7 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   }
   if (!error) {
     state.catalogAt = now.toISOString();
+    state.syncVersion = SYNC_VERSION;
     state.catalogComplete = complete;
     state.recordCount = recordCount;
   }
@@ -539,10 +580,10 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
     where: { id: source.id },
     data: failed
       ? { crawlStatus: out.status, consecutiveFailures: { increment: 1 }, lastError: (out.reason ?? "").slice(0, 300), lastCrawlAt: now }
-      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: complete ? null : `catalogue read stopped at page ${pages.length} of ${Math.ceil(recordCount / PAGE_SIZE)} (FEEDICO_MAX_CATALOG_PAGES or time limit)`, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 7 * 86_400_000) },
+      : { crawlStatus: "OK", consecutiveFailures: 0, lastError: complete ? null : `catalogue read stopped at page ${pages.filter((p) => p.page > 0).length} of ${Math.ceil(recordCount / PAGE_SIZE)} (FEEDICO_MAX_CATALOG_PAGES or time limit)`, lastCrawlAt: now, nextCrawlAt: new Date(now.getTime() + 7 * 86_400_000) },
   });
-  await commerceAudit(failed ? "COUPON_FEED_FAILED" : "COUPON_FEED_SYNCED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, provider: "feedico", status: out.status, reason: out.reason, recordCount, pages: pages.length, complete, fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, requestsThisMonth: state.requests } });
-  log.info("feedico coupon sync", { stage: "COMMERCE", status: out.status, recordCount, pages: pages.length, complete, fetched: fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, month: state.month, used: state.requests, budget });
+  await commerceAudit(failed ? "COUPON_FEED_FAILED" : "COUPON_FEED_SYNCED", "commerce_run", run.id, { metadata: { purpose: COUPON_PURPOSE, provider: "feedico", status: out.status, reason: out.reason, recordCount, pages: out.pages, complete, fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, requestsThisMonth: state.requests } });
+  log.info("feedico coupon sync", { stage: "COMMERCE", status: out.status, recordCount, pages: out.pages, brandQueries: pages.filter((p) => p.page === 0).length, complete, fetched: fetchedRows, merchants: groups.size, stored: out.coupons, created: out.created, rejected: out.dropped, invalidated: out.invalidated, requests: out.requests, month: state.month, used: state.requests, budget });
   return out;
 }
 
