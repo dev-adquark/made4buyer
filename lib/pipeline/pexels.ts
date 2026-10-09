@@ -1,4 +1,5 @@
 import { config } from "@/lib/config";
+import { guardedApiCall, onceInInvocation, serial } from "@/lib/ops/api-guard";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { tokenize } from "@/lib/util/text";
 import { KNOWN_BRANDS, stripLeadingBrand } from "./brands";
@@ -109,6 +110,14 @@ export function isPexelsImageUrl(raw: string): boolean {
  * topic costs one request however many reviews share it. A 429 is reported, never retried
  * here: the caller stops its batch until the window resets.
  */
+/** After a 429: no Pexels request until this time (ms epoch), process-wide. */
+let pexelsBlockedUntil = 0;
+
+/** Test hook: forget a recorded rate limit. */
+export function resetPexelsBlock(): void {
+  pexelsBlockedUntil = 0;
+}
+
 export async function pexelsSearch(query: string, opts: { perPage?: number; orientation?: "landscape" | "portrait"; cache?: Map<string, PexelsSearchResult> } = {}): Promise<PexelsSearchResult> {
   const q = query.trim().slice(0, 80);
   const empty: PexelsRateLimit = { limit: null, remaining: null, resetAt: null };
@@ -117,9 +126,26 @@ export async function pexelsSearch(query: string, opts: { perPage?: number; orie
   const cacheKey = `${opts.orientation ?? "landscape"}|${opts.perPage ?? 15}|${q.toLowerCase()}`;
   const hit = opts.cache?.get(cacheKey);
   if (hit) return { ...hit, fromCache: true };
+  if (!q) return { status: "INVALID_RESPONSE", httpStatus: 0, query: q, photos: [], rateLimit: empty, reason: "empty query: not sent" };
+  // Quota preflight: after a 429, nothing is sent until Pexels' reset time.
+  if (pexelsBlockedUntil > Date.now()) return { status: "RATE_LIMITED", httpStatus: 0, query: q, photos: [], rateLimit: empty, reason: `Pexels rate limit reached; not called until ${new Date(pexelsBlockedUntil).toISOString()}` };
   const url = `${config.images.pexelsBaseUrl()}/search?${new URLSearchParams({ query: q, per_page: String(opts.perPage ?? 15), orientation: opts.orientation ?? "landscape" })}`;
-  const res = await safeFetch(url, { headers: { Authorization: key, Accept: "application/json" }, timeoutMs: config.images.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 2_000_000 });
+  // One request per query per job invocation (reused by every later caller), one request at a time.
+  const guarded = await onceInInvocation(`pexels:${cacheKey}`, () =>
+    serial("pexels", () =>
+      guardedApiCall({
+        api: "pexels",
+        unit: `search:${cacheKey}`,
+        trigger: "images",
+        skipDbCheck: true,
+        call: () => safeFetch(url, { headers: { Authorization: key, Accept: "application/json" }, timeoutMs: config.images.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 2_000_000 }),
+      }),
+    ),
+  );
+  if (guarded.status !== "OK") return { status: "PROVIDER_ERROR", httpStatus: 0, query: q, photos: [], rateLimit: empty, reason: `Pexels not called: ${guarded.code}` };
+  const res = guarded.value;
   const rateLimit = rateLimitOf(res.headers ?? {});
+  if (res.status === 429) pexelsBlockedUntil = rateLimit.resetAt ? Date.parse(rateLimit.resetAt) || Date.now() + 3_600_000 : Date.now() + 3_600_000;
   let out: PexelsSearchResult;
   if (res.error) out = { status: "PROVIDER_ERROR", httpStatus: 0, query: q, photos: [], rateLimit, reason: `Pexels ${res.error.kind}` };
   else if (res.status === 401 || res.status === 403) out = { status: "AUTH_FAILED", httpStatus: res.status, query: q, photos: [], rateLimit, reason: `Pexels HTTP ${res.status}` };

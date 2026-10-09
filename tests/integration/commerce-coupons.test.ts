@@ -77,6 +77,39 @@ const addBrand = (over: Record<string, unknown> = {}) => db.commerceBrand.create
 /** Lets the next crawl start: the previous coupon run is moved back past the brand's crawl interval. */
 const ageRuns = () => db.commerceRun.updateMany({ data: { startedAt: new Date(Date.now() - 3 * 86_400_000) } });
 
+describe("paid-API guard on the coupon crawl (lib/ops/api-guard.ts; Apify stub only)", () => {
+  it("two scheduled triggers at once start ONE run for the brand", async () => {
+    await addBrand();
+    const [a, b] = await Promise.all([runCouponCrawl("cron-a"), runCouponCrawl("cron-b")]);
+    expect(stub.posts).toHaveLength(1);
+    expect([a.started, b.started].sort()).toEqual([0, 1]);
+  });
+
+  it("downloads a dataset once: a collect after a failed save reuses the stored raw pages", async () => {
+    const brand = await addBrand();
+    stub.items = [pageItem([{ code: "SAVE20", context: "Use code SAVE20 for 20% off sitewide." }])];
+    await runCouponCrawl("test");
+    await collectCouponRuns("test");
+    const datasetReads = () => stub.requests.filter((r) => r.includes("/datasets/")).length;
+    expect(datasetReads()).toBe(1);
+    // Processing failed after the raw pages were stored: the run is back to SUCCEEDED.
+    await db.commerceRun.updateMany({ where: { brandId: brand.id }, data: { status: "SUCCEEDED" } });
+    expect(await collectCouponRuns("test")).toMatchObject({ collected: 1 });
+    expect(datasetReads()).toBe(1); // not downloaded again
+    expect(await db.commerceRun.findFirstOrThrow({ where: { brandId: brand.id } })).toMatchObject({ status: "COLLECTED" });
+  });
+
+  it("does not start a run whose projected cost would exceed the monthly budget, and says why", async () => {
+    const brand = await addBrand();
+    for (let i = 0; i < 3; i++) await db.commerceRun.create({ data: { purpose: "COUPON", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 9, startedAt: new Date(Date.now() - (5 + i) * 86_400_000) } });
+    // $27 spent of $30: below the budget, but one more ~$9 run would pass it.
+    const r = await runCouponCrawl("test");
+    expect(stub.posts).toHaveLength(0);
+    expect(r.started).toBe(0);
+    expect(JSON.stringify(r.results)).toMatch(/BUDGET_EXHAUSTED: monthly Apify budget would be exceeded/);
+  });
+});
+
 describe("commerce coupon crawl", () => {
   it("crawls only official promo pages allowed by robots.txt, never a disabled or unapproved third-party source", async () => {
     await addBrand();

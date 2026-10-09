@@ -1,7 +1,9 @@
 import crypto from "node:crypto";
 import { config } from "@/lib/config";
 import { PipelineError } from "@/lib/errors";
+import { db } from "@/lib/db";
 import { log } from "@/lib/log";
+import { guardedApiCall } from "@/lib/ops/api-guard";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { cleanText, sha256, stableStringify } from "@/lib/util/text";
 
@@ -16,7 +18,7 @@ import { cleanText, sha256, stableStringify } from "@/lib/util/text";
 
 export const AI_GUIDE_SOURCE = "keyword-to-blog";
 
-export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string; industry?: string; articleType?: "GUIDE" | "ARTICLE" };
+export type GuideRequest = { productName: string; brand?: string; category?: string; keywords: string[]; topic?: string; audience?: string; industry?: string; articleType?: "GUIDE" | "ARTICLE"; trigger?: string };
 
 type Section = { type?: string; heading?: string; contentMarkdown?: string; callout?: { label?: string; text?: string } };
 type KtbResponse = {
@@ -128,26 +130,36 @@ export async function generateGuide(req: GuideRequest) {
     factualityMode: "standard",
   };
   const idempotencyKey = idempotencyKeyFor(body);
-  // Primary key, then the fallback key when the primary is refused (auth, quota, rate limit,
-  // provider error). A timeout is not failed over: the provider may still be generating, and a
-  // second key would start (and bill) a second generation.
-  let res: Awaited<ReturnType<typeof safeFetch>> | undefined;
-  for (const [i, key] of keys.entries()) {
-    res = await safeFetch(endpoint, {
-      method: "POST",
-      // Idempotency-Key: a retried request can never generate (or bill) twice.
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": idempotencyKey, "X-Request-ID": crypto.randomUUID() },
-      body: JSON.stringify(body),
-      timeoutMs: config.aiGuides.timeoutMs(),
-      maxRedirects: 0,
-      readBody: true,
-      maxBytes: 5_000_000,
-    });
-    const failover = !res.ok && res.error?.kind !== "TIMEOUT" && (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500 || /limit|quota|unavailable/i.test(res.body ?? ""));
-    if (res.ok || !failover || i === keys.length - 1) break;
-    log.warn("Keyword-to-Blog key refused; trying the fallback key", { stage: "CONTENT_FETCH", status: res.status, key: i === 0 ? "primary" : "secondary" });
+  // Exactly ONE call per attempt (lib/ops/api-guard.ts): the key is chosen BEFORE calling — the
+  // fallback key only when the primary was refused (auth, quota, rate limit) earlier today — and a
+  // refusal is remembered for the next attempt instead of being retried now with the other key.
+  // Duplicate attempts are prevented upstream (atomic slot claim) and by the provider's
+  // Idempotency-Key (the same request is never generated or billed twice).
+  const keyIndex = keys.length > 1 && (await primaryRefusedToday()) ? 1 : 0;
+  const guarded = await guardedApiCall({
+    api: "keyword-to-blog",
+    unit: `generate:${idempotencyKey.slice(0, 16)}`,
+    trigger: req.trigger ?? "unknown",
+    params: () => (body.keywords.length && body.topic ? null : { code: "INVALID_PARAMS", reason: "no keyword or topic" }),
+    call: () =>
+      safeFetch(endpoint, {
+        method: "POST",
+        // Idempotency-Key: a repeated request can never generate (or bill) twice.
+        headers: { Authorization: `Bearer ${keys[keyIndex]}`, "Content-Type": "application/json", Accept: "application/json", "Idempotency-Key": idempotencyKey, "X-Request-ID": crypto.randomUUID() },
+        body: JSON.stringify(body),
+        timeoutMs: config.aiGuides.timeoutMs(),
+        maxRedirects: 0,
+        readBody: true,
+        maxBytes: 5_000_000,
+      }),
+  });
+  if (guarded.status !== "OK") throw new PipelineError("CONTENT_API_NOT_CONFIGURED", `Keyword-to-Blog call not made: ${guarded.code}: ${guarded.reason}`, undefined, false);
+  const res = guarded.value;
+  const refused = !res.ok && res.error?.kind !== "TIMEOUT" && (res.status === 401 || res.status === 403 || res.status === 429 || /limit|quota/i.test(res.body ?? ""));
+  if (refused && keyIndex === 0 && keys.length > 1) {
+    await markPrimaryRefusedToday();
+    log.warn("Keyword-to-Blog primary key refused; the next attempt uses the fallback key", { stage: "CONTENT_FETCH", status: res.status });
   }
-  if (!res) throw new PipelineError("CONTENT_API_NOT_CONFIGURED", "No Keyword-to-Blog key configured");
   if (!res.ok) {
     let detail = res.error?.message ?? `HTTP ${res.status}`;
     try {
@@ -161,8 +173,9 @@ export async function generateGuide(req: GuideRequest) {
     throw new PipelineError(
       timedOut ? "CONTENT_API_TIMEOUT" : "CONTENT_API_HTTP_ERROR",
       timedOut ? "Keyword-to-Blog is still generating. Submit the same request again: it returns the finished guide without generating (or billing) twice." : `Keyword-to-Blog: ${detail}`,
-      { status: res.status },
-      res.status === 429 || res.status >= 500,
+      // fallbackNext: the primary key was refused and a fallback is configured — the NEXT attempt uses it.
+      { status: res.status, fallbackNext: refused && keyIndex === 0 && keys.length > 1 },
+      res.status === 429 || res.status >= 500 || (refused && keyIndex === 0 && keys.length > 1),
     );
   }
   let json: KtbResponse;
@@ -172,4 +185,18 @@ export async function generateGuide(req: GuideRequest) {
     throw new PipelineError("CONTENT_API_RESPONSE_INVALID", "Keyword-to-Blog returned invalid JSON");
   }
   return { response: json, item: guideToContentItem(json, req) };
+}
+
+// ── Key choice (no failover call) ─────────────────────────────────────────
+
+const refusedKey = (now = new Date()) => `ktb:primary-refused:${now.toISOString().slice(0, 10)}`;
+
+/** The primary key was refused (auth/quota/rate limit) earlier today (UTC): use the fallback key. */
+async function primaryRefusedToday(): Promise<boolean> {
+  return Boolean(await db.automationSetting.findUnique({ where: { key: refusedKey() } }).catch(() => null));
+}
+
+async function markPrimaryRefusedToday(): Promise<void> {
+  const key = refusedKey();
+  await db.automationSetting.upsert({ where: { key }, create: { key, value: new Date().toISOString(), updatedBy: "keyword-to-blog" }, update: { value: new Date().toISOString() } }).catch(() => undefined);
 }

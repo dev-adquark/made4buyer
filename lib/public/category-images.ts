@@ -5,6 +5,7 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
+import { guardedApiCall, serial } from "@/lib/ops/api-guard";
 
 /**
  * Editorial photography for category panels, from Pexels (same API key and licence as the
@@ -63,7 +64,10 @@ async function fetchPhoto(slug: string): Promise<CategoryPhoto | null> {
   const query = QUERIES[slug];
   if (!key || !query) return null;
   const url = `${config.images.pexelsBaseUrl()}/search?${new URLSearchParams({ query, per_page: "6", orientation: "portrait" })}`;
-  const res = await safeFetch(url, { headers: { Authorization: key, Accept: "application/json" }, timeoutMs: 8000, maxRedirects: 2, readBody: true, maxBytes: 1_000_000 });
+  // One request per category, one at a time with every other Pexels call (lib/ops/api-guard.ts).
+  const guarded = await serial("pexels", () => guardedApiCall({ api: "pexels", unit: `category:${slug}`, trigger: "category-photos", skipDbCheck: true, call: () => safeFetch(url, { headers: { Authorization: key, Accept: "application/json" }, timeoutMs: 8000, maxRedirects: 2, readBody: true, maxBytes: 1_000_000 }) }));
+  if (guarded.status !== "OK") return null;
+  const res = guarded.value;
   if (!res.ok) {
     log.warn("category photo unavailable", { slug, status: res.status, error: res.error?.kind });
     return null;
@@ -118,17 +122,13 @@ export async function loadCategoryPhotos(slugs: string[], now = Date.now()): Pro
   const stored = await readLastGood();
   const due = slugs.filter((s) => QUERIES[s] && now - (Date.parse(stored[s]?.at ?? "") || 0) > REFRESH_AFTER_MS);
   let fetched = 0;
-  // Small batches, not one burst of 32 requests: Pexels limits are per hour and per key.
-  for (let i = 0; i < due.length; i += 4) {
-    const batch = due.slice(i, i + 4);
-    const photos = await Promise.all(batch.map((s) => fetchPhoto(s).catch(() => null)));
-    batch.forEach((s, j) => {
-      const p = photos[j];
-      if (p) {
-        stored[s] = { ...p, at: new Date(now).toISOString() };
-        fetched++;
-      }
-    });
+  // One category at a time (no parallel Pexels calls); a 429 stops the rest until the next refresh.
+  for (const s of due) {
+    const p = await fetchPhoto(s).catch(() => null);
+    if (p) {
+      stored[s] = { ...p, at: new Date(now).toISOString() };
+      fetched++;
+    }
   }
   if (fetched) await writeLastGood(stored);
   const out: Record<string, CategoryPhoto | null> = {};

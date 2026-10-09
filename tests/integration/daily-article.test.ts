@@ -227,14 +227,16 @@ describe("daily article automation", () => {
     expect(await db.commerceOffer.count()).toBe(0);
   });
 
-  it("fails over to the second Keyword-to-Blog key when the first is refused", async () => {
+  it("one call per attempt: a refused primary key is not retried now; the next attempt uses the fallback key", async () => {
     const k = withEnv({ KEYWORD_TO_BLOG_API_KEY_SECONDARY: "test-ktb-key-2" });
     stub.ktb.rejectPrimary = true;
     try {
-      expect(await runDailyArticle("test", { now: MORNING })).toMatchObject({
-        status: "PUBLISHED",
-      });
-      expect(stub.ktb.keysUsed.slice(0, 2)).toEqual(["primary", "secondary"]);
+      const first = await runDailyArticle("test", { now: MORNING });
+      expect(first.status, JSON.stringify(first)).toBe("RETRYING");
+      expect(stub.ktb.keysUsed).toEqual(["primary"]); // exactly one call, no failover call
+      const second = await runDailyArticle("test", { now: new Date(MORNING.getTime() + 50 * 60_000) });
+      expect(second).toMatchObject({ status: "PUBLISHED" });
+      expect(stub.ktb.keysUsed).toEqual(["primary", "secondary"]);
     } finally {
       k();
     }

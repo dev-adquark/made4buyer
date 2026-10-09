@@ -1,5 +1,6 @@
 import type { ContentQueueItem } from "@prisma/client";
 import { config } from "@/lib/config";
+import { PipelineError } from "@/lib/errors";
 import {
   contentOpportunities,
   subjectKey,
@@ -633,8 +634,11 @@ export async function runDailyArticle(
         ? { ...runOutcome({ ...topic, attempts: attemptsAfter }, "SKIPPED", now, { reason: message }), attempts: { decrement: 1 } }
         : runOutcome({ ...topic, attempts: attemptsAfter }, "FAILED", now, { reason: message }),
     });
-    // The provider failed, not the topic: back to the queue (EXHAUSTED after 3 tries).
-    return fail(`Keyword-to-Blog: ${message}`, !quota);
+    // The provider failed, not the topic: back to the queue (EXHAUSTED after 3 tries). A quota refusal
+    // of the primary key with a fallback configured is retried by the NEXT attempt, on the fallback key
+    // (generateGuide makes one call per attempt; it marks the error retryable only in that case).
+    const fallbackNext = quota && error instanceof PipelineError && error.details?.fallbackNext === true;
+    return fail(`Keyword-to-Blog: ${message}`, !quota || fallbackNext);
   }
 
   // Duplicate agent, again: the generated post against everything that exists (exact only).

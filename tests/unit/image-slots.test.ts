@@ -8,7 +8,7 @@ import { productTypeTopic } from "@/lib/images/product-type";
 import { exactImagesFromProducts, type ExactImageProduct } from "@/lib/images/review-exact-image";
 import { photoMatchesTopic, type ImageTopic } from "@/lib/pipeline/image-topics";
 import { categoryImageTopic, enrichImage, relevantImage, type ExactProductImage } from "@/lib/pipeline/images";
-import { findPexelsImage, MIN_PHOTO_WIDTH, pexelsSearch } from "@/lib/pipeline/pexels";
+import { findPexelsImage, MIN_PHOTO_WIDTH, pexelsSearch, resetPexelsBlock } from "@/lib/pipeline/pexels";
 import type { CommonsImage } from "@/lib/products/commons-image";
 import { startStubServer } from "../../scripts/support/stub-server";
 import { withEnv } from "../support/env";
@@ -111,6 +111,7 @@ describe("priority: exact official > retailer > Commons > Pexels unused > Pexels
       expect(await enrichImage({ ...SLING })).toMatchObject({ sourceType: "PLACEHOLDER", providerStatus: "RATE_LIMITED" });
     } finally {
       stub.pexels.rateLimited = false;
+      resetPexelsBlock(); // the guard holds Pexels calls after a 429 until its reset time
     }
   });
 });

@@ -1,6 +1,7 @@
 import type { CommerceBrand, CommerceRawRecord, CommerceRun, Prisma } from "@prisma/client";
 import { getSwitches } from "@/lib/automation/settings";
 import { config } from "@/lib/config";
+import { guardedApiCall, onceInInvocation } from "@/lib/ops/api-guard";
 import { db } from "@/lib/db";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
@@ -110,13 +111,26 @@ const actorPath = () => `/acts/${encodeURIComponent(commerceActorId().replace("/
 
 // ── Budget ───────────────────────────────────────────────────────────────────
 
-/** Apify spend recorded this calendar month (UTC) across all commerce runs. */
+/**
+ * Apify spend recorded this calendar month (UTC) across all commerce runs, plus the expected cost of
+ * runs still in flight (their usage is only known once a status read stores it): each counts at the
+ * average cost of the last 20 finished runs. `exhausted`: the recorded spend reached the budget.
+ * `wouldExceed`: starting one more run would take the projected spend past it. A start is refused on
+ * either, so no unapproved cost is incurred.
+ */
 export async function commerceBudget(now = new Date()) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const agg = await db.commerceRun.aggregate({ where: { startedAt: { gte: monthStart } }, _sum: { usageUsd: true } });
+  const [agg, inFlight, recent] = await Promise.all([
+    db.commerceRun.aggregate({ where: { startedAt: { gte: monthStart } }, _sum: { usageUsd: true } }),
+    db.commerceRun.count({ where: { startedAt: { gte: monthStart }, apifyRunId: { not: null }, usageUsd: null, status: { in: ["READY", "RUNNING", "SUCCEEDED", "COLLECTING"] } } }),
+    db.commerceRun.findMany({ where: { usageUsd: { gt: 0 } }, orderBy: { startedAt: "desc" }, take: 20, select: { usageUsd: true } }),
+  ]);
   const spentUsd = agg._sum.usageUsd ?? 0;
+  const avgRunUsd = recent.length ? recent.reduce((s, r) => s + (r.usageUsd ?? 0), 0) / recent.length : 0;
+  const inFlightUsd = inFlight * avgRunUsd;
   const budgetUsd = monthlyBudgetUsd();
-  return { spentUsd, budgetUsd, remainingUsd: Math.max(0, budgetUsd - spentUsd), exhausted: spentUsd >= budgetUsd };
+  const projected = spentUsd + inFlightUsd;
+  return { spentUsd, inFlightUsd, avgRunUsd, budgetUsd, remainingUsd: Math.max(0, budgetUsd - spentUsd), exhausted: spentUsd >= budgetUsd, wouldExceed: projected + avgRunUsd > budgetUsd };
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────
@@ -175,15 +189,30 @@ export async function startProductRun(brand: CommerceBrand, urls: string[], trig
   if (!(await getSwitches()).commerce_engine) return skip("SWITCH_OFF", "paused in Admin → Automation: Commerce engine is off");
   const budget = await commerceBudget();
   if (budget.exhausted) return skip("BUDGET_EXHAUSTED", `monthly Apify budget exhausted ($${budget.spentUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
+  if (budget.wouldExceed) return skip("BUDGET_EXHAUSTED", `monthly Apify budget would be exceeded (spent $${budget.spentUsd.toFixed(2)} + in flight ≈$${budget.inFlightUsd.toFixed(2)} + this run ≈$${budget.avgRunUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
   if (!list.length && !listing.length) return skip("NO_URLS", note ? `no product URLs: ${note}` : "no product URLs discovered");
   const active = await db.commerceRun.findFirst({ where: { brandId: brand.id, purpose: "PRODUCT", status: { in: [...ACTIVE, "SUCCEEDED", "COLLECTING"] } } });
   if (active) return { status: "SKIPPED", code: "ACTIVE_RUN", reason: `run ${active.apifyRunId ?? active.id} is still ${active.status}` };
+  const lastRun = await db.commerceRun.findFirst({ where: { brandId: brand.id, purpose: "PRODUCT" }, orderBy: { startedAt: "desc" }, select: { id: true } });
   try {
     const q = new URLSearchParams({ timeout: String(config.apify.runTimeoutSecs()), memory: String(config.apify.memoryMb()) });
     const robotsRules = opts.robots?.rules ?? null;
     // One run per brand: with deal pages, the listing pages lead (after re-checks, which are in `list`).
     const body = listing.length ? buildDealActorInput(brand, listing, list, { robotsRules, leadingProductUrls: opts.recheckUrls }) : buildProductActorInput(brand, list, { robotsRules });
-    const { data } = await apify<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body });
+    // One start per brand per due slot (basis: the brand's previous run): a duplicate trigger that saw
+    // the same previous run finds the marker and starts nothing.
+    const guarded = await guardedApiCall({
+      api: "apify",
+      unit: `start:product:${brand.id}`,
+      idempotencyBasis: lastRun?.id ?? "first",
+      trigger,
+      params: () => ([...list, ...listing].every((u) => /^https?:\/\//i.test(u)) ? null : { code: "INVALID_PARAMS", reason: "a start URL is not http(s)" }),
+      call: () => apify<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body }),
+      validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+    });
+    if (guarded.status === "SKIPPED") return { status: "SKIPPED", code: guarded.code, reason: guarded.reason };
+    if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+    const { data } = guarded.value;
     if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
     const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: commerceActorId(), apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, trigger, status: "RUNNING", startUrls: total } });
     await db.commerceBrand.update({ where: { id: brand.id }, data: { crawlStatus: "RUNNING" } });
@@ -501,9 +530,24 @@ async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null
     if (!datasetId) throw new PipelineError("APIFY_RESPONSE_INVALID", "Run has no dataset", undefined, false);
     // A run with deal pages also holds the pages it followed (at most COMMERCE_DEAL_PAGES_PER_RUN).
     const q = new URLSearchParams({ clean: "true", format: "json", limit: String(run.startUrls + dealPagesPerRun() + 5) });
-    const items = await apify<unknown>(`/datasets/${encodeURIComponent(datasetId)}/items?${q}`);
-    if (!Array.isArray(items)) throw new PipelineError("APIFY_RESPONSE_INVALID", "Dataset items response is not an array");
-    const raws = await storeRaws(run, items);
+    // Reuse: a dataset stored by an earlier attempt (that failed while processing) is not downloaded again.
+    const stored = await db.commerceRawRecord.findMany({ where: { runId: run.id }, orderBy: { fetchedAt: "asc" } });
+    let raws: CommerceRawRecord[];
+    if (stored.length) {
+      log.info("api call skipped", { stage: "API_GUARD", api: "apify", unit: `dataset:${run.apifyRunId}`, code: "REUSED_STORED_RESULT", reason: `${stored.length} raw records already stored for this run` });
+      raws = stored;
+    } else {
+      const got = await guardedApiCall({
+        api: "apify",
+        unit: `dataset:${run.apifyRunId}`,
+        trigger: run.trigger,
+        call: () => onceInInvocation(`apify:dataset:${datasetId}`, () => apify<unknown>(`/datasets/${encodeURIComponent(datasetId)}/items?${q}`)),
+        validate: (r) => (Array.isArray(r) ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Dataset items response is not an array" }),
+      });
+      if (got.status === "SKIPPED") throw new PipelineError("APIFY_RUN_FAILED", `${got.code}: ${got.reason}`);
+      if (got.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", got.reason);
+      raws = await storeRaws(run, got.value as unknown[]);
+    }
     const cache = new Map<string, Candidate[]>();
     const outcomes: ItemOutcome[] = [];
     for (const raw of raws) {
@@ -543,7 +587,12 @@ export async function collectCommerceRuns(trigger: string, now = new Date()) {
   const results: CommerceCollectResult[] = [];
   for (const run of runs) {
     try {
-      const { data } = await apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId!)}`);
+      // A run already known to have SUCCEEDED (cost and dataset recorded) needs no status read; any other
+      // run is read at most once per job invocation (reused by the weekly sweep in the same invocation).
+      const known = run.status === "SUCCEEDED" && run.usageUsd != null && run.datasetId;
+      const { data } = known
+        ? { data: { id: run.apifyRunId!, status: "SUCCEEDED", defaultDatasetId: run.datasetId!, usageTotalUsd: run.usageUsd!, finishedAt: run.finishedAt?.toISOString() } as ApifyRunData }
+        : await onceInInvocation(`apify:status:${run.apifyRunId}`, () => apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId!)}`));
       if (!data?.status) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify run status missing");
       if (data.status === "SUCCEEDED") results.push(await collectSucceeded(run, data, now));
       else if (FAILED.includes(data.status)) {

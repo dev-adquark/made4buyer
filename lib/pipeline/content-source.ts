@@ -1,7 +1,8 @@
 import { config } from "@/lib/config";
+import { guardedApiCall } from "@/lib/ops/api-guard";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
-import { isRetryableStatus, safeFetch, withRetry } from "@/lib/net/safe-fetch";
+import { isRetryableStatus, safeFetch } from "@/lib/net/safe-fetch";
 import { validateContentItem, type ValidationCode } from "./validate";
 
 /**
@@ -140,10 +141,20 @@ export async function fetchContentBatch(): Promise<FetchedBatch> {
     if (seen.has(current.toString())) break;
     seen.add(current.toString());
     const target: string = current.toString();
-    const { result, attempts } = await withRetry(
-      () => safeFetch(target, { headers, timeoutMs: config.contentApi.timeoutMs(), maxRedirects: 3, readBody: true, maxBytes: 20_000_000 }),
-      { retries: config.contentApi.maxRetries(), shouldRetry: (r) => !r.ok && (r.error?.kind === "TIMEOUT" || isRetryableStatus(r.status)) },
-    );
+    // Exactly one request per page (lib/ops/api-guard.ts): no retry. A failed page is fetched again only
+    // by the next scheduled ingest (the `ingestion` lock prevents a duplicate trigger in the meantime).
+    const guarded = await guardedApiCall({
+      api: "content-api",
+      unit: `page:${pages + 1}`,
+      trigger: "ingest",
+      // Runs under the `ingestion` lock, written before this call: the database is reachable and writable.
+      skipDbCheck: true,
+      params: () => (/^https?:$/.test(new URL(target).protocol) ? null : { code: "INVALID_PARAMS", reason: "Content API URL is not http(s)" }),
+      call: () => safeFetch(target, { headers, timeoutMs: config.contentApi.timeoutMs(), maxRedirects: 3, readBody: true, maxBytes: 20_000_000 }),
+    });
+    if (guarded.status !== "OK") throw new PipelineError("CONTENT_API_HTTP_ERROR", `Content API call not made: ${guarded.code}: ${guarded.reason}`, undefined, false);
+    const result = guarded.value;
+    const attempts = 1;
     if (!result.ok) {
       if (result.error?.kind === "TIMEOUT") throw new PipelineError("CONTENT_API_TIMEOUT", `Content API timed out after ${attempts} attempt(s)`);
       throw new PipelineError(

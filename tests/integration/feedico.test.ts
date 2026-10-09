@@ -188,6 +188,13 @@ describe("Feedico coupon feed", () => {
     expect(await db.commerceCoupon.findFirst({ where: { code: "UKSAVE60" } })).toMatchObject({ status: "INVALID", verificationEvidence: expect.stringMatching(/Not a US-market offer/) });
   });
 
+  it("two triggers at once fetch each brand once (no duplicate request)", async () => {
+    await addBrand();
+    await addBrand("Bolt", "bolt.com");
+    await Promise.all([runFeedicoSync("cron-a"), runFeedicoSync("cron-b")]);
+    expect(stub.requests.map((q) => q.body.firmName).sort()).toEqual(["Acme", "Bolt"]);
+  });
+
   it("a rejected key stops the run and changes no coupon", async () => {
     await addBrand();
     await addBrand("Bolt", "bolt.com");
@@ -223,13 +230,13 @@ describe("Feedico coupon feed", () => {
     expect(stub.requests).toHaveLength(2);
   });
 
-  it("a server error is retried once, keeps the last good data, and the brand is retried on the next run", async () => {
+  it("a server error is not retried (one request), keeps the last good data, and the brand is fetched again on the next run", async () => {
     const brand = await addBrand();
     stub.rows.Acme = [row()];
     await runFeedicoSync("test");
     stub.mode = "500";
     const r = await runFeedicoSync("test", { force: true });
-    expect(r).toMatchObject({ status: "FAILED", brandsFailed: 1, requests: 2 });
+    expect(r).toMatchObject({ status: "FAILED", brandsFailed: 1, requests: 1 });
     expect((await feedRows(brand.id)).map((c) => c.status)).toEqual(["UNVERIFIED"]);
     stub.mode = "ok";
     expect(await runFeedicoSync("test")).toMatchObject({ status: "OK", brandsChecked: 1 }); // failed brand is due again

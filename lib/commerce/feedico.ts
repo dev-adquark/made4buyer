@@ -4,6 +4,7 @@ import { config } from "@/lib/config";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { registrableDomain } from "@/lib/net/ip";
+import { guardedApiCall } from "@/lib/ops/api-guard";
 import { sha256 } from "@/lib/util/text";
 import { commerceAudit } from "./audit";
 import { ensureBrandsSeeded } from "./brands";
@@ -73,7 +74,7 @@ export type FeedicoCouponRow = {
 
 export type FeedicoPage = { recordCount: number; page: number; pageSize: number; coupons: FeedicoCouponRow[] };
 
-export type FeedicoFetchError = { kind: "AUTH_FAILED" | "QUOTA_EXCEEDED" | "BAD_REQUEST" | "RESPONSE_INVALID" | "UNAVAILABLE"; status: number; message: string };
+export type FeedicoFetchError = { kind: "AUTH_FAILED" | "QUOTA_EXCEEDED" | "BAD_REQUEST" | "RESPONSE_INVALID" | "UNAVAILABLE" | "SKIPPED"; status: number; message: string };
 
 const str = (v: unknown, max = 500): string | null => (typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, max) : null);
 
@@ -275,6 +276,7 @@ export async function ensureFeedicoSource() {
   // The notes describe what the source does; refresh the original wording only (an admin's own notes are kept).
   if (existing?.notes?.startsWith(OLD_SOURCE_NOTES_PREFIX)) return db.commerceSource.update({ where: { id: existing.id }, data: { notes: FEEDICO_SOURCE_NOTES } });
   if (existing) return existing;
+  // Two concurrent first syncs may both try to create it: the loser reads the winner's row.
   return db.commerceSource.create({
     data: {
       name: "Feedico coupon feed",
@@ -286,6 +288,10 @@ export async function ensureFeedicoSource() {
       crawlFrequencyHours: 7 * 24,
       notes: FEEDICO_SOURCE_NOTES,
     },
+  }).catch(async (error: unknown) => {
+    const row = await db.commerceSource.findUnique({ where: { slug: FEEDICO_SOURCE_SLUG } });
+    if (row) return row;
+    throw error;
   });
 }
 
@@ -306,6 +312,8 @@ export type FeedicoSyncResult = {
   invalidated: number;
   expired: number;
   remaining: number;
+  /** Brands whose request preflight refused (duplicate trigger, invalid parameters, database not ready): not called. */
+  brandsSkipped?: number;
   /** Stored Feedico codes deactivated because Feedico's latest confirmation is older than 14 days. */
   deactivated: number;
   failures?: Array<{ brand: string; error: string }>;
@@ -364,12 +372,31 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
   const out = { ...base };
 
   /** Counts the attempt against the monthly budget before making it. */
-  const request = async (body: { page: number; pageSize: number; firmName?: string }) => {
-    if (state.requests >= budget) return { ok: false as const, error: { kind: "QUOTA_EXCEEDED" as const, status: 0, message: `request budget ${budget} for ${state.month} reached` }, local: true };
-    state.requests++;
-    out.requests++;
-    await writeState(state);
-    return { ...(await fetchFeedicoCoupons(body)), local: false };
+  /**
+   * One guarded request (lib/ops/api-guard.ts): parameters, database, monthly budget and an idempotency
+   * marker per (brand, page, previous fetch) are checked first; the attempt is counted before it is made;
+   * no retry. A duplicate trigger for the same brand and page finds the marker and makes no request.
+   */
+  const request = async (body: { page: number; pageSize: number; firmName: string }, brandSlug: string) => {
+    const guarded = await guardedApiCall({
+      api: "feedico",
+      unit: `catalog:${brandSlug}:page${body.page}`,
+      idempotencyBasis: state.brands[brandSlug]?.at ?? "never",
+      markerTtlMs: 7 * 86_400_000,
+      trigger,
+      config: [() => (feedicoConfigured() ? null : { code: "FEEDICO_NOT_CONFIGURED", reason: "FEEDICO_API_KEY not configured" })],
+      params: () => (body.firmName.trim() && body.page >= 1 && body.page <= config.feedico.maxPagesPerBrand() && body.pageSize >= 1 && body.pageSize <= 200 ? null : { code: "INVALID_PARAMS", reason: `bad request ${JSON.stringify({ page: body.page, pageSize: body.pageSize })}` }),
+      budget: [() => (state.requests >= budget ? { code: "QUOTA_EXCEEDED", reason: `request budget ${budget} for ${state.month} reached` } : null)],
+      call: async () => {
+        state.requests++;
+        out.requests++;
+        await writeState(state);
+        return fetchFeedicoCoupons(body);
+      },
+    });
+    if (guarded.status === "SKIPPED") return { ok: false as const, error: { kind: guarded.code === "QUOTA_EXCEEDED" ? ("QUOTA_EXCEEDED" as const) : ("SKIPPED" as const), status: 0, message: `${guarded.code}: ${guarded.reason}` }, local: true };
+    if (guarded.status === "INVALID_RESPONSE") return { ok: false as const, error: { kind: "RESPONSE_INVALID" as const, status: 200, message: guarded.reason }, local: false };
+    return { ...guarded.value, local: false };
   };
 
   for (const brand of due.slice(0, limit)) {
@@ -378,12 +405,8 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
     const rows: FeedicoCouponRow[] = [];
     let error: FeedicoFetchError | null = null;
     for (let page = 1; page <= config.feedico.maxPagesPerBrand(); page++) {
-      let res = await request({ page, pageSize: PAGE_SIZE, firmName: brand.name });
-      // One retry for a transient failure (network, timeout, 5xx).
-      if (!res.ok && res.error.kind === "UNAVAILABLE" && state.requests < budget) {
-        await new Promise((r) => setTimeout(r, 1500));
-        res = await request({ page, pageSize: PAGE_SIZE, firmName: brand.name });
-      }
+      // Exactly one request per brand page: no retry (a failed brand is due again at the next sync).
+      const res = await request({ page, pageSize: PAGE_SIZE, firmName: brand.name }, brand.slug);
       if (!res.ok) {
         error = res.error;
         if (res.error.kind === "QUOTA_EXCEEDED" && !res.local) state.quotaExceeded = true;
@@ -393,6 +416,13 @@ async function fetchAndStore(trigger: string, opts: FeedicoSyncOptions & { now: 
       if (page * PAGE_SIZE >= res.page.recordCount || res.page.coupons.length < PAGE_SIZE) break;
     }
 
+    if (error?.kind === "SKIPPED") {
+      // Preflight refused the request (duplicate trigger, invalid parameters, database not ready):
+      // nothing was called and nothing changes for this brand.
+      out.brandsSkipped = (out.brandsSkipped ?? 0) + 1;
+      failures.push({ brand: brand.slug, error: error.message });
+      continue;
+    }
     if (error) {
       out.brandsFailed++;
       consecutiveFailures++;

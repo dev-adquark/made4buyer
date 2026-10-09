@@ -1,5 +1,6 @@
 import type { EnrichmentStatus, ImageSourceType, LicenseState } from "@prisma/client";
 import { config } from "@/lib/config";
+import { guardedApiCall, onceInInvocation, serial } from "@/lib/ops/api-guard";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import type { ImageType } from "@/lib/images/provenance";
@@ -189,7 +190,12 @@ async function fromService(input: ImageInput, topic?: ImageTopic): Promise<{ ima
   const headers: Record<string, string> = { Accept: "application/json" };
   const key = config.images.enrichmentKey();
   if (key) headers.Authorization = `Bearer ${key}`;
-  const res = await safeFetch(endpoint.toString(), { headers, timeoutMs: config.images.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 1_000_000 });
+  const target = endpoint.toString();
+  const guarded = await onceInInvocation(`image-service:${target}`, () =>
+    serial("image-service", () => guardedApiCall({ api: "image-service", unit: `lookup:${input.productName}`, trigger: "images", skipDbCheck: true, call: () => safeFetch(target, { headers, timeoutMs: config.images.timeoutMs(), maxRedirects: 2, readBody: true, maxBytes: 1_000_000 }) })),
+  );
+  if (guarded.status !== "OK") return { reason: `image service not called: ${guarded.code}` };
+  const res = guarded.value;
   if (!res.ok) return { reason: `image service ${res.error ? res.error.kind : `HTTP ${res.status}`}` };
   try {
     const d = JSON.parse(res.body ?? "") as Record<string, unknown>;

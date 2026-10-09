@@ -185,6 +185,26 @@ coupon feed → Disable).
 advertisers often allow a code to be published only by approved publishers. Confirm your own approval
 in each affiliate programme whose codes appear.
 
+## 6b. Paid-API call guard (all paid / quota APIs)
+
+Every call to Apify, Feedico, Pexels, the image enrichment service, Keyword-to-Blog and the Content
+API goes through `lib/ops/api-guard.ts`: **one call per unit of work per trigger** (a brand, a review
+source, a run, a page, a search query) — no duplicate, no retry, no parallel call.
+
+- **Before the call** it checks configuration and authentication, the request parameters, that the
+  database is reachable and its schema matches this build, and the budget or quota. Then it writes an
+  atomic idempotency marker (a duplicate trigger for the same unit finds it and does not call; writing
+  it also proves the result can be saved). The first failing check skips the call and is logged as
+  `api call skipped` with the exact `code` and `reason` (Vercel logs, stage `API_GUARD`).
+- **After the call** the response is validated before anything is saved. A failed call is not retried;
+  the unit is due again at its next scheduled trigger.
+- **Reuse**: inside one job run, a run status, a dataset or a search result is fetched once and reused;
+  a dataset already stored (raw records) is never downloaded again.
+- **Budget**: an Apify start is refused when the recorded spend plus the expected cost of runs still in
+  flight plus this run would pass `COMMERCE_MONTHLY_BUDGET_USD`. Keyword-to-Blog uses one key per attempt
+  (the fallback key only for the next attempt after the primary is refused). Pexels is not called again
+  after a 429 until its reset time.
+
 ## 7. Other integrations shown in Admin → Integrations
 
 | Integration | Variables |

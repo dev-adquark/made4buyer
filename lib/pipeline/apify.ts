@@ -1,5 +1,6 @@
 import type { ApifyRun, ReviewSource } from "@prisma/client";
 import { config } from "@/lib/config";
+import { guardedApiCall, onceInInvocation } from "@/lib/ops/api-guard";
 import { db } from "@/lib/db";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
@@ -441,7 +442,22 @@ export async function startSourceRun(source: ReviewSource, trigger: string): Pro
   }
   try {
     const q = new URLSearchParams({ timeout: String(config.apify.runTimeoutSecs()), memory: String(config.apify.memoryMb()) });
-    const { data } = await apifyRequest<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body: buildActorInput(source) });
+    // One start per source per due slot: the basis is the source's previous run, so a duplicate trigger
+    // that saw the same previous run finds the marker and does not start (or bill) a second run.
+    const last = await db.apifyRun.findFirst({ where: { sourceId: source.id }, orderBy: { startedAt: "desc" }, select: { apifyRunId: true } });
+    const guarded = await guardedApiCall({
+      api: "apify",
+      unit: `start:source:${source.id}`,
+      idempotencyBasis: last?.apifyRunId ?? "first",
+      trigger,
+      config: [() => (apifyConfigured() ? null : { code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured" })],
+      params: () => (source.startUrls.length && source.startUrls.every((u) => /^https?:\/\//i.test(u)) ? null : { code: "INVALID_PARAMS", reason: `source ${source.slug} has no valid start URLs` }),
+      call: () => apifyRequest<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body: buildActorInput(source) }),
+      validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+    });
+    if (guarded.status === "SKIPPED") return { status: "SKIPPED", reason: `${guarded.code}: ${guarded.reason}` };
+    if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+    const { data } = guarded.value;
     if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
     await db.apifyRun.create({ data: { sourceId: source.id, apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, status: data.status ?? "READY", trigger } });
     await db.reviewSource.update({ where: { id: source.id }, data: { lastRunAt: new Date() } });
@@ -476,7 +492,8 @@ export async function runScrapeSources(trigger: string) {
 }
 
 async function refreshRun(run: ApifyRun): Promise<ApifyRun> {
-  const { data } = await apifyRequest<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId)}`);
+  // One status read per run per job invocation (reused by every later step of the same invocation).
+  const { data } = await onceInInvocation(`apify:status:${run.apifyRunId}`, () => apifyRequest<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId)}`));
   if (!data?.status) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify run status missing");
   return db.apifyRun.update({ where: { id: run.id }, data: { status: data.status, datasetId: data.defaultDatasetId ?? run.datasetId, finishedAt: data.finishedAt ? new Date(data.finishedAt) : run.finishedAt, error: FAILED.includes(data.status) ? (data.statusMessage ?? data.status).slice(0, 500) : null } });
 }
@@ -485,14 +502,31 @@ export type CollectResult = { runId: string; status: string; items: number; acce
 
 /** Fetches a finished run's dataset once (claimed atomically) and ingests valid items. */
 export async function collectRun(run: ApifyRun, trigger: string): Promise<CollectResult> {
+  // Write readiness before the download: the items can only be saved when ingestion is free. Otherwise
+  // the dataset would be read, fail to save, and be read again at the next collect.
+  const ingestLock = await db.jobLock.findUnique({ where: { name: "ingestion" } }).catch(() => null);
+  if (ingestLock && ingestLock.expiresAt > new Date()) {
+    log.warn("api call skipped", { stage: "API_GUARD", api: "apify", unit: `dataset:${run.apifyRunId}`, trigger, code: "WRITE_NOT_READY", reason: "ingestion is running (lock held); the dataset is read at the next collect" });
+    return { runId: run.apifyRunId, status: "SKIPPED", items: 0, accepted: 0, rejected: 0, rejections: { WRITE_NOT_READY: 1 } };
+  }
   const claimed = await db.apifyRun.updateMany({ where: { id: run.id, status: "SUCCEEDED" }, data: { status: "COLLECTING" } });
   if (!claimed.count) return { runId: run.apifyRunId, status: "ALREADY_COLLECTED", items: 0, accepted: 0, rejected: 0, rejections: {} };
   const source = await db.reviewSource.findUniqueOrThrow({ where: { id: run.sourceId } });
   try {
     if (!run.datasetId) throw new PipelineError("APIFY_RESPONSE_INVALID", "Run has no dataset");
     const q = new URLSearchParams({ clean: "true", format: "json", limit: String(config.apify.maxItemsPerCollect()) });
-    const items = await apifyRequest<unknown>(`/datasets/${encodeURIComponent(run.datasetId)}/items?${q}`);
-    if (!Array.isArray(items)) throw new PipelineError("APIFY_RESPONSE_INVALID", "Dataset items response is not an array");
+    const datasetId = run.datasetId;
+    const got = await guardedApiCall({
+      api: "apify",
+      unit: `dataset:${run.apifyRunId}`,
+      trigger,
+      config: [() => (apifyConfigured() ? null : { code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured" })],
+      call: () => onceInInvocation(`apify:dataset:${datasetId}`, () => apifyRequest<unknown>(`/datasets/${encodeURIComponent(datasetId)}/items?${q}`)),
+      validate: (r) => (Array.isArray(r) ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Dataset items response is not an array" }),
+    });
+    if (got.status === "SKIPPED") throw new PipelineError("APIFY_RUN_FAILED", `${got.code}: ${got.reason}`);
+    if (got.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", got.reason);
+    const items = got.value as unknown[];
     const pages = items.filter((i): i is ApifyItem => Boolean(i) && typeof i === "object" && (i as ApifyItem).m4b === 1);
     const rejections: Record<string, number> = {};
     const valid: Record<string, unknown>[] = [];

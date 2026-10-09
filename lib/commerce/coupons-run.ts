@@ -1,6 +1,7 @@
 import type { CommerceBrand, CommerceRun, CommerceSource, Prisma } from "@prisma/client";
 import { allowed } from "@/lib/automation/settings";
 import { config } from "@/lib/config";
+import { guardedApiCall, onceInInvocation } from "@/lib/ops/api-guard";
 import { db } from "@/lib/db";
 import { PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
@@ -12,7 +13,7 @@ import { commerceAudit } from "./audit";
 import { COUPON_PAGE_FUNCTION } from "./page-functions/coupon";
 import { revalidateCommerce } from "./revalidate";
 import { ensureBrandsSeeded } from "./brands";
-import { monthlyBudgetUsd } from "./pipeline";
+import { commerceBudget, monthlyBudgetUsd } from "./pipeline";
 import { sourceRunnable } from "./sources";
 import { couponMaxAgeDays } from "./deal-status";
 
@@ -143,9 +144,31 @@ async function startRun(target: { brandId?: string; sourceId?: string; name: str
     await db.commerceRun.create({ data: { ...base, status, startUrls: 0, errors: skipped, finishedAt: new Date() } });
     return { target: target.name, status, reason: skipped.map((s) => `${s.url}: ${s.reason}`).join("; "), skipped };
   }
+  const where = target.brandId ? { brandId: target.brandId } : { sourceId: target.sourceId };
+  const lastRun = await db.commerceRun.findFirst({ where: { ...where, purpose: COUPON_PURPOSE }, orderBy: { startedAt: "desc" }, select: { id: true } });
   try {
     const q = new URLSearchParams({ timeout: String(Math.min(config.apify.runTimeoutSecs(), 600)), memory: "1024" });
-    const { data } = await apify<{ data?: ApifyRunData }>(`/acts/${encodeURIComponent(commerceActorId().replace("/", "~"))}/runs?${q}`, { method: "POST", body: buildCouponActorInput(ok, target.name) });
+    // Budget per start (not once per crawl), and one start per target per due slot (basis: its previous run).
+    const guarded = await guardedApiCall({
+      api: "apify",
+      unit: `start:coupon:${target.brandId ?? target.sourceId}`,
+      idempotencyBasis: lastRun?.id ?? "first",
+      trigger,
+      config: [() => (apifyConfigured() ? null : { code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured" })],
+      params: () => (ok.every((u) => /^https?:\/\//i.test(u)) ? null : { code: "INVALID_PARAMS", reason: "a promo URL is not http(s)" }),
+      budget: [
+        async () => {
+          const b = await commerceBudget();
+          if (b.exhausted) return { code: "BUDGET_EXHAUSTED", reason: `monthly Apify budget exhausted ($${b.spentUsd.toFixed(2)} of $${b.budgetUsd.toFixed(2)})` };
+          return b.wouldExceed ? { code: "BUDGET_EXHAUSTED", reason: `monthly Apify budget would be exceeded (spent $${b.spentUsd.toFixed(2)} + in flight ≈$${b.inFlightUsd.toFixed(2)} + this run ≈$${b.avgRunUsd.toFixed(2)} of $${b.budgetUsd.toFixed(2)})` } : null;
+        },
+      ],
+      call: () => apify<{ data?: ApifyRunData }>(`/acts/${encodeURIComponent(commerceActorId().replace("/", "~"))}/runs?${q}`, { method: "POST", body: buildCouponActorInput(ok, target.name) }),
+      validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+    });
+    if (guarded.status === "SKIPPED") return { target: target.name, status: guarded.code === "BUDGET_EXHAUSTED" ? "BUDGET_EXHAUSTED" : "SKIPPED", reason: `${guarded.code}: ${guarded.reason}` };
+    if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+    const { data } = guarded.value;
     if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
     await db.commerceRun.create({ data: { ...base, apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, status: data.status ?? "READY", startUrls: ok.length, errors: skipped.length ? skipped : undefined } });
     log.info("commerce coupon run started", { stage: "COMMERCE", target: target.name, runId: data.id, urls: ok.length });
@@ -216,7 +239,8 @@ export async function runCouponCrawl(trigger: string, opts: CouponCrawlOptions =
 export type CouponCollectResult = { runId: string; status: string; pages?: number; candidates?: number; coupons?: number; dropped?: number; invalidated?: number; changed?: number; error?: string };
 
 async function refresh(run: CommerceRun): Promise<CommerceRun> {
-  const { data } = await apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId!)}`);
+  // At most one status read per run per job invocation (the weekly sweep in the same invocation reuses it).
+  const { data } = await onceInInvocation(`apify:status:${run.apifyRunId}`, () => apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId!)}`));
   if (!data?.status) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify run status missing");
   return db.commerceRun.update({
     where: { id: run.id },
@@ -248,8 +272,25 @@ async function collectOne(run: CommerceRun & { brand: CommerceBrand | null; sour
   try {
     if (!run.datasetId) throw new PipelineError("APIFY_RESPONSE_INVALID", "Run has no dataset");
     const q = new URLSearchParams({ clean: "true", format: "json", limit: "200" });
-    const items = await apify<unknown>(`/datasets/${encodeURIComponent(run.datasetId)}/items?${q}`);
-    if (!Array.isArray(items)) throw new PipelineError("APIFY_RESPONSE_INVALID", "Dataset items response is not an array");
+    const datasetId = run.datasetId;
+    // Reuse: raw pages stored by an earlier attempt are processed again without downloading the dataset.
+    const stored = await db.commerceRawRecord.findMany({ where: { runId: run.id }, orderBy: { fetchedAt: "asc" } });
+    let items: unknown[];
+    if (stored.length) {
+      log.info("api call skipped", { stage: "API_GUARD", api: "apify", unit: `dataset:${run.apifyRunId}`, code: "REUSED_STORED_RESULT", reason: `${stored.length} raw records already stored for this run` });
+      items = stored.map((r) => r.payload);
+    } else {
+      const got = await guardedApiCall({
+        api: "apify",
+        unit: `dataset:${run.apifyRunId}`,
+        trigger: run.trigger,
+        call: () => onceInInvocation(`apify:dataset:${datasetId}`, () => apify<unknown>(`/datasets/${encodeURIComponent(datasetId)}/items?${q}`)),
+        validate: (r) => (Array.isArray(r) ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Dataset items response is not an array" }),
+      });
+      if (got.status === "SKIPPED") throw new PipelineError("APIFY_RUN_FAILED", `${got.code}: ${got.reason}`);
+      if (got.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", got.reason);
+      items = got.value as unknown[];
+    }
     const now = new Date();
     const errors: Array<Record<string, string>> = [];
     const rawIds: Record<string, string> = {};

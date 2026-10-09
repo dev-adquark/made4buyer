@@ -5,6 +5,7 @@ import { runCollectScrapes, runScrapeSources } from "@/lib/pipeline/apify";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { reviewUrl } from "@/lib/pipeline/render-model";
 import { config } from "@/lib/config";
+import { withApiInvocation } from "@/lib/ops/api-guard";
 import { LockHeldError, withLock } from "./lock";
 import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } from "./run-log";
 import { runDataAudit } from "@/lib/ops/data-audit";
@@ -195,7 +196,8 @@ export async function runJob(name: JobName, trigger: string): Promise<unknown> {
   const run = job.run as (trigger: string) => Promise<unknown>;
   const record = await startJobRun(name, trigger);
   try {
-    const result = job.locked ? await withLock(`job:${name}`, job.lockTtlMs, () => run(trigger)) : await run(trigger);
+    // One invocation: a paid-API result fetched once is reused by every later step (lib/ops/api-guard.ts).
+    const result = await withApiInvocation(() => (job.locked ? withLock(`job:${name}`, job.lockTtlMs, () => run(trigger)) : run(trigger)));
     const outcome = jobOutcome(result);
     await finishJobRun(record, { status: runStatusFor(outcome), outcome: outcome.status, reason: outcome.reason });
     return result;

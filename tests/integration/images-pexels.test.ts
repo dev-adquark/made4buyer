@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { runImageBackfill } from "@/lib/jobs/image-backfill";
 import { enrichImage } from "@/lib/pipeline/images";
-import { findPexelsImage, pexelsSearch } from "@/lib/pipeline/pexels";
+import { findPexelsImage, pexelsSearch, resetPexelsBlock } from "@/lib/pipeline/pexels";
 import { buildPageRenderModel } from "@/lib/pipeline/render-model";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { seedTaxonomy } from "@/lib/taxonomy/persist";
@@ -50,6 +50,11 @@ describe("Pexels adapter", () => {
     expect((await pexelsSearch("data center servers")).status).toBe("AUTH_FAILED");
     off();
     expect(await pexelsSearch("ratelimit please")).toMatchObject({ status: "RATE_LIMITED", httpStatus: 429 });
+    // After a 429 nothing is sent until Pexels' reset time.
+    const sent = stub.requests.length;
+    expect(await pexelsSearch("anything else")).toMatchObject({ status: "RATE_LIMITED", httpStatus: 0 });
+    expect(stub.requests.length).toBe(sent);
+    resetPexelsBlock();
     expect((await pexelsSearch("malformed")).status).toBe("INVALID_RESPONSE");
     expect((await pexelsSearch("nothing at all")).status).toBe("EMPTY");
     const none = withEnv({ PEXELS_API_KEY: undefined });

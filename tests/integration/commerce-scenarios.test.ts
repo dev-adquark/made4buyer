@@ -411,6 +411,9 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     await db.commerceRun.updateMany({ data: { startedAt: lastMonth } });
     expect(await commerceBudget()).toMatchObject({ exhausted: false });
     await db.commerceBrand.update({ where: { id: brand.id }, data: { nextCrawlAt: null } });
+    // Typical runs cost cents: with only the two $15 runs above as history, the projected cost of a
+    // second start (one in flight + this one ≈ $30) would itself exceed the budget.
+    for (let i = 0; i < 8; i++) await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 0.05, startedAt: lastMonth } });
     stub.runStatus = "RUNNING";
     expect(await JOBS["commerce-discover"].run("test")).toMatchObject({ status: "OK", started: 1 });
     expect(await runCouponCrawl("test")).toMatchObject({ status: "OK", started: 1 });
