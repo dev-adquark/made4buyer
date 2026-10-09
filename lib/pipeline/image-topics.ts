@@ -16,6 +16,8 @@ export type ImageTopic = {
   accept: string[];
   /** Other product types: a photo naming one of these before an accepted word is about that other object. */
   competing?: string[];
+  /** Words that mean the photo shows something else, wherever they appear ("Singapore Sling cocktail"). */
+  reject?: string[];
 };
 
 type Rule = ImageTopic & { match: string[] };
@@ -96,6 +98,7 @@ export function photoMatchesTopic(alt: string, topic: ImageTopic): boolean {
   const words = tokenize(alt);
   const first = words.findIndex((w) => topic.accept.includes(w));
   if (first < 0) return false;
+  if (topic.reject?.length && words.some((w) => topic.reject!.includes(w))) return false;
   // "Compact white drone … surrounded by flashlight" is a photo of a drone, not of a flashlight.
   if (topic.competing?.length && words.slice(0, first).some((w) => topic.competing!.includes(w))) return false;
   return true;

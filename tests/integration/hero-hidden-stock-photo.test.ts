@@ -79,6 +79,24 @@ describe("a stored stock photo that fails today's relevance rule is replaced (Pe
     expect(again.items.map((i) => i.slug)).not.toContain(r.slug);
   });
 
+  it("a sling bag topic never accepts a Singapore Sling cocktail, a slingshot or an arm sling (what production picked first)", () => {
+    expect(photoMatchesTopic("Glass of Singapore Sling with pineapple garnish beside a Raffles bag.", SLING)).toBe(false);
+    expect(photoMatchesTopic("Boy aiming a wooden slingshot in the garden", SLING)).toBe(false);
+    expect(photoMatchesTopic("Man with his arm in a sling after an injury", SLING)).toBe(false);
+    expect(photoMatchesTopic("Fashion-forward outfit featuring a blue blazer and a striking yellow sling bag.", SLING)).toBe(true);
+    expect(photoMatchesTopic("Elegant pink leather sling bag hanging against a plain background.", SLING)).toBe(true);
+    expect(photoMatchesTopic("Woman wearing a black crossbody bag on a city street", SLING)).toBe(true);
+  });
+
+  it("a stored cocktail photo is re-selected by hero correction and replaced", async () => {
+    const r = await review("Peak Design City Crescent 6L", "Peak Design", "luggage-travel");
+    const bad = await plantStock(r.id, 36016736, "Glass of Singapore Sling with pineapple garnish beside a Raffles bag.", new Date("2026-10-09T11:23:21Z"));
+    await runHeroCorrection("test", { now: Date.parse("2026-10-09T12:00:00Z") });
+    const now = await db.imageAsset.findFirstOrThrow({ where: { normalizedReviewId: r.id, isPrimary: true } });
+    expect(now.id).not.toBe(bad.id);
+    expect(photoMatchesTopic(now.altText ?? "", SLING)).toBe(true);
+  });
+
   it("leaves a stock photo that still passes the rule untouched (only incorrect placements change)", async () => {
     const r = await review("Peak Design City Crescent 12L", "Peak Design", "luggage-travel");
     const ok = await plantStock(r.id, 10669656, "Fashion-forward outfit featuring a blue blazer and a striking yellow sling bag.", CHOSEN_AT);

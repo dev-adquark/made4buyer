@@ -8,7 +8,7 @@ import { imageTopic, type ImageTopic } from "@/lib/pipeline/image-topics";
  * product when no licensed photo of the exact product exists. A photo qualifies only if its own
  * description names the product type (`accept`), so an off-topic photo is never used.
  */
-type TypeRule = { key: string; label: string; match: string[]; queries: string[]; accept: string[]; allowWith?: string[] };
+type TypeRule = { key: string; label: string; match: string[]; queries: string[]; accept: string[]; allowWith?: string[]; reject?: string[] };
 
 // Ordered: specific types first ("galaxy watch" before "galaxy", "car mount" before "car").
 const TYPES: TypeRule[] = [
@@ -21,7 +21,7 @@ const TYPES: TypeRule[] = [
   { key: "flashlight", label: "a flashlight", match: ["flashlight", "torch", "headlamp", "imini", "keychain light", "edc light"], queries: ["small flashlight", "flashlight in hand"], accept: ["flashlight", "torch", "headlamp"] },
   { key: "packing-cubes", label: "packing cubes", match: ["packing cube", "packing cubes", "packing organizer"], queries: ["packing cubes suitcase", "organized packing clothes"], accept: ["packing", "cubes", "suitcase", "clothes", "luggage", "organizer"] },
   { key: "duffel", label: "a duffel bag", match: ["duffel", "duffle", "weekender", "holdall"], queries: ["duffel bag", "travel duffle bag"], accept: ["duffel", "duffle", "bag", "holdall"] },
-  { key: "sling", label: "a sling bag", match: ["sling", "crescent", "crossbody", "hip pack", "waist pack", "fanny pack"], queries: ["sling bag", "crossbody bag", "crossbody bag street style", "sling bag fashion", "crossbody bag woman", "man with crossbody bag", "small shoulder bag", "chest bag", "travel sling bag"], accept: ["sling", "crossbody", "bag", "pack"] },
+  { key: "sling", label: "a sling bag", match: ["sling", "crescent", "crossbody", "hip pack", "waist pack", "fanny pack"], queries: ["sling bag", "crossbody bag", "crossbody bag street style", "sling bag fashion", "crossbody bag woman", "man with crossbody bag", "small shoulder bag", "chest bag", "travel sling bag"], accept: ["sling", "crossbody", "bag", "pack"], reject: ["cocktail", "cocktails", "drink", "drinks", "beverage", "glass", "singapore", "pineapple", "slingshot", "catapult", "arm", "injury", "injured", "bandage", "medical", "baby", "infant", "carrier"] },
   { key: "messenger", label: "a messenger bag", match: ["messenger", "briefcase", "laptop bag", "tote"], queries: ["messenger bag", "leather laptop bag"], accept: ["messenger", "bag", "briefcase", "tote"] },
   { key: "backpack", label: "a backpack", match: ["backpack", "daypack", "rucksack", "roll top", "rolltop"], queries: ["backpack", "travel backpack"], accept: ["backpack", "rucksack", "bag", "daypack"] },
   { key: "suitcase", label: "a suitcase", match: ["suitcase", "carry on", "carry-on", "luggage", "spinner", "check in"], queries: ["suitcase", "carry on luggage"], accept: ["suitcase", "luggage", "baggage", "trolley"] },
@@ -88,7 +88,7 @@ export function productTypeTopic(input: { productName: string; title?: string | 
   for (const text of [input.productName, `${input.productName} ${input.title ?? ""}`]) {
     const padded = ` ${tokenize(text).join(" ")} `;
     const rule = TYPES.find((r) => r.match.some((m) => contains(padded, m)));
-    if (rule) return { key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept, competing: competingWords(rule) };
+    if (rule) return { key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept, competing: competingWords(rule), ...(rule.reject ? { reject: rule.reject } : {}) };
   }
   return null;
 }
@@ -120,7 +120,7 @@ function typeNamedFirst(text: string): TypeRule | null {
   return best?.rule ?? null;
 }
 
-const topicOf = (rule: TypeRule): ImageTopic => ({ key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept, competing: competingWords(rule) });
+const topicOf = (rule: TypeRule): ImageTopic => ({ key: `product-type:${rule.key}`, label: rule.label, queries: rule.queries, accept: rule.accept, competing: competingWords(rule), ...(rule.reject ? { reject: rule.reject } : {}) });
 
 /** A product type named by a category label or breadcrumbs ("Headsets", "Blenders", "flashlights"); plurals are read too. */
 export function typeTopicFromCrumbs(text: string | null | undefined): ImageTopic | null {
