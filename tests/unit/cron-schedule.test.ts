@@ -40,14 +40,14 @@ describe("next / previous run (UTC)", () => {
     }
   });
 
-  it("runs the Feedico coupon sync once a week, Friday 10:30 IST (05:00 UTC)", () => {
+  it("runs the Feedico coupon sync once a week, Friday 11:30 IST (06:00 UTC)", () => {
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     const feedico = crons.filter((c) => c.path === "/api/cron/feedico-coupons");
-    expect(feedico.map((c) => c.schedule)).toEqual(["0 5 * * 5"]);
-    expect(iso(nextRun("0 5 * * 5", NOW))).toBe("2026-10-09T05:00:00.000Z");
-    expect(formatInZone(nextRun("0 5 * * 5", NOW)!, "Asia/Kolkata")).toMatch(/10:30/);
-    expect(new Date("2026-10-09T05:00:00Z").toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "long", hour: "numeric", minute: "2-digit" })).toBe("Friday 10:30 AM");
-    expect(iso(previousRun("0 5 * * 5", NOW))).toBe("2026-10-02T05:00:00.000Z");
+    expect(feedico.map((c) => c.schedule)).toEqual(["0 6 * * 5"]);
+    expect(iso(nextRun("0 6 * * 5", NOW))).toBe("2026-10-09T06:00:00.000Z");
+    expect(formatInZone(nextRun("0 6 * * 5", NOW)!, "Asia/Kolkata")).toMatch(/11:30/);
+    expect(new Date("2026-10-09T06:00:00Z").toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "long", hour: "numeric", minute: "2-digit" })).toBe("Friday 11:30 AM");
+    expect(iso(previousRun("0 6 * * 5", NOW))).toBe("2026-10-02T06:00:00.000Z");
   });
 
   it("matches hand-checked values for the current schedules", () => {

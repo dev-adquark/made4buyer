@@ -26,7 +26,7 @@ import { recordVerification, type VerificationEventInput } from "./verification-
  * outranks it: the same code verified there is shown once, as the official one. Every sync purges the
  * deals cache so the site shows the latest feed.
  *
- * Schedule: the feedico-coupons job runs once a week (vercel.json `0 5 * * 5`: Friday 05:00 UTC = 10:30 IST) and fetches
+ * Schedule: the feedico-coupons job runs once a week (vercel.json `0 6 * * 5`: Friday 06:00 UTC = 11:30 IST) and fetches
  * every enabled brand. A re-run within FEEDICO_MIN_REFETCH_HOURS (12) skips brands already fetched.
  * Requests: one per brand (a second page only when a brand has more than 200 matches) ≈ 100/week,
  * capped by FEEDICO_MONTHLY_REQUEST_BUDGET (600) under the Free plan's 1,000/month; the cap is counted
