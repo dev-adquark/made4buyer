@@ -4,7 +4,7 @@ import { checkGscAccess, gscVerificationMetadata, listSitemaps, querySearchConso
 import { withEnv } from "../support/env";
 import { miniStub, type StubReply, type StubRequest } from "../support/mini-stub";
 
-const SITE = "https://made4buyers.vercel.app/";
+const SITE = "https://made4buyers.com/";
 const claims = (r: StubRequest) => JSON.parse(Buffer.from(new URLSearchParams(r.body).get("assertion")!.split(".")[1], "base64url").toString()) as { scope: string; iss: string };
 
 let route: (r: StubRequest) => StubReply = () => ({ status: 404 });
@@ -21,7 +21,7 @@ beforeAll(async () => {
     GSC_TOKEN_URL: `${stub.base}/token`,
     GSC_API_BASE_URL: `${stub.base}/webmasters/v3`,
     GSC_INSPECTION_URL: `${stub.base}/inspect`,
-    NEXT_PUBLIC_SITE_URL: "https://made4buyers.vercel.app",
+    NEXT_PUBLIC_SITE_URL: "https://made4buyers.com",
     DATABASE_URL: undefined,
   });
 });
@@ -60,11 +60,11 @@ describe("Search Console (stub Google APIs)", () => {
   });
 
   it("lists sitemaps and submits with the full scope only for the PUT", async () => {
-    sitemaps = [{ path: "https://made4buyers.vercel.app/sitemap.xml", lastSubmitted: "2026-10-01T00:00:00Z", errors: "0", contents: [{ submitted: "120", indexed: "80" }] }];
+    sitemaps = [{ path: "https://made4buyers.com/sitemap.xml", lastSubmitted: "2026-10-01T00:00:00Z", errors: "0", contents: [{ submitted: "120", indexed: "80" }] }];
     expect(await listSitemaps()).toEqual([expect.objectContaining({ path: sitemapUrl(), submitted: 120, indexed: 80, errors: 0 })]);
     expect(await submitSitemap()).toEqual({ ok: true });
     const put = stub.requests.find((r) => r.method === "PUT")!;
-    expect(decodeURIComponent(put.path)).toContain("/sitemaps/https://made4buyers.vercel.app/sitemap.xml");
+    expect(decodeURIComponent(put.path)).toContain("/sitemaps/https://made4buyers.com/sitemap.xml");
     expect(stub.requests.filter((r) => r.path === "/token").map((r) => claims(r).scope)).toEqual(["https://www.googleapis.com/auth/webmasters.readonly", "https://www.googleapis.com/auth/webmasters"]);
   });
 
@@ -76,12 +76,12 @@ describe("Search Console (stub Google APIs)", () => {
   it("maintenance submits a sitemap that was never submitted, then snapshots analytics", async () => {
     const r = await runGscMaintenance(new Date("2026-10-07T12:00:00Z"));
     expect(r.status).toBe("OK");
-    expect(r.sitemap).toMatchObject({ action: "submitted", url: "https://made4buyers.vercel.app/sitemap.xml" });
+    expect(r.sitemap).toMatchObject({ action: "submitted", url: "https://made4buyers.com/sitemap.xml" });
     expect(r.analytics).toMatchObject({ clicks: 5, impressions: 100, startDate: "2026-09-08", endDate: "2026-10-05" });
   });
 
   it("maintenance leaves a recently submitted sitemap alone", async () => {
-    sitemaps = [{ path: "https://made4buyers.vercel.app/sitemap.xml", lastSubmitted: "2026-10-05T00:00:00Z" }];
+    sitemaps = [{ path: "https://made4buyers.com/sitemap.xml", lastSubmitted: "2026-10-05T00:00:00Z" }];
     const r = await runGscMaintenance(new Date("2026-10-07T12:00:00Z"));
     expect(r.sitemap).toMatchObject({ action: "already_current" });
     expect(stub.requests.some((q) => q.method === "PUT")).toBe(false);

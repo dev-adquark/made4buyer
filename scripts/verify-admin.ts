@@ -1,7 +1,7 @@
 /**
  * Production admin verification (Playwright, headless Chromium).
  *
- *   ADMIN_EMAIL=... ADMIN_PASSWORD=... npx tsx scripts/verify-admin.ts [--base-url https://made4buyers.vercel.app]
+ *   ADMIN_EMAIL=... ADMIN_PASSWORD=... npx tsx scripts/verify-admin.ts [--base-url https://made4buyers.com]
  *
  * Credentials are read from the LOCAL environment only (shell or .env.local) and never printed.
  * Signs in through the real form, opens every admin page, asserts HTTP 200, no error boundary,
@@ -111,7 +111,7 @@ export function formatTable(rows: AdminCheck[]): string {
 
 async function main(): Promise<number> {
   const i = process.argv.indexOf("--base-url");
-  const baseUrl = (i > 0 ? process.argv[i + 1] : undefined) ?? process.env.VERIFY_ADMIN_BASE_URL ?? "https://made4buyers.vercel.app";
+  const baseUrl = (i > 0 ? process.argv[i + 1] : undefined) ?? process.env.VERIFY_ADMIN_BASE_URL ?? "https://made4buyers.com";
   const email = process.env.ADMIN_EMAIL?.trim();
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) {

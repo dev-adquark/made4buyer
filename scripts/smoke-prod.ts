@@ -1,11 +1,11 @@
 /**
  * Post-deploy smoke test (read-only): health + schema status, then every sitemap URL, every
  * category page and the key hubs must return 200 without an error boundary.
- * Usage: npx tsx scripts/smoke-prod.ts [https://made4buyers.vercel.app]
+ * Usage: npx tsx scripts/smoke-prod.ts [https://made4buyers.com]
  */
 import { CATEGORIES } from "../lib/taxonomy/definitions";
 
-const base = (process.argv[2] ?? "https://made4buyers.vercel.app").replace(
+const base = (process.argv[2] ?? "https://made4buyers.com").replace(
   /\/+$/,
   "",
 );

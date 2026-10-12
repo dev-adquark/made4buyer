@@ -60,7 +60,7 @@ exposed key stops working. No variable needs to be set. Delete `SOVRN_*` variabl
 npm run build                                   # so the .next output is scanned too
 npx tsx scripts/verify-no-secrets.ts            # working tree + .next + production HTML/JS
 npx tsx scripts/verify-no-secrets.ts --skip-prod
-npx tsx scripts/verify-no-secrets.ts --prod-url https://made4buyers.vercel.app --pages /,/deals,/reviews
+npx tsx scripts/verify-no-secrets.ts --prod-url https://made4buyers.com --pages /,/deals,/reviews
 ```
 
 Patterns: Apify `apify_api_…`, Sovrn keys by the prefixes `e9f9…` / `c668…`, Vercel `vcp_…`,
@@ -113,7 +113,7 @@ Links are applied by the daily `commerce-collect` job, or right away with Admin 
 | Provider | `AFFILIATE_PROVIDER` | Variables | What you need first |
 |---|---|---|---|
 | Amazon Associates (US) | `amazon` | `AMAZON_ASSOCIATES_TAG` (e.g. `yourid-20`) | An approved Associates account. Only amazon.com product URLs that already contain an ASIN are wrapped (`https://www.amazon.com/dp/<ASIN>?tag=…`); nothing is looked up or invented. |
-| Skimlinks | `skimlinks` | `SKIMLINKS_PUBLISHER_ID`, `SKIMLINKS_SITE_ID` (numeric, Publisher Hub), `SKIMLINKS_CLIENT_ID`, `SKIMLINKS_CLIENT_SECRET` (Hub → Toolbox → API) | An approved Skimlinks publisher account with made4buyers.vercel.app added as a site. A domain is wrapped only if the Skimlinks Merchant API lists the merchant. |
+| Skimlinks | `skimlinks` | `SKIMLINKS_PUBLISHER_ID`, `SKIMLINKS_SITE_ID` (numeric, Publisher Hub), `SKIMLINKS_CLIENT_ID`, `SKIMLINKS_CLIENT_SECRET` (Hub → Toolbox → API) | An approved Skimlinks publisher account with made4buyers.com added as a site. A domain is wrapped only if the Skimlinks Merchant API lists the merchant. |
 | impact.com | `impact` | `IMPACT_ACCOUNT_SID`, `IMPACT_AUTH_TOKEN` (partner account → Settings → API), `IMPACT_PROGRAMS` = `{"brand.com":"<programId>"}` | Approval in each brand's program. Only mapped domains are wrapped, via the Tracking Link API. |
 
 Check: `npx tsx scripts/verify-affiliate.ts --url <a real product URL>` prints the status and the
@@ -122,15 +122,15 @@ stored affiliate link on the next run.
 
 ## 6. Google Search Console
 
-1. **Verify the property.** In Search Console, add a **URL-prefix** property
-   `https://made4buyers.vercel.app/`. A Domain property is not possible on `vercel.app`. Verify it
-   by one of:
+1. **Verify the property.** The site's public host is `https://made4buyers.com` (www and the
+   `vercel.app` alias redirect to it). Recommended: a **Domain** property `sc-domain:made4buyers.com`,
+   verified by a DNS TXT record (Vercel → Domains → made4buyers.com → DNS records). Or a
+   **URL-prefix** property `https://made4buyers.com/`, verified by one of:
    - **HTML tag**: copy the `content` value of the tag into `GOOGLE_SITE_VERIFICATION` and
      redeploy. The root layout needs this one-line change, owned by the layout maintainer:
      in `app/layout.tsx` add `import { gscVerificationMetadata } from "@/lib/gsc";` and add
      `...gscVerificationMetadata(),` inside `export const metadata: Metadata = { … }`.
    - **HTML file**: download Google's `google<token>.html` and commit it to `public/`, then redeploy.
-   - Or (custom domain later) **DNS TXT** on a Domain property.
 2. **Google Cloud:** create (or pick) a project → *APIs & Services → Library* → enable **Google
    Search Console API** → *IAM & Admin → Service Accounts* → create a service account → *Keys →
    Add key → JSON* (download it once and keep it private).
@@ -138,8 +138,8 @@ stored affiliate link on the next run.
    `client_email`, permission **Full**. Restricted is enough for reading data, but sitemap
    submission needs Full.
 4. Set in Vercel (Sensitive) and redeploy:
-   - `GSC_SITE_URL` = `https://made4buyers.vercel.app/` (exactly the property, with the trailing slash;
-     `sc-domain:example.com` for a Domain property)
+   - `GSC_SITE_URL` = `sc-domain:made4buyers.com` for the Domain property, or `https://made4buyers.com/`
+     for a URL-prefix property (exactly the property, with the trailing slash)
    - `GSC_SERVICE_ACCOUNT_JSON` = the whole JSON key on one line
    - optional `GSC_SITEMAP_URL` (default `$NEXT_PUBLIC_SITE_URL/sitemap.xml`), `GSC_INSPECTIONS_PER_RUN` (default 50)
 5. Check: `npx tsx scripts/verify-gsc.ts` (add `--submit-sitemap` to submit now). The daily
@@ -229,7 +229,7 @@ source, a run, a page, a search query) — no duplicate, no retry, no parallel c
 ```sh
 export ADMIN_EMAIL=…                       # or keep both in .env.local
 read -s ADMIN_PASSWORD && export ADMIN_PASSWORD
-npx tsx scripts/verify-admin.ts            # default https://made4buyers.vercel.app; --base-url to override
+npx tsx scripts/verify-admin.ts            # default https://made4buyers.com; --base-url to override
 ```
 
 Headless Chromium signs in, opens every admin page (dashboard, commerce engine, commerce

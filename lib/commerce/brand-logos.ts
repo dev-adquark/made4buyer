@@ -52,7 +52,7 @@ const ICON_MIN_PX = 96;
 const LOGO_MIN_PX = 64;
 const PIXEL_MAX_PX = 15;
 
-const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "https://made4buyers.vercel.app").replace(/\/+$/, "");
+const SITE = () => (process.env.NEXT_PUBLIC_SITE_URL || "https://made4buyers.com").replace(/\/+$/, "");
 export const LOGO_USER_AGENT = () => `Made4BuyersBot/1.0 (+${SITE()})`;
 const WIKIDATA_API = () => process.env.WIKIDATA_API_URL || "https://www.wikidata.org/w/api.php";
 const COMMONS_API = () => process.env.COMMONS_API_URL || "https://commons.wikimedia.org/w/api.php";

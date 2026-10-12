@@ -58,7 +58,15 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     // Legacy review URLs → canonical /review/{slug}.
-    return [{ source: "/reviews/:slug", destination: "/review/:slug", permanent: true }];
+    // One public host: www and the vercel.app alias redirect to https://made4buyers.com (pages only;
+    // /api and /_next stay on every host so cron jobs, webhooks and assets keep working).
+    const toApex = ["www.made4buyers.com", "made4buyers.vercel.app"].map((value) => ({
+      source: "/:path((?!api/|_next/).*)",
+      has: [{ type: "host" as const, value }],
+      destination: "https://made4buyers.com/:path",
+      permanent: true,
+    }));
+    return [...toApex, { source: "/reviews/:slug", destination: "/review/:slug", permanent: true }];
   },
   async rewrites() {
     // Common legal-page URLs serve the privacy policy and terms directly (200, canonical /privacy and

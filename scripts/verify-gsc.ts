@@ -2,7 +2,7 @@
  * Google Search Console check with the configured service account. Prints statuses and counts
  * only (never the key, never the service-account email's private key).
  *
- *   GSC_SITE_URL=https://made4buyers.vercel.app/ GSC_SERVICE_ACCOUNT_JSON='{...}' npx tsx scripts/verify-gsc.ts
+ *   GSC_SITE_URL=https://made4buyers.com/ GSC_SERVICE_ACCOUNT_JSON='{...}' npx tsx scripts/verify-gsc.ts
  *   ... --submit-sitemap     also submits /sitemap.xml (needs FULL permission on the property)
  *
  * Steps: token → sites.get (permission level) → sitemaps.list → 28-day clicks/impressions →

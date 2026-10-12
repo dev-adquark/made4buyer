@@ -1,6 +1,6 @@
 # More frequent job cadence than Vercel Hobby cron allows (daily only).
 # Calls the same authenticated /api/cron/<job> endpoints. Inactive until the repository
-# secrets SITE_URL (e.g. https://made4buyers.vercel.app) and CRON_SECRET are set.
+# secrets SITE_URL (e.g. https://made4buyers.com) and CRON_SECRET are set.
 name: Scheduled jobs
 
 on:

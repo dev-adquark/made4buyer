@@ -18,7 +18,7 @@ export default async function GscPage() {
         </p>
         <h2>What the site owner needs to do</h2>
         <ol>
-          <li>In Search Console, add and verify the property (URL prefix <code>https://made4buyers.vercel.app/</code> by HTML tag or file, or a domain property by DNS TXT once a custom domain is used).</li>
+          <li>In Search Console, add and verify the property: a Domain property <code>sc-domain:made4buyers.com</code> by DNS TXT (recommended: covers www and http), or a URL-prefix property <code>https://made4buyers.com/</code> by HTML tag or file.</li>
           <li>In Google Cloud, enable the &ldquo;Google Search Console API&rdquo;, create a service account and download its JSON key.</li>
           <li>In Search Console → Settings → Users and permissions, add the service account&apos;s <code>client_email</code> as a user.</li>
           <li>In Vercel (production), set <code>GSC_SITE_URL</code> to the exact property string and <code>GSC_SERVICE_ACCOUNT_JSON</code> to the whole JSON key (Sensitive), then redeploy.</li>

@@ -7,7 +7,7 @@
  *
  *   npx tsx scripts/verify-no-secrets.ts                       # all three
  *   npx tsx scripts/verify-no-secrets.ts --skip-prod           # local only
- *   npx tsx scripts/verify-no-secrets.ts --prod-url https://made4buyers.vercel.app --pages /,/deals
+ *   npx tsx scripts/verify-no-secrets.ts --prod-url https://made4buyers.com --pages /,/deals
  *
  * Exit 0 = nothing found, 1 = findings (or the production fetch failed).
  * Git history is NOT scanned here (see docs/OWNER_ACTIONS.md → "Purge git history").
@@ -154,7 +154,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     bad ||= build.length > 0;
   } else console.log(".next output     not built (run npm run build to include it)");
   if (!argv.includes("--skip-prod")) {
-    const base = arg(argv, "prod-url") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://made4buyers.vercel.app";
+    const base = arg(argv, "prod-url") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://made4buyers.com";
     const pages = (arg(argv, "pages") ?? "/,/deals,/reviews").split(",").filter(Boolean);
     const prod = await scanProduction(base, pages);
     print("production", prod.findings);
