@@ -1033,3 +1033,9 @@ details summary { cursor: pointer; font-weight: 600; }
   form.searchbox.wide, .searchbox.is-wide form { flex-wrap: wrap; }
   form.searchbox.wide input, .searchbox.is-wide form input, form.searchbox.wide .btn, .searchbox.is-wide form .btn { flex: 1 1 100%; }
 }
+
+/* Top progress bar (components/nav-progress.tsx): starts on click, completes when the page arrives. */
+.nav-progress { position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 1000; pointer-events: none; background: var(--ink); transform-origin: left; transform: scaleX(0); opacity: 0; }
+.nav-progress[data-state="run"] { opacity: 1; transform: scaleX(0.85); transition: transform 8s cubic-bezier(0.1, 0.6, 0.2, 1); }
+.nav-progress[data-state="done"] { opacity: 0; transform: scaleX(1); transition: transform 0.15s ease-out, opacity 0.3s ease 0.15s; }
+@media (prefers-reduced-motion: reduce) { .nav-progress[data-state="run"] { transform: scaleX(0.6); transition: none; } .nav-progress[data-state="done"] { transition: opacity 0.2s; } }

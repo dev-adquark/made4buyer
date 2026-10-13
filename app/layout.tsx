@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Anybody, IBM_Plex_Mono, Newsreader, Schibsted_Grotesk } from "next/font/google";
 import ExternalAnalytics from "@/components/external-analytics";
 import GoogleAnalytics from "@/components/google-analytics";
+import NavProgress from "@/components/nav-progress";
 import PageViewTracker from "@/components/page-view-tracker";
 import RevealProvider from "@/components/reveal-provider";
 import SiteFooter from "@/components/site-footer";
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             Skip to content
           </a>
           <SiteHeader categories={categories} />
+          <NavProgress />
           <PageViewTracker />
           <RevealProvider />
           <ExternalAnalytics />

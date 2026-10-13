@@ -90,3 +90,12 @@ test("no overflow and no accessibility violations, with and without a comparison
     expect(result.violations.flatMap((v) => v.nodes.map((n) => `${v.id}: ${n.target.join(" ")} ${n.any[0]?.message ?? ""}`))).toEqual([]);
   }
 });
+
+test("the top progress bar starts on click and finishes when the page arrives", async ({ page }) => {
+  await page.goto("/compare");
+  const bar = page.locator(".nav-progress");
+  await expect(bar).toHaveAttribute("data-state", "idle");
+  await page.getByRole("link", { name: "About" }).first().click();
+  await page.waitForURL(/\/about/);
+  await expect(bar).toHaveAttribute("data-state", "idle"); // done, then idle
+});
