@@ -220,6 +220,8 @@ export async function startProductRun(brand: CommerceBrand, urls: string[], trig
     return { status: "STARTED", runId: run.id, apifyRunId: data.id };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
+    // Visible in the logs (not only as a DB row): e.g. Apify 403 platform-feature-disabled when the account cannot run actors.
+    log.warn("commerce run start failed", { stage: "CONTENT_FETCH", brand: brand.slug, trigger, code: e.code, reason: e.message.slice(0, 300) });
     const runId = await recordSkip(brand, trigger, list.length, e.code, e.message, "FAILED");
     await brandFailed(brand.id, e.code, e.message);
     await commerceAudit("APIFY_RUN_FAILED", "commerce_run", runId, { metadata: { purpose: "PRODUCT", brand: brand.slug, stage: "start", code: e.code, reason: e.message } });

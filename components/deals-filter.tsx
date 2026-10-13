@@ -30,10 +30,14 @@ function matches(el: HTMLElement, f: DealsFilterState): boolean {
   if (f.seller && d.seller !== f.seller) return false;
   if (f.verified && d.kind !== f.verified) return false;
   if (f.discount && !(num(d.savingPct) >= Number(f.discount))) return false;
-  const min = Number(f.min);
-  const max = Number(f.max);
-  if (f.min && Number.isFinite(min) && !(num(d.price) >= min)) return false;
-  if (f.max && Number.isFinite(max) && !(num(d.price) <= max)) return false;
+  // A price range applies to items that have a price (drops, current prices); a coupon states none.
+  const priced = d.price !== undefined && d.price !== "";
+  if (priced || !el.closest("#coupons")) {
+    const min = Number(f.min);
+    const max = Number(f.max);
+    if (f.min && Number.isFinite(min) && !(num(d.price) >= min)) return false;
+    if (f.max && Number.isFinite(max) && max > 0 && !(num(d.price) <= max)) return false;
+  }
   return true;
 }
 
@@ -67,11 +71,25 @@ function compare(sort: string) {
  * item, so it stays cacheable; this narrows and orders what is visible in the browser and keeps the
  * choice in the URL (?category=…&brand=…&seller=…&discount=…&min=…&max=…&sort=…&verified=…), so a
  * filtered view can be linked and is restored on load. Without JavaScript every verified item stays
- * visible. A polite live region announces how many items match.
+ * visible. Choices are applied with "Apply filters" (or Enter), not on every change; "Clear filters"
+ * resets them. A polite live region announces how many items match.
  */
+
+/** Why a price range cannot be applied, or null. */
+export function rangeError(f: Pick<DealsFilterState, "min" | "max">): string | null {
+  const min = f.min ? Number(f.min) : null;
+  const max = f.max ? Number(f.max) : null;
+  if ((min !== null && (!Number.isFinite(min) || min < 0)) || (max !== null && (!Number.isFinite(max) || max < 0))) return "Prices must be 0 or more.";
+  if (max === 0) return "Maximum price must be more than 0.";
+  if (min !== null && max !== null && min > max) return "Minimum price is higher than the maximum.";
+  return null;
+}
 export default function DealsFilter({ categories, brands, sellers, scope = "deals-root", total }: { categories: Option[]; brands: Option[]; sellers: Option[]; scope?: string; total: number }) {
+  // `draft`: what the controls show; `f`: what is applied to the list (on Apply).
   const [f, setF] = useState<DealsFilterState>(EMPTY);
+  const [draft, setDraft] = useState<DealsFilterState>(EMPTY);
   const [shown, setShown] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const ready = useRef(false);
 
   // Initial values from the URL (e.g. links from a category page: /deals?category=laptops).
@@ -91,9 +109,14 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       const v = (p.get(k) ?? "").trim();
       if (v && valid(k, v)) next[k] = v;
     }
+    if (rangeError(next)) {
+      next.min = "";
+      next.max = "";
+    }
     ready.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the URL after hydration
     setF(next);
+    setDraft(next);
   }, [categories, brands, sellers]);
 
   const apply = useCallback(
@@ -134,16 +157,31 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
 
   const set = (k: keyof DealsFilterState) => (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const value = e.target.value;
-    setF((s) => ({ ...s, [k]: value }));
+    setDraft((s) => ({ ...s, [k]: value }));
+    if (k === "min" || k === "max") setError(null);
   };
   const active = KEYS.some((k) => k !== "sort" && f[k]);
+  const pending = KEYS.some((k) => draft[k] !== f[k]);
+  const dirty = KEYS.some((k) => draft[k] || f[k]);
+  const onApply = (e: React.FormEvent) => {
+    e.preventDefault();
+    const err = rangeError(draft);
+    setError(err);
+    if (err) return;
+    setF({ ...draft });
+  };
+  const onClear = () => {
+    setError(null);
+    setDraft(EMPTY);
+    setF(EMPTY);
+  };
 
   return (
-    <form className="deals-filter" role="search" aria-label="Filter and sort deals" action="/deals" onSubmit={(e) => e.preventDefault()}>
+    <form className="deals-filter" role="search" aria-label="Filter and sort deals" action="/deals" onSubmit={onApply} noValidate>
       {categories.length > 0 && (
         <div className="df-field">
           <label htmlFor="deal-category">Category</label>
-          <select id="deal-category" name="category" value={f.category} onChange={set("category")}>
+          <select id="deal-category" name="category" value={draft.category} onChange={set("category")}>
             <option value="">All categories</option>
             {categories.map((o) => (
               <option key={o.value} value={o.value}>
@@ -156,7 +194,7 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       {brands.length > 0 && (
         <div className="df-field">
           <label htmlFor="deal-brand">Brand</label>
-          <select id="deal-brand" name="brand" value={f.brand} onChange={set("brand")}>
+          <select id="deal-brand" name="brand" value={draft.brand} onChange={set("brand")}>
             <option value="">All brands</option>
             {brands.map((o) => (
               <option key={o.value} value={o.value}>
@@ -169,7 +207,7 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       {sellers.length > 0 && (
         <div className="df-field">
           <label htmlFor="deal-seller">Seller</label>
-          <select id="deal-seller" name="seller" value={f.seller} onChange={set("seller")}>
+          <select id="deal-seller" name="seller" value={draft.seller} onChange={set("seller")}>
             <option value="">All sellers</option>
             {sellers.map((o) => (
               <option key={o.value} value={o.value}>
@@ -181,7 +219,7 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       )}
       <div className="df-field">
         <label htmlFor="deal-discount">Discount</label>
-        <select id="deal-discount" name="discount" value={f.discount} onChange={set("discount")}>
+        <select id="deal-discount" name="discount" value={draft.discount} onChange={set("discount")}>
           <option value="">Any discount</option>
           {DISCOUNTS.map((d) => (
             <option key={d} value={d}>
@@ -196,17 +234,22 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
           <label htmlFor="deal-min" className="visually-hidden">
             Minimum price in US dollars
           </label>
-          <input id="deal-min" name="min" type="number" inputMode="decimal" min={0} step="any" placeholder="Min" value={f.min} onChange={set("min")} />
+          <input id="deal-min" name="min" type="number" inputMode="decimal" min={0} step="any" placeholder="Min" aria-invalid={error ? true : undefined} aria-describedby={error ? "deal-range-error" : undefined} value={draft.min} onChange={set("min")} />
           <span aria-hidden="true">–</span>
           <label htmlFor="deal-max" className="visually-hidden">
             Maximum price in US dollars
           </label>
-          <input id="deal-max" name="max" type="number" inputMode="decimal" min={0} step="any" placeholder="Max" value={f.max} onChange={set("max")} />
+          <input id="deal-max" name="max" type="number" inputMode="decimal" min={0} step="any" placeholder="Max" aria-invalid={error ? true : undefined} aria-describedby={error ? "deal-range-error" : undefined} value={draft.max} onChange={set("max")} />
         </div>
+        {error && (
+          <p id="deal-range-error" className="df-error small" role="alert">
+            {error}
+          </p>
+        )}
       </fieldset>
       <div className="df-field">
         <label htmlFor="deal-verified">Verified on</label>
-        <select id="deal-verified" name="verified" value={f.verified} onChange={set("verified")}>
+        <select id="deal-verified" name="verified" value={draft.verified} onChange={set("verified")}>
           {KINDS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -216,7 +259,7 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       </div>
       <div className="df-field">
         <label htmlFor="deal-sort">Sort</label>
-        <select id="deal-sort" name="sort" value={f.sort} onChange={set("sort")}>
+        <select id="deal-sort" name="sort" value={draft.sort} onChange={set("sort")}>
           {SORTS.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
@@ -226,13 +269,18 @@ export default function DealsFilter({ categories, brands, sellers, scope = "deal
       </div>
       <div className="df-foot">
         <p className="df-status small muted" role="status" aria-live="polite">
-          {shown !== null && active ? `Showing ${shown} of ${total}` : ""}
+          {pending ? "Changes not applied yet." : shown !== null && active ? `Showing ${shown} of ${total}` : ""}
         </p>
-        {active && (
-          <button type="button" className="btn small" onClick={() => setF((s) => ({ ...EMPTY, sort: s.sort }))}>
-            Clear filters
+        <div className="df-actions">
+          <button type="submit" className="btn primary small">
+            Apply filters
           </button>
-        )}
+          {dirty && (
+            <button type="button" className="btn small" onClick={onClear}>
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
     </form>
   );

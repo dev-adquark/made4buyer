@@ -179,28 +179,47 @@ export function decodeGuidesState(segment: string): GuidesState | null {
 
 export const MATCH_STEPS = ["category", "intent", "platform", "tier"] as const;
 export type MatchStep = (typeof MATCH_STEPS)[number];
-export type MatchPicks = Partial<Record<MatchStep, string>>;
+/**
+ * The answers so far. Steps are answered in order, so only a prefix counts: an answer after an
+ * unanswered (or invalid) step is dropped. `unknown`: the URL named a category we do not cover (or a
+ * malformed one); the first question is shown again with a notice.
+ */
+export type MatchPicks = Partial<Record<MatchStep, string>> & { unknown?: true };
 
-/** `isCategory` validates the category answer against the taxonomy (an unknown one is dropped). */
+/** `isCategory` validates the category answer against the taxonomy (an unknown one is dropped and flagged). */
 export function parseMatchQuery(query: RawQuery, isCategory: (slug: string) => boolean): MatchPicks {
-  const picks: MatchPicks = {};
-  for (const s of MATCH_STEPS) {
+  const rawCategory = rawParam(query, "category");
+  const category = cleanSlug(rawCategory);
+  if (!category || !isCategory(category)) return rawCategory ? { unknown: true } : {};
+  const picks: MatchPicks = { category };
+  for (const s of MATCH_STEPS.slice(1)) {
     const v = cleanSlug(rawParam(query, s));
-    if (v) picks[s] = v;
+    if (!v) break;
+    picks[s] = v;
   }
-  if (picks.category && !isCategory(picks.category)) delete picks.category;
   return picks;
 }
 
 export function encodeMatchState(p: MatchPicks): string {
-  return encodeEntries(MATCH_STEPS.map((s) => [s, p[s]]));
+  return encodeEntries([...MATCH_STEPS.map((s) => [s, p[s]] as [string, string | undefined]), ["unknown", p.unknown]]);
 }
 
 export function decodeMatchState(segment: string, isCategory: (slug: string) => boolean): MatchPicks | null {
   const m = decodeEntries(segment);
-  if (!m || [...m.keys()].some((k) => !(MATCH_STEPS as readonly string[]).includes(k))) return null;
-  const picks = parseMatchQuery(Object.fromEntries(m), isCategory);
+  if (!m || [...m.keys()].some((k) => !(MATCH_STEPS as readonly string[]).includes(k) && k !== "unknown")) return null;
+  const picks: MatchPicks = m.has("unknown") ? { unknown: true } : parseMatchQuery(Object.fromEntries(m), isCategory);
   return encodeMatchState(picks) === decodeSegment(segment) ? picks : null;
+}
+
+/** The public URL for a set of answers (what the browser shows; proxy.ts rewrites it to the cached state route). */
+export function matchHref(p: Omit<MatchPicks, "unknown">): string {
+  const q = new URLSearchParams();
+  for (const s of MATCH_STEPS) {
+    if (!p[s]) break;
+    q.set(s, p[s]);
+  }
+  const qs = q.toString();
+  return `/match${qs ? `?${qs}` : ""}`;
 }
 
 // ---------------------------------------------------------------------------------------------

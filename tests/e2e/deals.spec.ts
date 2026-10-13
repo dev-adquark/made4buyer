@@ -100,6 +100,45 @@ test("deals: only the valid drop and the verified code are listed, with the righ
   await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(0);
 });
 
+test("deals: filters apply only on 'Apply filters', a price range never hides coupons, invalid ranges are refused, Clear resets", async ({ page }) => {
+  await page.goto("/deals");
+  await settle(page);
+  const visibleDrops = () => drops(page).locator("[data-deal]:visible").count();
+  const visibleCodes = () => codes(page).locator("[data-deal]:visible").count();
+  const dropsBefore = await visibleDrops();
+  const codesBefore = await visibleCodes();
+  expect(dropsBefore).toBeGreaterThan(0);
+  expect(codesBefore).toBeGreaterThan(0);
+  const apply = page.getByRole("button", { name: "Apply filters" });
+  await expect(apply).toBeEnabled();
+
+  // A price range below every drop: nothing changes until Apply.
+  await page.locator("#deal-max").fill("1");
+  await expect(page.locator(".deals-filter [role=status]")).toHaveText("Changes not applied yet.");
+  expect(await visibleDrops()).toBe(dropsBefore);
+  await apply.click();
+  await expect.poll(visibleDrops).toBe(0);
+  expect(await visibleCodes()).toBe(codesBefore); // coupons state no price: never hidden by a price range
+  await expect(page).toHaveURL(/[?&]max=1\b/);
+
+  // Invalid ranges are refused with a message and change nothing.
+  await page.locator("#deal-max").fill("0");
+  await apply.click();
+  await expect(page.locator("#deal-range-error")).toHaveText("Maximum price must be more than 0.");
+  await page.locator("#deal-min").fill("500");
+  await page.locator("#deal-max").fill("100");
+  await page.locator("#deal-max").press("Enter");
+  await expect(page.locator("#deal-range-error")).toHaveText("Minimum price is higher than the maximum.");
+  await expect(page).toHaveURL(/[?&]max=1\b/);
+
+  // Clear resets controls, list and URL.
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect.poll(visibleDrops).toBe(dropsBefore);
+  await expect(page.locator("#deal-min")).toHaveValue("");
+  await expect(page.locator("#deal-max")).toHaveValue("");
+  await expect(page).not.toHaveURL(/max=/);
+});
+
 test("deals: Offer JSON-LD only for the valid drop", async ({ page }) => {
   await page.goto("/deals");
   const blocks = (await page.locator('script[type="application/ld+json"]').allTextContents()).map((t) => JSON.parse(t));

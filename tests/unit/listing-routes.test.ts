@@ -9,6 +9,7 @@ import {
   decodeReviewsState,
   encodeCategoryState,
   encodeMatchState,
+  matchHref,
   parseCategoryQuery,
   parseCompareIds,
   parseGuidesQuery,
@@ -39,7 +40,9 @@ describe("listing routes: which URLs stay on the cached default view", () => {
     expect(route("/category/laptops?brand=dell&type=review&page=2")).toEqual({ kind: "rewrite", pathname: "/category/laptops/v/brand.dell~type.review~page.2~noindex" });
     expect(route("/reviews?type=guide&page=3")).toEqual({ kind: "rewrite", pathname: "/reviews/v/type.guide~page.3~noindex" });
     expect(route("/guides?page=2")).toEqual({ kind: "rewrite", pathname: "/guides/v/page.2~noindex" });
-    expect(route("/match?tier=any&category=laptops")).toEqual({ kind: "rewrite", pathname: "/match/v/category.laptops~tier.any" });
+    expect(route("/match?tier=any&category=laptops")).toEqual({ kind: "rewrite", pathname: "/match/v/category.laptops" });
+    expect(route("/match?platform=any&intent=work&category=laptops")).toEqual({ kind: "rewrite", pathname: "/match/v/category.laptops~intent.work~platform.any" });
+    expect(route("/match?category=bogus")).toEqual({ kind: "rewrite", pathname: "/match/v/unknown" });
   });
 
   it("raw parameters that change only the robots rule keep it (noindex) on the default list", () => {
@@ -84,7 +87,7 @@ describe("listing state parsing mirrors the previous searchParams handling", () 
     expect(parseReviewsQuery({ type: "comparison", page: "2" })).toMatchObject({ page: 2, noindex: true, type: { value: "COMPARISON" } });
     expect(parseReviewsQuery({ type: "nope" })).toMatchObject({ page: 1, noindex: true, type: { value: null } });
     expect(parseGuidesQuery({ page: "-4" })).toEqual({ page: 1, noindex: true });
-    expect(parseMatchQuery({ category: "bogus", intent: "work" }, isCategory)).toEqual({ intent: "work" });
+    expect(parseMatchQuery({ category: "bogus", intent: "work" }, isCategory)).toEqual({ unknown: true });
     expect(parseMatchQuery({ category: "laptops", tier: "BAD" }, isCategory)).toEqual({ category: "laptops" });
     expect(parseCompareIds({ ids: "abcdefghij1, abcdefghij1 ,x,abcdefghij2,abcdefghij3,abcdefghij4" })).toEqual(["abcdefghij1", "abcdefghij2", "abcdefghij3"]);
     expect(searchQueryText({ q: `  ${"y".repeat(150)}` })).toHaveLength(100);
@@ -127,5 +130,40 @@ describe("/coupons paging (60 per page, cached per page)", () => {
     expect(decodeCouponsState(encodeCouponsState(parseCouponsQuery({ page: "7" })))).toEqual({ page: 7, noindex: true });
     expect(decodeCouponsState("page.02~noindex")).toBeNull();
     expect(decodeCouponsState("sort.x")).toBeNull();
+  });
+});
+
+describe("/match answers: one ordered state per URL", () => {
+  it("keeps only the answered prefix, flags unknown or malformed categories, and never carries answers without a category", () => {
+    expect(parseMatchQuery({ category: "phones", intent: "gaming", platform: "android", tier: "budget" }, isCategory)).toEqual({ category: "phones", intent: "gaming", platform: "android", tier: "budget" });
+    expect(parseMatchQuery({ category: "phones", platform: "android" }, isCategory)).toEqual({ category: "phones" });
+    expect(parseMatchQuery({ category: "phones", intent: "Not A Slug!", platform: "android" }, isCategory)).toEqual({ category: "phones" });
+    expect(parseMatchQuery({ category: "PHONES" }, isCategory)).toEqual({ unknown: true });
+    expect(parseMatchQuery({ category: "<script>" }, isCategory)).toEqual({ unknown: true });
+    expect(parseMatchQuery({ category: "" }, isCategory)).toEqual({});
+    expect(parseMatchQuery({ intent: "gaming" }, isCategory)).toEqual({});
+    expect(parseMatchQuery({ category: ["phones", "laptops"] }, isCategory)).toEqual({ unknown: true });
+  });
+
+  it("state segments round-trip; non-canonical or unknown segments are rejected", () => {
+    for (const picks of [{ category: "phones" }, { category: "phones", intent: "any", platform: "ios", tier: "any" }, { unknown: true as const }]) {
+      expect(decodeMatchState(encodeMatchState(picks), isCategory)).toEqual(picks);
+    }
+    expect(encodeMatchState({ unknown: true })).toBe("unknown");
+    expect(decodeMatchState("category.phones~unknown", isCategory)).toBeNull();
+    expect(decodeMatchState("category.phones~platform.ios", isCategory)).toBeNull(); // gap: not a state the site links to
+    expect(decodeMatchState("intent.any~category.phones", isCategory)).toBeNull(); // wrong order
+    expect(decodeMatchState("category.phones~foo.bar", isCategory)).toBeNull();
+    expect(decodeMatchState("category.phones~intent.any", isCategory)).toEqual({ category: "phones", intent: "any" });
+  });
+
+  it("matchHref is the public URL of a state, and the proxy maps it back to the same state", () => {
+    expect(matchHref({})).toBe("/match");
+    expect(matchHref({ category: "phones", intent: "any", platform: "ios" })).toBe("/match?category=phones&intent=any&platform=ios");
+    expect(matchHref({ category: "phones", platform: "ios" })).toBe("/match?category=phones");
+    for (const picks of [{ category: "phones" }, { category: "laptops", intent: "work", platform: "any", tier: "budget" }]) {
+      expect(route(matchHref(picks))).toEqual({ kind: "rewrite", pathname: `/match/v/${encodeMatchState(picks)}` });
+    }
+    expect(route(matchHref({}))).toEqual({ kind: "static" });
   });
 });

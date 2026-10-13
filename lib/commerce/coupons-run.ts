@@ -175,6 +175,7 @@ async function startRun(target: { brandId?: string; sourceId?: string; name: str
     return { target: target.name, status: "STARTED", runId: data.id, ...(skipped.length ? { skipped } : {}) };
   } catch (error) {
     const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
+    log.warn("commerce coupon run start failed", { stage: "COMMERCE", target: target.name, trigger, code: e.code, reason: e.message.slice(0, 300) });
     const failed = await db.commerceRun.create({ data: { ...base, status: "START_FAILED", startUrls: ok.length, errors: [{ code: e.code, message: e.message.slice(0, 300) }, ...skipped], finishedAt: new Date() } });
     await commerceAudit("APIFY_RUN_FAILED", "commerce_run", failed.id, { metadata: { purpose: COUPON_PURPOSE, target: target.name, stage: "start", code: e.code, reason: e.message } });
     return { target: target.name, status: e.code, reason: e.message };
