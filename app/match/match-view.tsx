@@ -161,7 +161,6 @@ export async function MatchView({ picks: requested }: { picks: MatchPicks }) {
             ) : current === "category" ? (
               <>
                 <h1 className="match-q" tabIndex={-1}>
-                  <span className="visually-hidden">Step 1 of 4: </span>
                   {STEPS[0].question}
                 </h1>
                 {requested.unknown && (
@@ -192,7 +191,6 @@ export async function MatchView({ picks: requested }: { picks: MatchPicks }) {
             ) : current && category ? (
               <>
                 <h1 className="match-q" tabIndex={-1}>
-                  <span className="visually-hidden">{`Step ${stepNumber} of 4: `}</span>
                   {STEPS[stepNumber - 1].question}
                 </h1>
                 {invalidAnswer && (
