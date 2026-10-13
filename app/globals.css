@@ -745,6 +745,7 @@ legend { font-weight: 700; padding: 0 6px; }
 .option-grid a:hover, .option-grid button:hover { background: var(--cat, var(--ink)); color: var(--cat-on, #fff); }
 .option-grid a:hover span, .option-grid button:hover span { color: inherit; }
 .option-grid button[aria-pressed="true"], .option-grid a[aria-current="true"] { background: var(--ink); color: var(--paper); }
+.option-grid button[aria-pressed="true"] span, .option-grid a[aria-current="true"] span { color: inherit; }
 .option-grid strong { font: 800 clamp(26px, 2.6vw, 38px)/0.95 var(--f-display); font-stretch: 72%; font-variation-settings: "wdth" 72; }
 .option-grid span { font: 500 12px var(--f-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
 .option-grid svg { width: 28px; height: 28px; }

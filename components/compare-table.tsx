@@ -7,6 +7,15 @@ import SafeImg from "./safe-img";
 export type CompareColumn = { id: string; slug: string; name: string; image: string; alternates?: string[]; fallback: string; categoryName: string; facts: Record<string, string | null> };
 export type CompareSection = { title: string; rows: string[] };
 
+/** Two facts are the same when they read the same: case, spacing and surrounding punctuation are ignored. */
+export const factKey = (v: string) => v.normalize("NFKC").toLowerCase().replace(/[\s ]+/g, " ").trim();
+
+/** A row differs when at least two products state a value and the values are not the same fact. */
+export function factsDiffer(values: Array<string | null | undefined>): boolean {
+  const known = values.filter((v): v is string => Boolean(v && v.trim()));
+  return known.length > 1 && new Set(known.map(factKey)).size > 1;
+}
+
 /**
  * Comparison board: sticky product headers, collapsible sections, rows whose known values
  * differ are marked "Differs". A row no product has a value for is left out; a value one product
@@ -15,10 +24,7 @@ export type CompareSection = { title: string; rows: string[] };
 export default function CompareTable({ columns, sections, removeHref, addSlot }: { columns: CompareColumn[]; sections: CompareSection[]; removeHref: Record<string, string>; addSlot?: React.ReactNode }) {
   const [onlyDiff, setOnlyDiff] = useState(false);
   const cols = { "--cols": columns.length } as React.CSSProperties;
-  const differs = (label: string) => {
-    const known = columns.map((c) => c.facts[label]).filter((v): v is string => Boolean(v));
-    return known.length > 1 && new Set(known).size > 1;
-  };
+  const differs = (label: string) => factsDiffer(columns.map((c) => c.facts[label]));
   const diffCount = sections.flatMap((s) => s.rows).filter(differs).length;
   return (
     <>
@@ -44,9 +50,9 @@ export default function CompareTable({ columns, sections, removeHref, addSlot }:
               </Link>
               {c.categoryName && <span className="small muted">{c.categoryName}</span>}
               <div>
-                <Link className="btn small remove" href={removeHref[c.id]}>
+                <a className="btn small remove" href={removeHref[c.id]}>
                   Remove<span className="visually-hidden"> {c.name}</span>
-                </Link>
+                </a>
               </div>
             </div>
           ))}

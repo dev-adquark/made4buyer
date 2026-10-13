@@ -146,6 +146,35 @@ export async function freshOffersForProduct(productEntityId: string, now = Date.
   return sortAndDedupe(rows.map((r) => toPublicOffer(r, now))).slice(0, MAX_PUBLIC_OFFERS);
 }
 
+/**
+ * Fresh offers for several reviews in two queries (primary products, then their offers) instead of
+ * two per review; the result per review equals freshOffersForReview.
+ */
+export async function freshOffersForReviews(reviewIds: string[], now = Date.now()): Promise<PublicOffer[][]> {
+  if (!reviewIds.length) return [];
+  const links = await db.contentEntity.findMany({ where: { normalizedReviewId: { in: reviewIds }, role: "PRIMARY" }, select: { normalizedReviewId: true, productEntityId: true } });
+  const pidOf = new Map<string, string>();
+  for (const l of links) if (l.productEntityId && !pidOf.has(l.normalizedReviewId)) pidOf.set(l.normalizedReviewId, l.productEntityId);
+  const pids = [...new Set(pidOf.values())];
+  if (!pids.length) return reviewIds.map(() => []);
+  const rows = await db.commerceOffer.findMany({
+    where: { ...freshOfferWhere(now), product: { productEntityId: { in: pids } } },
+    select: { ...OFFER_SELECT, product: { select: { productEntityId: true } } },
+    orderBy: { observedAt: "desc" },
+  });
+  const byPid = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const k = r.product.productEntityId!;
+    const list = byPid.get(k) ?? [];
+    if (list.length < 20) list.push(r);
+    byPid.set(k, list);
+  }
+  return reviewIds.map((id) => {
+    const pid = pidOf.get(id);
+    return pid ? sortAndDedupe((byPid.get(pid) ?? []).map((r) => toPublicOffer(r, now))).slice(0, MAX_PUBLIC_OFFERS) : [];
+  });
+}
+
 /** The review's PRIMARY product, if any. */
 export async function primaryProductId(reviewId: string): Promise<string | null> {
   const link = await db.contentEntity.findFirst({ where: { normalizedReviewId: reviewId, role: "PRIMARY" }, select: { productEntityId: true } });

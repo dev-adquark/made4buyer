@@ -3,10 +3,12 @@ import Breadcrumbs from "@/components/breadcrumbs";
 import CompareSelector from "@/components/compare-selector";
 import CompareTable, { type CompareColumn, type CompareSection } from "@/components/compare-table";
 import TrackOnce from "@/components/track-once";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { LISTING_CONTENT_TAGS, LISTING_REVALIDATE_SECONDS } from "@/lib/public/page-cache";
 import { LATEST_FIRST, resolveCardImage } from "@/lib/public/queries";
 import { placeholderPath } from "@/lib/pipeline/images";
-import { freshOffersForReview } from "@/lib/public/offers";
+import { freshOffersForReviews } from "@/lib/public/offers";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { displayText, displayUrl } from "@/lib/public/display";
 import { availabilityLabel, money, shortDate } from "@/lib/util/format";
@@ -15,6 +17,13 @@ import { availabilityLabel, money, shortDate } from "@/lib/util/format";
  * Rendered by page.tsx (the product picker, cached) and q/page.tsx (`?ids=`, rewritten there by
  * proxy.ts; per request, because the table shows live prices).
  */
+
+/** The picker's 60 newest published products: the same for every visitor, so cached (purged on publish). */
+const pickerOptions = unstable_cache(
+  () => db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, take: 60, select: { id: true, slug: true, canonicalTitle: true, productName: true, brand: true, categorySlug: true } }),
+  ["compare-picker-v1"],
+  { revalidate: LISTING_REVALIDATE_SECONDS, tags: LISTING_CONTENT_TAGS },
+);
 
 export const compareMetadata: Metadata = { title: "Compare products", description: "Put two reviewed products side by side: specs, verdicts and recently checked prices from the reviews we publish.", robots: { index: false, follow: true }, alternates: { canonical: "/compare" } };
 
@@ -37,10 +46,10 @@ export async function CompareView({ ids }: { ids: string[] }) {
           },
         })
       : Promise.resolve([]),
-    db.normalizedReview.findMany({ where: { status: "PUBLISHED" }, orderBy: LATEST_FIRST, take: 60, select: { id: true, slug: true, canonicalTitle: true, productName: true, brand: true, categorySlug: true } }),
+    pickerOptions(),
   ]);
   const selected = ids.map((id) => selectedRaw.find((r) => r.id === id)).filter((r): r is (typeof selectedRaw)[number] => Boolean(r));
-  const [deals, images] = await Promise.all([Promise.all(selected.map((r) => freshOffersForReview(r.id))), Promise.all(selected.map((r) => resolveCardImage(r)))]);
+  const [deals, images] = await Promise.all([freshOffersForReviews(selected.map((r) => r.id)), Promise.all(selected.map((r) => resolveCardImage(r)))]);
   const columns: CompareColumn[] = selected.map((r, i) => {
     const best = deals[i].find((d) => money(d.price, d.currency) !== null && displayUrl(d.url));
     const tags = (type: string) => r.assignments.filter((a) => a.tagType === type).map((a) => a.categoryTag.name);
@@ -70,7 +79,7 @@ export async function CompareView({ ids }: { ids: string[] }) {
     };
   });
   const removeHref = Object.fromEntries(columns.map((c) => [c.id, `/compare${columns.length > 1 ? `?ids=${columns.filter((x) => x.id !== c.id).map((x) => x.id).join(",")}` : ""}`]));
-  const pickerItems = options.map((o) => ({ id: o.id, slug: o.slug, title: o.canonicalTitle, productName: o.productName, brand: o.brand, categoryName: categoryName(o.categorySlug) ?? null }));
+  const pickerItems = [...options, ...selected.filter((r) => !options.some((o) => o.id === r.id)).map((r) => ({ id: r.id, slug: r.slug, canonicalTitle: r.canonicalTitle, productName: r.productName, brand: r.brand, categorySlug: r.categorySlug }))].map((o) => ({ id: o.id, slug: o.slug, title: o.canonicalTitle, productName: o.productName, brand: o.brand, categoryName: categoryName(o.categorySlug) ?? null }));
 
   return (
     <main>

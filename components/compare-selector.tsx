@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type Item = { id: string; slug: string; title: string; productName: string; brand: string | null; categoryName: string | null };
@@ -27,9 +26,10 @@ export default function CompareSelector({ items, initial, heading = "Pick up to 
           {names.length > 0 && <div className="small muted">{names.join(", ")}</div>}
         </div>
         {ready ? (
-          <Link className="btn primary" href={href}>
+          // A full page load: the router would reuse its cached static /compare for this ?ids= URL (proxy.ts rewrites it to a different page).
+          <a className="btn primary" href={href}>
             Compare selected
-          </Link>
+          </a>
         ) : (
           <button className="btn" type="button" disabled aria-disabled="true" title="Select at least two products">
             Compare selected

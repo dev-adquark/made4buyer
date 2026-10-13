@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { runIngestion } from "@/lib/pipeline/ingest";
 import { buildPageRenderModel } from "@/lib/pipeline/render-model";
 import { runOfferStage } from "@/lib/pipeline/stages";
-import { freshOffersForReview, publishedFreshOffers } from "@/lib/public/offers";
+import { freshOffersForReview, freshOffersForReviews, publishedFreshOffers } from "@/lib/public/offers";
 import { freshDealRows } from "@/lib/public/queries";
 import { seedTaxonomy } from "@/lib/taxonomy/persist";
 import { resetDb } from "../support/db";
@@ -40,6 +40,18 @@ const offer = (productId: string, over: Record<string, unknown>) =>
   db.commerceOffer.create({ data: { productId, seller: "Framework", sellerType: "MANUFACTURER", destinationUrl: "https://frame.work/products/laptop13", price: 999, currency: "USD", availability: "InStock", observedAt: new Date(Date.now() - HOUR), ...over } });
 
 describe("commerce offers on public pages", () => {
+  it("batch lookup (compare) returns exactly what the per-review lookup returns, in input order", async () => {
+    const { review, product } = await publishedReviewWithProduct();
+    await offer(product.id, {});
+    await offer(product.id, { seller: "Retailer", sellerType: "RETAILER", destinationUrl: "https://shop.retailer.test/p/fw13", price: 899, observedAt: new Date(Date.now() - 72 * HOUR) });
+    expect(await freshOffersForReviews([])).toEqual([]);
+    const [a, none, b] = await freshOffersForReviews([review.id, "missing-review-id", review.id]);
+    expect(a).toEqual(await freshOffersForReview(review.id));
+    expect(a.map((o) => o.price)).toEqual([999]);
+    expect(none).toEqual([]);
+    expect(b).toEqual(a);
+  });
+
   it("shows a fresh price with a plain link; a stale price is never shown", async () => {
     const { review, product } = await publishedReviewWithProduct();
     const fresh = await offer(product.id, {});
