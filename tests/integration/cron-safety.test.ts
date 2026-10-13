@@ -138,7 +138,7 @@ describe("schedules read model", () => {
     const now = new Date();
     const rows = await loadScheduleRows(now);
     const cleanup = rows.find((r) => r.job === "cleanup-cache")!;
-    expect(cleanup.schedules.map((s) => s.cron)).toEqual(["0 3 * * *"]);
+    expect(cleanup.schedules.map((s) => s.cron)).toEqual(["0 3 1,15 * *"]);
     expect(cleanup.next!.getTime()).toBeGreaterThan(now.getTime());
     expect(cleanup.lastRun).toMatchObject({ status: "FAILED" });
     expect(cleanup.last30).toEqual({ succeeded: 1, failed: 1, other: 0, rate: 0.5 });
@@ -146,7 +146,7 @@ describe("schedules read model", () => {
     expect(cleanup.lastFailure?.error).toContain("disk full");
     expect(cleanup.lock).toEqual({ state: "free" });
     const daily = rows.find((r) => r.job === "daily-article")!;
-    expect(daily.schedules.map((s) => s.origin)).toEqual(["vercel", "vercel", "github-actions"]);
+    expect(daily.schedules.map((s) => s.origin)).toEqual(["vercel"]);
     expect(daily.lastRun).toBeNull();
     expect(daily.lastAudit).toBeNull();
     expect(daily.last30.rate).toBeNull();

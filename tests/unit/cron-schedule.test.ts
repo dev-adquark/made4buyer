@@ -26,38 +26,45 @@ describe("cron parsing", () => {
 });
 
 describe("next / previous run (UTC)", () => {
-  it("computes next and previous for every vercel.json schedule", () => {
+  it("every vercel.json schedule is weekly (Monday-only) or biweekly (the 1st and 15th), never more often", () => {
+    // Coupons aside, data this site tracks (reviews, prices, images, links) does not change fast
+    // enough to need daily runs; every schedule here is capped at a 2-week gap between runs.
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     expect(crons.length).toBeGreaterThan(0);
-    // Daily entries here; a weekly entry (day-of-week set) is checked on its own below.
-    for (const { schedule } of crons.filter((c) => c.schedule.split(" ")[4] === "*")) {
-      const [m, h] = schedule.split(" ").map(Number);
-      const today = Date.UTC(2026, 9, 7, h, m);
-      const expectedNext = today > NOW.getTime() ? today : today + 86_400_000;
-      const expectedPrev = today <= NOW.getTime() ? today : today - 86_400_000;
-      expect(iso(nextRun(schedule, NOW)), schedule).toBe(new Date(expectedNext).toISOString());
-      expect(iso(previousRun(schedule, NOW)), schedule).toBe(new Date(expectedPrev).toISOString());
+    for (const { path, schedule } of crons) {
+      const [, , dom, , dow] = schedule.split(" ");
+      expect([dom, dow], `${path}: ${schedule}`).toEqual(dow === "1" ? ["*", "1"] : ["1,15", "*"]);
     }
   });
 
-  it("runs the Feedico coupon sync once a week, Friday 11:30 IST (06:00 UTC)", () => {
+  it("computes next and previous for every vercel.json schedule, and confirms no gap exceeds 16 days", () => {
+    const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
+    for (const { schedule } of crons) {
+      const next = nextRun(schedule, NOW)!;
+      const prev = previousRun(schedule, NOW)!;
+      expect(next.getTime(), schedule).toBeGreaterThan(NOW.getTime());
+      expect(prev.getTime(), schedule).toBeLessThanOrEqual(NOW.getTime());
+      const nextAfterPrev = nextRun(schedule, prev)!;
+      expect(nextAfterPrev.getTime() - prev.getTime(), schedule).toBeLessThanOrEqual(16 * 86_400_000);
+    }
+  });
+
+  it("runs the Feedico coupon sync on the 1st and 15th of the month, 11:30 IST (06:00 UTC)", () => {
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     const feedico = crons.filter((c) => c.path === "/api/cron/feedico-coupons");
-    expect(feedico.map((c) => c.schedule)).toEqual(["0 6 * * 5"]);
-    expect(iso(nextRun("0 6 * * 5", NOW))).toBe("2026-10-09T06:00:00.000Z");
-    expect(formatInZone(nextRun("0 6 * * 5", NOW)!, "Asia/Kolkata")).toMatch(/11:30/);
-    expect(new Date("2026-10-09T06:00:00Z").toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "long", hour: "numeric", minute: "2-digit" })).toBe("Friday 11:30 AM");
-    expect(iso(previousRun("0 6 * * 5", NOW))).toBe("2026-10-02T06:00:00.000Z");
+    expect(feedico.map((c) => c.schedule)).toEqual(["0 6 1,15 * *"]);
+    expect(iso(nextRun("0 6 1,15 * *", NOW))).toBe("2026-10-15T06:00:00.000Z");
+    expect(formatInZone(nextRun("0 6 1,15 * *", NOW)!, "Asia/Kolkata")).toMatch(/11:30/);
+    expect(new Date("2026-10-15T06:00:00Z").toLocaleString("en-US", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" })).toBe("11:30 AM");
+    expect(iso(previousRun("0 6 1,15 * *", NOW))).toBe("2026-10-01T06:00:00.000Z");
   });
 
   it("matches hand-checked values for the current schedules", () => {
-    expect(iso(nextRun("0 5 * * *", NOW))).toBe("2026-10-08T05:00:00.000Z");
-    expect(iso(previousRun("0 5 * * *", NOW))).toBe("2026-10-07T05:00:00.000Z");
-    expect(iso(nextRun("30 13 * * *", NOW))).toBe("2026-10-07T13:30:00.000Z");
-    expect(iso(previousRun("30 13 * * *", NOW))).toBe("2026-10-06T13:30:00.000Z");
-    expect(iso(nextRun("30 2 * * *", NOW))).toBe("2026-10-08T02:30:00.000Z");
-    expect(iso(nextRun("20 11 * * *", NOW))).toBe("2026-10-08T11:20:00.000Z");
-    expect(iso(previousRun("20 11 * * *", NOW))).toBe("2026-10-07T11:20:00.000Z");
+    expect(iso(nextRun("0 5 * * 1", NOW))).toBe("2026-10-12T05:00:00.000Z"); // 2026-10-07 is a Wednesday
+    expect(iso(previousRun("0 5 * * 1", NOW))).toBe("2026-10-05T05:00:00.000Z");
+    expect(iso(nextRun("30 2 * * 1", NOW))).toBe("2026-10-12T02:30:00.000Z");
+    expect(iso(nextRun("20 9 1,15 * *", NOW))).toBe("2026-10-15T09:20:00.000Z");
+    expect(iso(previousRun("20 9 1,15 * *", NOW))).toBe("2026-10-01T09:20:00.000Z");
   });
 
   it("handles the GitHub Actions schedules", () => {
@@ -106,19 +113,16 @@ describe("scheduled jobs", () => {
     const entries = scheduledEntries();
     const vercel = entries.filter((e) => e.origin === "vercel");
     expect(vercel).toHaveLength((vercelConfig as { crons: unknown[] }).crons.length);
-    expect(vercel.filter((e) => e.job === "daily-article").map((e) => e.query)).toEqual(["slot=morning", "slot=evening"]);
-    expect(entries.filter((e) => e.origin === "github-actions").map((e) => e.job)).toContain("enrich-products");
+    expect(vercel.filter((e) => e.job === "daily-article").map((e) => e.query)).toEqual([undefined]);
+    expect(entries.filter((e) => e.origin === "github-actions")).toEqual([]);
     expect(jobFromCronPath("/api/cron/commerce-collect")).toEqual({ job: "commerce-collect", query: undefined });
     expect(jobFromCronPath("/elsewhere")).toBeNull();
   });
 
-  it("mirrors the GitHub Actions workflow exactly", () => {
+  it("the GitHub Actions workflow has no schedule trigger (vercel.json's own cadence covers it)", () => {
+    expect(GITHUB_SCHEDULES).toEqual([]);
     const yml = fs.readFileSync(path.join(process.cwd(), ".github/workflows/scheduled-jobs.yml"), "utf8");
-    const crons = [...yml.matchAll(/- cron: "([^"]+)"/g)].map((m) => m[1]);
-    expect(crons).toEqual(GITHUB_SCHEDULES.map((s) => s.cron));
-    const sixHourly = /SCHEDULE" = "10 \*\/6 \* \* \*" \]; then JOBS="([^"]+)"/.exec(yml)?.[1];
-    const otherwise = /else JOBS="([^"]+)"; fi/.exec(yml)?.[1];
-    expect(sixHourly?.split(" ")).toEqual(GITHUB_SCHEDULES[0].jobs);
-    expect(otherwise?.split(" ")).toEqual(GITHUB_SCHEDULES[1].jobs);
+    expect(yml).not.toMatch(/^\s*schedule:/m);
+    expect(yml).toMatch(/workflow_dispatch:/);
   });
 });

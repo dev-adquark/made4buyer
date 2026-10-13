@@ -181,13 +181,14 @@ describe("commerceMetrics", () => {
 
 describe("nextCommerceRuns", () => {
   it("recognises commerce-discover cron paths with a query string", () => {
-    // 12:41 UTC: the hourly GitHub pass (minute 40) has just gone; the next is the Vercel pass at 13:05.
+    // 2026-10-15 is one of the two run days (the 1st and 15th). 12:41 UTC: the next of the 24 hourly
+    // passes that day is the Vercel pass at 13:05.
     const at1241 = nextCommerceRuns(new Date("2026-10-15T12:41:00Z")).find((r) => r.job === "commerce-discover");
     expect(at1241?.at.toISOString()).toBe("2026-10-15T13:05:00.000Z");
     expect(at1241?.path).toBe("/api/cron/commerce-discover?pass=13");
     expect(at1241?.origin).toBe("vercel");
-    // 24 hourly Vercel passes (23 with ?pass=HH plus the plain path) + the GitHub schedule.
-    expect(at1241?.schedules).toBeGreaterThanOrEqual(25);
+    // 24 hourly Vercel passes (23 with ?pass=HH plus the plain path), no GitHub schedule.
+    expect(at1241?.schedules).toBe(24);
 
     // 09:41: next is the plain-path 10:05 pass.
     const at0941 = nextCommerceRuns(new Date("2026-10-15T09:41:00Z")).find((r) => r.job === "commerce-discover");

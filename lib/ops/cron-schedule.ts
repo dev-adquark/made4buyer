@@ -139,13 +139,12 @@ export function jobFromCronPath(path: string): { job: string; query?: string } |
 }
 
 /**
- * GitHub Actions schedules in .github/workflows/scheduled-jobs.yml. The workflow file is not
- * deployed, so it is mirrored here; tests/unit/cron-schedule.test.ts fails if the two drift.
+ * GitHub Actions schedules in .github/workflows/scheduled-jobs.yml. Empty: that workflow is now
+ * workflow_dispatch only (vercel.json's own weekly/biweekly cadence no longer needs a gap-filler).
+ * The workflow file is not deployed, so any schedule there is mirrored here; tests/unit/cron-schedule.test.ts
+ * fails if the two drift.
  */
-export const GITHUB_SCHEDULES: Array<{ cron: string; jobs: string[] }> = [
-  { cron: "10 */6 * * *", jobs: ["enrich-products", "commerce-collect"] },
-  { cron: "40 * * * *", jobs: ["scrape-sources", "collect-scrapes", "ingest", "retry-failed", "publish-cycle", "daily-article", "commerce-discover", "commerce-collect"] },
-];
+export const GITHUB_SCHEDULES: Array<{ cron: string; jobs: string[] }> = [];
 
 /** Every schedule from vercel.json, then the GitHub Actions workflow schedules. */
 export function scheduledEntries(): ScheduledEntry[] {

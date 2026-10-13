@@ -7,191 +7,187 @@
   "crons": [
     {
       "path": "/api/cron/scrape-sources",
-      "schedule": "0 5 * * *"
+      "schedule": "0 5 * * 1"
     },
     {
       "path": "/api/cron/collect-scrapes",
-      "schedule": "45 5 * * *"
+      "schedule": "45 5 * * 1"
     },
     {
       "path": "/api/cron/cleanup-cache",
-      "schedule": "0 3 * * *"
+      "schedule": "0 3 1,15 * *"
     },
     {
       "path": "/api/cron/inspect-index",
-      "schedule": "0 4 * * *"
+      "schedule": "0 4 1,15 * *"
     },
     {
       "path": "/api/cron/ingest",
-      "schedule": "15 6 * * *"
+      "schedule": "15 6 * * 1"
     },
     {
       "path": "/api/cron/retry-failed",
-      "schedule": "0 8 * * *"
+      "schedule": "0 8 * * 1"
     },
     {
       "path": "/api/cron/publish-cycle",
-      "schedule": "30 8 * * *"
+      "schedule": "30 8 * * 1"
     },
     {
       "path": "/api/cron/detect-stale",
-      "schedule": "30 3 * * *"
+      "schedule": "30 3 1,15 * *"
     },
     {
       "path": "/api/cron/enrich-images",
-      "schedule": "55 9 * * *"
+      "schedule": "55 9 1,15 * *"
     },
     {
-      "path": "/api/cron/daily-article?slot=morning",
-      "schedule": "30 2 * * *"
-    },
-    {
-      "path": "/api/cron/daily-article?slot=evening",
-      "schedule": "30 13 * * *"
+      "path": "/api/cron/daily-article",
+      "schedule": "30 2 * * 1"
     },
     {
       "path": "/api/cron/enrich-products",
-      "schedule": "50 7 * * *"
+      "schedule": "50 7 * * 1"
     },
     {
       "path": "/api/cron/fix-title-years",
-      "schedule": "15 7 * * *"
+      "schedule": "15 7 * * 1"
     },
     {
       "path": "/api/cron/commerce-collect",
-      "schedule": "45 23 * * *"
+      "schedule": "45 23 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-coupons",
-      "schedule": "20 9 * * *"
+      "schedule": "20 9 1,15 * *"
     },
     {
       "path": "/api/cron/feedico-coupons",
-      "schedule": "0 6 * * 5"
+      "schedule": "0 6 1,15 * *"
     },
     {
       "path": "/api/cron/data-audit",
-      "schedule": "0 12 * * *"
+      "schedule": "0 12 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-validate-links",
-      "schedule": "10 12 * * *"
+      "schedule": "10 12 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-official-verify",
-      "schedule": "40 12 * * *"
+      "schedule": "40 12 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=00",
-      "schedule": "5 0 * * *"
+      "schedule": "5 0 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=01",
-      "schedule": "5 1 * * *"
+      "schedule": "5 1 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=02",
-      "schedule": "5 2 * * *"
+      "schedule": "5 2 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=03",
-      "schedule": "5 3 * * *"
+      "schedule": "5 3 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=04",
-      "schedule": "5 4 * * *"
+      "schedule": "5 4 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=05",
-      "schedule": "5 5 * * *"
+      "schedule": "5 5 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=06",
-      "schedule": "5 6 * * *"
+      "schedule": "5 6 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=07",
-      "schedule": "5 7 * * *"
+      "schedule": "5 7 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=08",
-      "schedule": "5 8 * * *"
+      "schedule": "5 8 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=09",
-      "schedule": "5 9 * * *"
+      "schedule": "5 9 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover",
-      "schedule": "5 10 * * *"
+      "schedule": "5 10 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=11",
-      "schedule": "5 11 * * *"
+      "schedule": "5 11 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=12",
-      "schedule": "5 12 * * *"
+      "schedule": "5 12 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=13",
-      "schedule": "5 13 * * *"
+      "schedule": "5 13 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=14",
-      "schedule": "5 14 * * *"
+      "schedule": "5 14 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=15",
-      "schedule": "5 15 * * *"
+      "schedule": "5 15 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=16",
-      "schedule": "5 16 * * *"
+      "schedule": "5 16 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=17",
-      "schedule": "5 17 * * *"
+      "schedule": "5 17 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=18",
-      "schedule": "5 18 * * *"
+      "schedule": "5 18 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=19",
-      "schedule": "5 19 * * *"
+      "schedule": "5 19 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=20",
-      "schedule": "5 20 * * *"
+      "schedule": "5 20 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=21",
-      "schedule": "5 21 * * *"
+      "schedule": "5 21 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=22",
-      "schedule": "5 22 * * *"
+      "schedule": "5 22 1,15 * *"
     },
     {
       "path": "/api/cron/commerce-discover?pass=23",
-      "schedule": "5 23 * * *"
+      "schedule": "5 23 1,15 * *"
     },
     {
       "path": "/api/cron/deals-weekly-refresh",
-      "schedule": "35 6 * * *"
+      "schedule": "35 6 1,15 * *"
     },
     {
       "path": "/api/cron/image-integrity",
-      "schedule": "25 4 * * *"
+      "schedule": "25 4 1,15 * *"
     },
     {
       "path": "/api/cron/brand-logos",
-      "schedule": "40 3 * * *"
+      "schedule": "40 3 1,15 * *"
     },
     {
       "path": "/api/cron/image-integrity?pass=night",
-      "schedule": "30 0 * * *"
+      "schedule": "30 0 1,15 * *"
     }
   ]
 }

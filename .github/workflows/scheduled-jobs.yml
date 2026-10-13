@@ -1,12 +1,11 @@
-# More frequent job cadence than Vercel Hobby cron allows (daily only).
-# Calls the same authenticated /api/cron/<job> endpoints. Inactive until the repository
-# secrets SITE_URL (e.g. https://made4buyers.com) and CRON_SECRET are set.
+# Manual-only: vercel.json's own cadence (weekly at the fastest, biweekly for most jobs) now sits
+# well under Vercel Hobby's once-a-day-per-cron limit, so this workflow no longer needs a schedule
+# to fill the gap. Kept for an on-demand run (workflow_dispatch). Calls the same authenticated
+# /api/cron/<job> endpoints; inactive until the repository secrets SITE_URL
+# (e.g. https://made4buyers.com) and CRON_SECRET are set.
 name: Scheduled jobs
 
 on:
-  schedule:
-    - cron: "10 */6 * * *" # every 6 hours: product data enrichment
-    - cron: "40 * * * *" # hourly: ingestion + retries + publish cycle
   workflow_dispatch:
     inputs:
       job:
@@ -22,15 +21,12 @@ jobs:
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          SCHEDULE: ${{ github.event.schedule }}
           MANUAL_JOB: ${{ github.event.inputs.job }}
         run: |
           if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
             echo "SITE_URL / CRON_SECRET secrets not set — skipping."; exit 0
           fi
-          if [ -n "$MANUAL_JOB" ]; then JOBS="$MANUAL_JOB"
-          elif [ "$SCHEDULE" = "10 */6 * * *" ]; then JOBS="enrich-products commerce-collect"
-          else JOBS="scrape-sources collect-scrapes ingest retry-failed publish-cycle daily-article commerce-discover commerce-collect"; fi
+          JOBS="$MANUAL_JOB"
           status=0
           for job in $JOBS; do
             code=$(curl -s -o /tmp/out.json -w '%{http_code}' --max-time 320 -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/$job")
