@@ -7,11 +7,11 @@
   "crons": [
     {
       "path": "/api/cron/scrape-sources",
-      "schedule": "0 5 * * 1"
+      "schedule": "0 5 1,15 * *"
     },
     {
       "path": "/api/cron/collect-scrapes",
-      "schedule": "45 5 * * 1"
+      "schedule": "45 5 1,15 * *"
     },
     {
       "path": "/api/cron/cleanup-cache",
