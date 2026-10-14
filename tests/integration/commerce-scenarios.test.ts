@@ -5,8 +5,7 @@ import type { ReactElement } from "react";
 import { prerender } from "react-dom/static";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { markExpiredCoupons } from "@/lib/commerce/coupons";
-import { collectCouponRuns, commerceSpendThisMonth, runCouponCrawl } from "@/lib/commerce/coupons-run";
+import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, recordDisappearances, upsertCoupons } from "@/lib/commerce/coupons";
 import { HIDDEN_LINK_STATUSES, runLinkValidation } from "@/lib/commerce/link-check";
 import { collectCommerceRuns, commerceBudget, runCommerceCollect, startProductRun } from "@/lib/commerce/pipeline";
 import { runIngestion } from "@/lib/pipeline/ingest";
@@ -220,11 +219,21 @@ async function crawl(items: unknown[], now = new Date()) {
   return collected;
 }
 
-/** Runs the first-party coupon crawl and collects it. */
+/**
+ * Stores one official promo page's codes exactly as the (now removed) first-party coupon crawl
+ * used to: normalize → cross-page conflicts → upsert → disappearances → expire. No Apify run; the
+ * only coupon source left in production is the Feedico feed (lib/commerce/feedico.ts), but these
+ * scenarios still exercise the shared classification/display rules (lib/commerce/deal-status.ts).
+ */
 async function couponCrawl(codes: Array<{ code: string; context: string }>) {
-  stub.items = [couponItem(codes)];
-  expect(await runCouponCrawl("test")).toMatchObject({ status: "OK", started: 1 });
-  expect(await collectCouponRuns("test")).toMatchObject({ collected: 1 });
+  const brand = await db.commerceBrand.findFirstOrThrow({ where: { slug: "framework" } });
+  const page = couponItem(codes);
+  const now = new Date();
+  const all = normalizeCoupons(page, brand).coupons;
+  markCrossPageConflicts(all);
+  await upsertCoupons({ brandId: brand.id, coupons: all, observedAt: now, now });
+  await recordDisappearances({ merchant: brand.name, sourceUrl: page.url, presentCodes: all.map((c) => c.code), now });
+  await markExpiredCoupons(now);
 }
 
 // ── Rendering and global display checks ──────────────────────────────────
@@ -380,10 +389,9 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     expect(r.text).not.toContain(NO_VERIFIED_PRICE);
   });
 
-  it("2. budget exhausted ($30 spent this month): discover and coupon crawl start nothing and record why; they resume in a new month", async () => {
+  it("2. budget exhausted ($30 spent this month): discover starts nothing and records why; it resumes in a new month", async () => {
     const { brand } = await seedReviewAndBrand();
-    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 20 } });
-    await db.commerceRun.create({ data: { purpose: "COUPON", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 10.01 } });
+    await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 30.01 } });
     expect(await commerceBudget()).toMatchObject({ budgetUsd: 30, exhausted: true });
     discovered.urls = [productUrl("laptop13")];
 
@@ -393,11 +401,7 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     const skipped = await db.commerceRun.findFirstOrThrow({ where: { brandId: brand.id, status: "SKIPPED" } });
     expect(skipped).toMatchObject({ purpose: "PRODUCT", apifyRunId: null, startUrls: 1 });
     expect(JSON.stringify(skipped.errors)).toContain("BUDGET_EXHAUSTED");
-    expect(await runCouponCrawl("test")).toMatchObject({ status: "BUDGET_EXHAUSTED", started: 0 });
     expect(stub.posts).toHaveLength(0);
-    // The scheduler records the coupon job as not having run.
-    const { jobOutcome } = await import("@/lib/jobs/registry");
-    expect(jobOutcome(await JOBS["commerce-coupons"].run("test")).ran).toBe(false);
     expect(await db.commerceOffer.count()).toBe(0);
     expectNoDeals(await deals());
 
@@ -405,19 +409,17 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     const now = new Date();
     const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 30));
     expect(await commerceBudget(nextMonth)).toMatchObject({ spentUsd: 0, exhausted: false });
-    expect(await commerceSpendThisMonth(nextMonth)).toBe(0);
-    // Month change: last month's runs fall out of the window and both crawls start again.
+    // Month change: last month's run falls out of the window and discovery starts again.
     const lastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15));
     await db.commerceRun.updateMany({ data: { startedAt: lastMonth } });
     expect(await commerceBudget()).toMatchObject({ exhausted: false });
     await db.commerceBrand.update({ where: { id: brand.id }, data: { nextCrawlAt: null } });
-    // Typical runs cost cents: with only the two $15 runs above as history, the projected cost of a
-    // second start (one in flight + this one ≈ $30) would itself exceed the budget.
+    // Typical runs cost cents: with only the one $30 run above as history, the projected cost of a
+    // second start (one in flight + this one) would itself exceed the budget, so pad the average down.
     for (let i = 0; i < 8; i++) await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: "x", trigger: "test", status: "COLLECTED", usageUsd: 0.05, startedAt: lastMonth } });
     stub.runStatus = "RUNNING";
     expect(await JOBS["commerce-discover"].run("test")).toMatchObject({ status: "OK", started: 1 });
-    expect(await runCouponCrawl("test")).toMatchObject({ status: "OK", started: 1 });
-    expect(stub.posts).toHaveLength(2);
+    expect(stub.posts).toHaveLength(1);
   });
 
   it("3. duplicate offers (same page with utm/gclid, crawled again): one offer row, one public card", async () => {
@@ -670,7 +672,6 @@ describe("owner scenarios: pipeline → /deals and review page", () => {
     const c = await db.commerceCoupon.findFirstOrThrow({ where: { code: "SAVE10" } });
     expect(c).toMatchObject({ status: "VERIFIED", discount: "10% off", discountType: "PERCENT", sourceUrl: promoUrl() });
     expect(c.verificationEvidence).toMatch(/^Published on /);
-    expect(stub.siteHits).toContain("GET /robots.txt");
 
     const d = await deals();
     const codes = section(d.markup, "codes-title");

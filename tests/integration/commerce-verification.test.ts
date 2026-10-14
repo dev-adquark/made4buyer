@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { collectCouponRuns } from "@/lib/commerce/coupons-run";
 import { markExpiredCoupons, verifiedCouponsFor } from "@/lib/commerce/coupons";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
@@ -251,18 +250,15 @@ describe("coupons drop out when expired or not re-verified", () => {
     env();
   });
 
-  it("expired codes become EXPIRED on every collect (even without Apify), with one COUPON_EXPIRED event", async () => {
+  it("expired codes become EXPIRED, once, with one COUPON_EXPIRED event", async () => {
     const brand = await addBrand();
     const past = new Date(Date.now() - 86_400_000);
     const c = await coupon({ brandId: brand.id, code: "ENDED10", expiresAt: past });
     expect(await verifiedCouponsFor({ brandId: brand.id })).toHaveLength(0); // never shown once past its stated end
-    const env = withEnv({ APIFY_API_TOKEN: undefined });
-    const r = await collectCouponRuns("test");
-    env();
-    expect(r).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", expired: 1 });
+    expect(await markExpiredCoupons()).toBe(1);
     expect(await db.commerceCoupon.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ status: "EXPIRED" });
+    // A second pass finds it already EXPIRED: no second event.
     expect(await markExpiredCoupons()).toBe(0);
-    await collectCouponRuns("test");
     const events = await audits("COUPON_EXPIRED");
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ actor: "system", entityType: "commerce_coupon", entityId: c.id, before: { status: "VERIFIED" }, after: { status: "EXPIRED" } });

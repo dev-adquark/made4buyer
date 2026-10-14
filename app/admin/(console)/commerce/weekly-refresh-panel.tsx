@@ -15,7 +15,7 @@ function Counters({ c, id }: { c: SweepCounters; id: string }) {
       <Stat label="Brands processed" value={c.brandsProcessed} note={`${c.brandsTargeted} targeted · ${c.runsStarted} runs started · ${c.runsSkipped} skipped · ${c.runsFailed} failed`} />
       <Stat label="Records" value={`${c.recordsDiscovered} discovered`} note={`${c.recordsAccepted} accepted · ${c.recordsRejected} rejected · ${c.offersUpdated} offers updated`} />
       <Stat label="Deals" value={`+${c.dealsCreated} created`} note={`${c.dealsExpired} expired · ${c.dealsHidden} hidden · ${c.dealsNow || c.dealsAtStart} live`} />
-      <Stat label="Coupons" value={`${c.couponsVerified} verified`} note={`${c.couponsExpired} expired · ${c.couponRunsStarted} promo-page runs`} />
+      <Stat label="Coupons" value={`${c.couponsVerified} verified`} note={`${c.couponsExpired} expired (Feedico only; brand-site coupon crawling was removed)`} />
       <Stat label="Links" value={`${c.linksFailed} failed`} note={`${c.linksChecked} checked`} />
       <Stat label="Verification" value={`${c.verificationFailures} failures`} note={`${c.verificationChecked} products checked · audit: ${c.auditFlagged} flagged, ${c.auditFixed} fixed`} />
       <Stat label="Errors" value={`${c.apiErrors} API errors`} note={`${c.retries} retries${c.durationMs ? ` · ${duration(c.durationMs)}` : ""}`} />

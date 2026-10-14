@@ -12,14 +12,18 @@ import { audit, type AuditContext } from "@/lib/security/audit";
  * slug and a purpose/scope from a fixed list, never a URL. Every call is audited.
  */
 
-export const RUN_PURPOSES = ["PRODUCT", "COUPON", "DEAL"] as const;
+export const RUN_PURPOSES = ["PRODUCT", "DEAL"] as const;
 export type RunPurpose = (typeof RUN_PURPOSES)[number];
 
 /** Which job each run purpose starts when no brand is named (the next due brands). */
-export const PURPOSE_JOB: Record<RunPurpose, string> = { PRODUCT: "commerce-discover", DEAL: "commerce-discover", COUPON: "commerce-coupons" };
+export const PURPOSE_JOB: Record<RunPurpose, string> = { PRODUCT: "commerce-discover", DEAL: "commerce-discover" };
 
-/** Verification scopes → jobs. "deals" is registered by the deal classifier; until then it answers 503. */
-export const VERIFY_JOBS = { links: "commerce-validate-links", official: "commerce-official-verify", coupons: "commerce-collect", deals: "commerce-classify-deals" } as const;
+/**
+ * Verification scopes → jobs. "deals" is registered by the deal classifier; until then it answers 503.
+ * Coupons have no verification scope: brand-site coupon crawling was removed, and Feedico codes are
+ * verified by its own sync (lib/commerce/feedico.ts), not an on-demand admin check.
+ */
+export const VERIFY_JOBS = { links: "commerce-validate-links", official: "commerce-official-verify", deals: "commerce-classify-deals" } as const;
 export type VerifyScope = keyof typeof VERIFY_JOBS;
 export const isVerifyScope = (v: unknown): v is VerifyScope => typeof v === "string" && Object.prototype.hasOwnProperty.call(VERIFY_JOBS, v);
 
@@ -48,9 +52,6 @@ export async function startBrandApifyRun(slug: string, purpose: RunPurpose, ctx:
   const brand = await db.commerceBrand.findUnique({ where: { slug } });
   if (!brand) return { status: 404, body: { ok: false, error: `No brand with slug ${slug}` } };
   if (!brand.enabled) return { status: 422, body: { ok: false, brand: slug, error: `${brand.name} is disabled: enable it in Commerce → Sources first` } };
-  if (purpose === "COUPON") {
-    return { status: 422, body: { ok: false, brand: slug, error: "A single-brand coupon run is not available; send {purpose: \"COUPON\"} without a brand to start the due coupon runs" } };
-  }
   try {
     const r = await withLock(`commerce-brand-run:${brand.id}`, 5 * 60_000, () => startBrandRun(brand, `admin:${ctx.actor}`, new Date()));
     await audit(ctx, { action: "commerce.apify.run", entityType: "commerce_brand", entityId: brand.id, metadata: { brand: slug, purpose, status: r.status, code: r.code ?? null, runId: r.runId ?? null, urls: r.urls, recheck: r.recheck, discovery: r.discovery, reason: r.reason ?? null } });

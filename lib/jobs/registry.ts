@@ -1,3 +1,4 @@
+import { markExpiredCoupons } from "@/lib/commerce/coupons";
 import { db } from "@/lib/db";
 import { gscConfigured, inspectUrl } from "@/lib/gsc";
 import { recordFailure, resolveFailures } from "@/lib/pipeline/failures";
@@ -10,7 +11,6 @@ import { LockHeldError, withLock } from "./lock";
 import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } from "./run-log";
 import { runDataAudit } from "@/lib/ops/data-audit";
 import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline";
-import { collectCouponRuns, runCouponCrawl } from "@/lib/commerce/coupons-run";
 import { runFeedicoSync } from "@/lib/commerce/feedico";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
@@ -97,37 +97,39 @@ export const JOBS = {
     locked: true,
   },
   "enrich-products": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runProductEnrichment({ trigger }), locked: true },
-  // Commerce intelligence engine (Apify, budget-capped): discover → start runs; collect → match → offers; first-party coupons.
-  // Each discover pass first collects finished product and coupon runs, so the every-2-hours
-  // passes keep collection current without relying on any other scheduler.
+  // Commerce intelligence engine (Apify, budget-capped): discover → start runs; collect → match → offers.
+  // Each discover pass first collects finished product runs, so the hourly passes keep
+  // collection current without relying on any other scheduler.
   "commerce-discover": {
     lockTtlMs: 15 * 60_000,
     run: async (trigger: string) => {
       const t0 = Date.now();
       const collected = await runCommerceCollect(trigger);
-      const coupons = await collectCouponRuns(trigger);
       const discover = await runCommerceDiscover(trigger);
       // Carries an in-progress weekly deals sweep on with the time this invocation has left (≤ 90 s; one settings read when idle).
       const weekly = await continueWeeklyRefresh(trigger, { budgetMs: Math.min(90_000, 250_000 - (Date.now() - t0)) });
-      return { ...discover, collected: { checked: collected.checked, collected: collected.collected, staleOffers: collected.staleOffers }, coupons: { checked: coupons.checked, collected: coupons.collected }, weekly: { status: weekly.status, ...(weekly.reason ? { reason: weekly.reason } : {}) } };
+      return { ...discover, collected: { checked: collected.checked, collected: collected.collected, staleOffers: collected.staleOffers }, weekly: { status: weekly.status, ...(weekly.reason ? { reason: weekly.reason } : {}) } };
     },
     locked: true,
   },
-  // Also applies the configured affiliate provider to offers (lib/affiliate/apply.ts; a no-op revert-to-plain when none is configured).
+  // Also applies the configured affiliate provider to offers (lib/affiliate/apply.ts; a no-op revert-to-plain when none is configured),
+  // and expires coupons whose stated date has passed (DB bookkeeping only; a public page already hides
+  // an expired code by its stated date regardless of this column, lib/commerce/deal-status.ts).
   "commerce-collect": {
     lockTtlMs: 20 * 60_000,
     run: async (trigger: string) => {
       const collected = await runCommerceCollect(trigger);
-      const coupons = await collectCouponRuns(trigger);
+      const couponsExpired = await markExpiredCoupons();
       const affiliate = await runAffiliateLinks(trigger).catch((error: unknown) => ({ status: "ERROR", error: String(error).slice(0, 200) }));
-      return { ...collected, coupons, affiliate };
+      return { ...collected, coupons: { expired: couponsExpired }, affiliate };
     },
     locked: true,
   },
   // Affiliate links on demand (Admin → Jobs / `npm run job -- affiliate-links`).
   "affiliate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runAffiliateLinks(trigger), locked: true },
-  "commerce-coupons": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runCouponCrawl(trigger), locked: true },
-  // Feedico coupon feed (lib/commerce/feedico.ts): weekly (Friday 11:30 IST = 06:00 UTC), every brand; codes older than 14 days deactivated; current codes shown publicly as "Via Feedico".
+  // Feedico coupon feed (lib/commerce/feedico.ts): the only coupon source now (brand-site coupon
+  // crawling via Apify was removed); every brand; codes older than 14 days deactivated; current
+  // codes shown publicly as "Via Feedico".
   "feedico-coupons": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runFeedicoSync(trigger), locked: true },
   // Commerce verification: offer destination checks (robots.txt respected, ≤ COMMERCE_LINK_CHECKS_PER_RUN) and official-source status.
   "commerce-validate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runLinkValidation(trigger), locked: true },

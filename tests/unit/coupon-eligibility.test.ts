@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { couponRecheckHours } from "@/lib/commerce/coupons-run";
 import { classifyCoupons, couponDealStatus, couponMaxAgeDays, couponSourceTier, couponVerifiedSince, DEFAULT_COUPON_MAX_AGE_DAYS, publicCoupons, type DealBrandInput, type DealCouponInput } from "@/lib/commerce/deal-status";
 import { withEnv } from "../support/env";
 
 /**
  * THE public coupon rule (lib/commerce/deal-status.ts): couponDealStatus for one row, classifyCoupons
- * for duplicates / conflicts across rows, publicCoupons for what any public surface may show, and the
- * re-verification cadence that keeps a still-published code inside the window (couponRecheckHours).
+ * for duplicates / conflicts across rows, and publicCoupons for what any public surface may show.
  */
 
 const HOUR = 3_600_000;
@@ -227,30 +225,5 @@ describe("conflicts: official pages that disagree hide the code", () => {
     const current = row({ id: "current", discount: "10% off laptops" });
     const stale = row({ id: "stale", discount: "25% off laptops", sourceUrl: "https://frame.work/deals", lastVerifiedAt: ago(9 * DAY) });
     expect(publicCoupons([current, stale], NOW).map((c) => c.id)).toEqual(["current"]);
-  });
-});
-
-describe("couponRecheckHours: a still-published code is re-verified inside the window", () => {
-  it("defaults to 120 h (window 7 days minus 2 days of slack)", () => {
-    restore = withEnv({ COMMERCE_COUPON_MAX_AGE_DAYS: undefined });
-    expect(couponRecheckHours()).toBe(120);
-  });
-
-  it("is never under 24 h and always leaves at least 2 days of slack once the window allows it", () => {
-    for (let days = 1; days <= 90; days++) {
-      restore = withEnv({ COMMERCE_COUPON_MAX_AGE_DAYS: String(days) });
-      const h = couponRecheckHours();
-      expect(h, `window ${days} d`).toBeGreaterThanOrEqual(24);
-      if (days >= 3) expect(h, `window ${days} d`).toBe((days - 2) * 24);
-      else expect(h, `window ${days} d`).toBe(24);
-      expect(h, `window ${days} d: re-checked before the window closes`).toBeLessThanOrEqual(days * 24);
-      restore();
-      restore = null;
-    }
-  });
-
-  it("an invalid window setting falls back to the 7-day cadence", () => {
-    restore = withEnv({ COMMERCE_COUPON_MAX_AGE_DAYS: "500" });
-    expect(couponRecheckHours()).toBe(120);
   });
 });

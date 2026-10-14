@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { markCrossPageConflicts, normalizeCoupons, notACodeReason, parseStatedDate, statedDiscount, statedExpiry, verifyCoupon, type CouponObservation } from "@/lib/commerce/coupons";
-import { buildCouponActorInput } from "@/lib/commerce/coupons-run";
 import { COUPON_PAGE_FUNCTION, findCodesInText } from "@/lib/commerce/page-functions/coupon";
 
 const brand = { id: "b1", name: "Acme", officialDomain: "acme.example", market: "US" };
@@ -35,12 +34,6 @@ describe("code extraction", () => {
     expect(COUPON_PAGE_FUNCTION).toContain("const MAX = 50");
     // Parses as JavaScript.
     expect(() => new Function(`return (${COUPON_PAGE_FUNCTION})`)).not.toThrow();
-  });
-
-  it("actor input: promo URLs only, depth 0, one page each, concurrency 1, robots respected", () => {
-    const input = buildCouponActorInput(["https://acme.example/a", "https://acme.example/b"], "acme");
-    expect(input).toMatchObject({ maxCrawlingDepth: 0, maxPagesPerCrawl: 2, maxConcurrency: 1, respectRobotsTxtFile: true, proxyConfiguration: { useApifyProxy: true } });
-    expect(input.startUrls).toEqual([{ url: "https://acme.example/a" }, { url: "https://acme.example/b" }]);
   });
 });
 

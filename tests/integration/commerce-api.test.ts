@@ -213,13 +213,13 @@ describe("admin action endpoints", () => {
   it("verify runs the job for each scope, as an admin trigger, audited", async () => {
     await signIn();
     const calls: Record<string, string[]> = {};
-    for (const job of ["commerce-validate-links", "commerce-official-verify", "commerce-collect"] as const) {
+    for (const job of ["commerce-validate-links", "commerce-official-verify"] as const) {
       vi.spyOn(JOBS[job], "run").mockImplementation(async (trigger: string) => {
         (calls[job] ??= []).push(trigger);
         return { status: "OK", checked: 2 } as never;
       });
     }
-    for (const [scope, job] of [["links", "commerce-validate-links"], ["official", "commerce-official-verify"], ["coupons", "commerce-collect"]] as const) {
+    for (const [scope, job] of [["links", "commerce-validate-links"], ["official", "commerce-official-verify"]] as const) {
       const res = await post(postVerify, "/api/commerce/verify", { scope });
       expect(res.status, scope).toBe(200);
       expect(res.headers.get("cache-control")).toContain("no-store");
@@ -228,7 +228,9 @@ describe("admin action endpoints", () => {
       const log = await db.auditLog.findFirstOrThrow({ where: { action: `job.run.${job}` } });
       expect(log).toMatchObject({ actor: ADMIN, entityType: "job", entityId: job });
     }
-    expect(await db.jobRun.count()).toBe(3);
+    expect(await db.jobRun.count()).toBe(2);
+    // Coupons have no verify scope any more (brand-site crawling was removed).
+    expect((await post(postVerify, "/api/commerce/verify", { scope: "coupons" })).status).toBe(400);
 
     // Deal classification: the job the classifier registers; unavailable until it exists.
     const deals = await post(postVerify, "/api/commerce/verify", { scope: "deals" });
@@ -263,15 +265,11 @@ describe("admin action endpoints", () => {
   it("apify/run starts the due-brand jobs by purpose, or one brand's run by slug; never accepts URLs", async () => {
     await signIn();
     const discover = vi.spyOn(JOBS["commerce-discover"], "run").mockResolvedValue({ status: "OK", started: 2 } as never);
-    const coupons = vi.spyOn(JOBS["commerce-coupons"], "run").mockResolvedValue({ status: "OK", started: 1 } as never);
 
     let res = await post(postRun, "/api/commerce/apify/run", {});
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, job: "commerce-discover" });
-    res = await post(postRun, "/api/commerce/apify/run", { purpose: "COUPON" });
-    expect(await res.json()).toMatchObject({ ok: true, job: "commerce-coupons" });
     expect(discover).toHaveBeenCalledTimes(1);
-    expect(coupons).toHaveBeenCalledTimes(1);
 
     const acme = await db.commerceBrand.create({ data: { name: "Acme", slug: "acme", officialDomain: "www.acme.com", categories: ["audio"] } });
     res = await post(postRun, "/api/commerce/apify/run", { brand: "acme", purpose: "DEAL" });
@@ -288,12 +286,12 @@ describe("admin action endpoints", () => {
     expect(vi.mocked(startBrandRun)).toHaveBeenCalledTimes(1);
   });
 
-  it("apify/run refuses a disabled brand and a single-brand coupon run", async () => {
+  it("apify/run refuses a disabled brand and an unknown purpose (COUPON: brand-site coupon crawling was removed)", async () => {
     await signIn();
     await db.commerceBrand.create({ data: { name: "Off", slug: "off", officialDomain: "www.off.com", categories: ["audio"], enabled: false } });
     await db.commerceBrand.create({ data: { name: "On", slug: "on", officialDomain: "www.on.com", categories: ["audio"] } });
     expect((await post(postRun, "/api/commerce/apify/run", { brand: "off" })).status).toBe(422);
-    expect((await post(postRun, "/api/commerce/apify/run", { brand: "on", purpose: "COUPON" })).status).toBe(422);
+    expect((await post(postRun, "/api/commerce/apify/run", { brand: "on", purpose: "COUPON" })).status).toBe(400);
     expect(vi.mocked(startBrandRun)).not.toHaveBeenCalled();
   });
 

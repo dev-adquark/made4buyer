@@ -5,9 +5,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * POST /api/commerce/verify {scope: "links" | "official" | "coupons" | "deals"} — admin, same-origin,
- * rate-limited, audited. Runs commerce-validate-links / commerce-official-verify / commerce-collect /
- * commerce-classify-deals (503 until that job is registered).
+ * POST /api/commerce/verify {scope: "links" | "official" | "deals"} — admin, same-origin,
+ * rate-limited, audited. Runs commerce-validate-links / commerce-official-verify /
+ * commerce-classify-deals (503 until that job is registered). No "coupons" scope: brand-site
+ * coupon crawling was removed, and Feedico codes are verified by its own sync, not an admin check.
  */
 export const POST = adminJsonPost(
   "commerce-verify",

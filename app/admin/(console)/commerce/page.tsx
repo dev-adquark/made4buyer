@@ -20,7 +20,6 @@ const RUN_TONE: Record<string, "ok" | "warn" | "error" | "info" | "neutral"> = {
 const JOBS: Array<[string, string]> = [
   ["commerce-discover", "Run discovery now"],
   ["commerce-collect", "Run collection now"],
-  ["commerce-coupons", "Run coupon check now"],
 ];
 
 function duration(start: Date, end: Date | null): string {

@@ -9,7 +9,6 @@ import { audit, type AuditContext } from "@/lib/security/audit";
 import { ensureBrandsSeeded } from "./brands";
 import { classifyOfferStatusesSafe } from "./classify";
 import { markExpiredCoupons } from "./coupons";
-import { collectCouponRuns, runCouponCrawl } from "./coupons-run";
 import { HIDDEN_LINK_STATUSES, linkCheckBudgetMs, runLinkValidation } from "./link-check";
 import { runOfficialVerify } from "./official";
 import { collectCommerceRuns, isStopCode, markStaleOffers, startBrandRun } from "./pipeline";
@@ -31,15 +30,15 @@ import { revalidateCommerce } from "./revalidate";
  * and saves progress after every step; the daily cron and the hourly commerce-discover passes
  * (continueWeeklyRefresh) carry it on until it completes. Stages:
  *
- *   collect    collect finished product and coupon runs
- *   freshness  offers past PRODUCT_PRICE_MAX_AGE_HOURS → STALE; expired coupons → EXPIRED
+ *   collect    collect finished product runs
+ *   freshness  offers past PRODUCT_PRICE_MAX_AGE_HOURS → STALE; expired coupons (Feedico's own
+ *              14-day freshness rule, lib/commerce/feedico.ts) → EXPIRED
  *   recheck    for every brand with public-candidate offers: a run of its offer pages due for a price
  *              re-check (then newly discovered URLs). COMMERCE_WEEKLY_BRANDS_PER_INVOCATION (default 8)
  *              brands per invocation; budget- and switch-gated; failure backoff respected
  *   discover   discovery runs for enabled brands not crawled in 7 days, and for every brand with
  *              official deal pages (dealUrls) not yet run in this sweep: each brand run includes its
  *              deal pages (lib/commerce/deal-crawl.ts), so every deal brand gets a deal crawl per sweep
- *   coupons    official promotions pages of every promo brand (once per sweep)
  *   settle     wait (≤ COMMERCE_WEEKLY_SETTLE_HOURS, default 3) for this sweep's Apify runs, collecting them
  *   links      every offer destination checked once in this sweep (robots.txt, one request at a time per host)
  *   official   official-source verification
@@ -57,14 +56,13 @@ export const STATE_KEY = "deals_weekly_state";
 export const LAST_KEY = "deals_weekly_last";
 const SNAPSHOT_KEY = "deals_weekly_snapshot";
 
-export const STAGES = ["collect", "freshness", "recheck", "discover", "coupons", "settle", "links", "official", "audit", "summary"] as const;
+export const STAGES = ["collect", "freshness", "recheck", "discover", "settle", "links", "official", "audit", "summary"] as const;
 export type Stage = (typeof STAGES)[number];
 export const STAGE_LABELS: Record<Stage, string> = {
   collect: "Collect finished runs",
   freshness: "Mark stale offers and expired coupons",
   recheck: "Re-check prices of brands with deals",
   discover: "Discover brands not crawled in 7 days",
-  coupons: "Crawl official promotions pages",
   settle: "Wait for this sweep's runs and collect them",
   links: "Check every offer link",
   official: "Official-source verification",
@@ -177,7 +175,6 @@ export type SweepCounters = {
   dealsCreated: number;
   dealsExpired: number;
   dealsHidden: number;
-  couponRunsStarted: number;
   couponsVerified: number;
   couponsExpired: number;
   linksChecked: number;
@@ -208,7 +205,6 @@ export const emptyCounters = (): SweepCounters => ({
   dealsCreated: 0,
   dealsExpired: 0,
   dealsHidden: 0,
-  couponRunsStarted: 0,
   couponsVerified: 0,
   couponsExpired: 0,
   linksChecked: 0,
@@ -318,9 +314,8 @@ const APIFY_ERROR = /^APIFY_/;
 
 async function collectAll(c: Ctx) {
   const p = await collectCommerceRuns(c.runTrigger, c.now);
-  const k = await collectCouponRuns(c.runTrigger);
-  c.state.counters.apiErrors += p.results.filter((r) => APIFY_ERROR.test(r.status) && r.status !== "APIFY_NOT_CONFIGURED").length + k.results.filter((r) => APIFY_ERROR.test(r.status)).length;
-  return { products: p, coupons: k };
+  c.state.counters.apiErrors += p.results.filter((r) => APIFY_ERROR.test(r.status) && r.status !== "APIFY_NOT_CONFIGURED").length;
+  return { products: p };
 }
 
 async function freshness(c: Ctx) {
@@ -432,21 +427,6 @@ const STAGE_FNS: Record<Stage, StageFn> = {
       await c.save();
     }
     return processBrandQueue(c, "discover");
-  },
-  async coupons(c) {
-    const s = c.state;
-    const r = await runCouponCrawl(c.runTrigger, { since: new Date(s.startedAt), deadline: c.deadline - 30_000 });
-    s.counters.couponRunsStarted += r.started;
-    for (const x of r.results ?? []) {
-      if (x.status === "STARTED" || x.status === "NOT_DUE") continue;
-      if (APIFY_ERROR.test(x.status)) s.counters.apiErrors++;
-      addError(s, "coupons", x.reason ?? x.status, x.target, x.status);
-    }
-    if (r.status !== "OK") {
-      addError(s, "coupons", r.reason ?? r.status, undefined, r.status);
-      return true;
-    }
-    return !r.remaining;
   },
   async settle(c) {
     const s = c.state;
