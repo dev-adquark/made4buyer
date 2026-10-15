@@ -1,4 +1,5 @@
 import { couponDealStatus, summarizeStatuses } from "./deal-status";
+import { ERROR_CODES, isErrorCode } from "@/lib/errors";
 import { HIDDEN_LINK_STATUSES } from "./link-check";
 import { commerceBudget, monthlyBudgetUsd } from "./pipeline";
 import { getSwitches, setSwitch, SWITCHES, type SwitchKey } from "@/lib/automation/settings";
@@ -40,17 +41,39 @@ export async function setCommerceEngine(on: boolean, ctx: AuditContext): Promise
   return { before, after: on };
 }
 
+/** Whether a recorded error code means retrying is pointless until something outside this app changes (an Apify account/permission block, a misconfiguration) — never queued for retry, no matter how it is asked for. */
+function isPermanentCode(code: string | null | undefined): boolean {
+  return !!code && isErrorCode(code) && !ERROR_CODES[code].retryable;
+}
+
+/** The code of a CommerceRun's most recent recorded error, if any (errors: [{ code, reason }, …], newest last). */
+function lastRunErrorCode(errors: unknown): string | null {
+  if (!Array.isArray(errors) || !errors.length) return null;
+  const last = errors[errors.length - 1];
+  return last && typeof last === "object" && typeof (last as { code?: unknown }).code === "string" ? (last as { code: string }).code : null;
+}
+
 /**
- * Re-queue everything that failed: brands with failures (or a FAILED crawl) become due now with
- * their failure counter reset and crawl status RETRY_QUEUED (the next crawl overwrites it), and FAILED runs are marked RETRY_QUEUED. Healthy brands and runs
- * in any other state are not touched.
+ * Re-queue everything that failed AND can plausibly succeed on a retry: brands with failures (or a
+ * FAILED crawl) become due now with their failure counter reset and crawl status RETRY_QUEUED (the
+ * next crawl overwrites it), and FAILED runs are marked RETRY_QUEUED. A brand or run whose last
+ * recorded error is permanent (lib/errors.ts retryable: false — an Apify account/permission block,
+ * a bad token, a configuration problem) is left exactly as it is: retrying would only repeat the
+ * same call for the same guaranteed failure, and one call per unit is the rule everywhere else in
+ * this app (lib/ops/api-guard.ts). Healthy brands and runs in any other state are not touched.
  */
 export async function retryFailed(ctx: AuditContext, now = new Date()) {
-  const brands = await db.commerceBrand.findMany({
+  const candidates = await db.commerceBrand.findMany({
     where: { OR: [{ consecutiveFailures: { gt: 0 } }, { crawlStatus: "FAILED" }] },
     select: { id: true, slug: true, consecutiveFailures: true, crawlStatus: true, nextCrawlAt: true },
   });
-  const runs = await db.commerceRun.findMany({ where: { status: "FAILED" }, select: { id: true } });
+  const brands = candidates.filter((b) => !isPermanentCode(b.crawlStatus));
+  const skippedBrands = candidates.filter((b) => isPermanentCode(b.crawlStatus));
+
+  const runCandidates = await db.commerceRun.findMany({ where: { status: "FAILED" }, select: { id: true, errors: true } });
+  const runs = runCandidates.filter((r) => !isPermanentCode(lastRunErrorCode(r.errors)));
+  const skippedRuns = runCandidates.filter((r) => isPermanentCode(lastRunErrorCode(r.errors)));
+
   await db.$transaction([
     db.commerceBrand.updateMany({ where: { id: { in: brands.map((b) => b.id) } }, data: { nextCrawlAt: now, consecutiveFailures: 0, crawlStatus: "RETRY_QUEUED" } }),
     db.commerceRun.updateMany({ where: { id: { in: runs.map((r) => r.id) }, status: "FAILED" }, data: { status: "RETRY_QUEUED" } }),
@@ -59,11 +82,11 @@ export async function retryFailed(ctx: AuditContext, now = new Date()) {
     action: "commerce.retry_failed",
     entityType: "commerce_engine",
     entityId: "commerce",
-    before: { brands: brands.map((b) => ({ slug: b.slug, consecutiveFailures: b.consecutiveFailures, crawlStatus: b.crawlStatus, nextCrawlAt: b.nextCrawlAt })) },
+    before: { brands: candidates.map((b) => ({ slug: b.slug, consecutiveFailures: b.consecutiveFailures, crawlStatus: b.crawlStatus, nextCrawlAt: b.nextCrawlAt })) },
     after: { nextCrawlAt: now, consecutiveFailures: 0, crawlStatus: "RETRY_QUEUED", runsMarked: "RETRY_QUEUED" },
-    metadata: { brands: brands.length, runs: runs.length, runIds: runs.map((r) => r.id).slice(0, 100) },
+    metadata: { brands: brands.length, runs: runs.length, runIds: runs.map((r) => r.id).slice(0, 100), skippedBrands: skippedBrands.map((b) => ({ slug: b.slug, code: b.crawlStatus })), skippedRuns: skippedRuns.length },
   });
-  return { brands: brands.length, runs: runs.length };
+  return { brands: brands.length, runs: runs.length, skipped: { brands: skippedBrands.length, runs: skippedRuns.length } };
 }
 
 /** Monthly Apify budget in USD — the same value the jobs enforce (lib/commerce/pipeline.ts). */

@@ -21,6 +21,7 @@ const JOBS: Array<[string, string]> = [
   ["commerce-discover", "Run discovery now"],
   ["commerce-collect", "Run collection now"],
   ["commerce-direct-crawl", "Run direct crawl now (no Apify)"],
+  ["commerce-multibrand-crawl", "Run every due brand in one Apify call"],
 ];
 
 function duration(start: Date, end: Date | null): string {

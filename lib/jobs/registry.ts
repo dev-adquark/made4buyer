@@ -10,7 +10,7 @@ import { withApiInvocation } from "@/lib/ops/api-guard";
 import { LockHeldError, withLock } from "./lock";
 import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } from "./run-log";
 import { runDataAudit } from "@/lib/ops/data-audit";
-import { runCommerceCollect, runCommerceDirectCrawl, runCommerceDiscover } from "@/lib/commerce/pipeline";
+import { runCommerceCollect, runCommerceDirectCrawl, runCommerceDiscover, runMultiBrandCrawl } from "@/lib/commerce/pipeline";
 import { runFeedicoSync } from "@/lib/commerce/feedico";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
@@ -131,6 +131,10 @@ export const JOBS = {
   // HTTP GET per page (robots.txt checked first), reusing the same sitemap discovery and
   // normalize/match/offer pipeline Apify-sourced pages use. Independent of commerce-discover/collect.
   "commerce-direct-crawl": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCommerceDirectCrawl(trigger), locked: true },
+  // One Apify call for every due brand at once (lib/commerce/pipeline.ts startMultiBrandRun), instead
+  // of one call per brand. Admin-triggered only (no cron entry yet): run it from Admin → Commerce
+  // once you've verified it against a few brands.
+  "commerce-multibrand-crawl": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runMultiBrandCrawl(trigger), locked: true },
   // Feedico coupon feed (lib/commerce/feedico.ts): the only coupon source now (brand-site coupon
   // crawling via Apify was removed); every brand; codes older than 14 days deactivated; current
   // codes shown publicly as "Via Feedico".
@@ -167,6 +171,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-discover": ["commerce_engine"],
   "commerce-collect": ["commerce_engine"],
   "commerce-direct-crawl": ["commerce_engine"],
+  "commerce-multibrand-crawl": ["commerce_engine"],
   "affiliate-links": ["commerce_engine"],
   "feedico-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],

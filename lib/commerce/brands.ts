@@ -406,10 +406,15 @@ export async function toggleBrand(id: string) {
 }
 
 /** "Crawl next": due immediately (also lifts a failure backoff); failures are kept for the record. */
+/**
+ * Clears a permanent-failure mark too (crawlStatus, consecutiveFailures): "Crawl next" is a
+ * deliberate, one-brand admin override — the one case a permanent error (lib/errors.ts retryable:
+ * false — an Apify account/permission block) is tried again, on the admin's own say ("I fixed it").
+ */
 export async function crawlBrandNow(id: string, now = new Date()) {
   const before = await db.commerceBrand.findUnique({ where: { id } });
   if (!before) return null;
-  const after = await db.commerceBrand.update({ where: { id }, data: { nextCrawlAt: now } });
+  const after = await db.commerceBrand.update({ where: { id }, data: { nextCrawlAt: now, crawlStatus: null, consecutiveFailures: 0 } });
   return { before, after };
 }
 

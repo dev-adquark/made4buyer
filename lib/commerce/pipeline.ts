@@ -3,7 +3,7 @@ import { getSwitches } from "@/lib/automation/settings";
 import { config } from "@/lib/config";
 import { guardedApiCall, onceInInvocation } from "@/lib/ops/api-guard";
 import { db } from "@/lib/db";
-import { PipelineError } from "@/lib/errors";
+import { ERROR_CODES, isErrorCode, PipelineError } from "@/lib/errors";
 import { log } from "@/lib/log";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { apifyConfigured, globToRegex, normalizeUrl } from "@/lib/pipeline/apify";
@@ -184,6 +184,116 @@ async function recordSkip(brand: CommerceBrand, trigger: string, startUrls: numb
   return run.id;
 }
 
+// ── Multi-brand run (one Apify call, many brands) ────────────────────────────
+
+export type MultiBrandResult = { status: "STARTED" | "SKIPPED"; code?: string; reason?: string; runId?: string; apifyRunId?: string; brands: number; urls: number; skippedBrands: Array<{ slug: string; reason: string }> };
+
+/** Actor input for one run spanning several brands: each brand's own productUrlPatterns/robots.txt rules, looked up by hostname inside the page function (lib/commerce/page-functions/product.ts). */
+export function buildMultiBrandActorInput(targets: Array<{ brand: Pick<CommerceBrand, "productUrlPatterns">; host: string; urls: string[]; robotsRules?: RobotsRule[] | null }>) {
+  const startUrls = targets.flatMap((t) => t.urls.map((url) => ({ url })));
+  const brandsByHost: Record<string, { productPatterns: string[]; robotsRules: RobotsRule[] | null }> = {};
+  for (const t of targets) {
+    brandsByHost[t.host] = {
+      productPatterns: t.brand.productUrlPatterns.length ? t.brand.productUrlPatterns.map(globToRegex) : t.urls.map(exactUrlRegex),
+      robotsRules: t.robotsRules ?? null,
+    };
+  }
+  return {
+    startUrls,
+    maxCrawlingDepth: 0,
+    maxPagesPerCrawl: startUrls.length,
+    maxConcurrency: Math.min(10, Math.max(2, targets.length)),
+    respectRobotsTxtFile: true,
+    injectJQuery: false,
+    proxyConfiguration: { useApifyProxy: true },
+    pageFunction: PRODUCT_PAGE_FUNCTION,
+    customData: { brandsByHost },
+  };
+}
+
+/**
+ * One Apify call for several brands at once: brandRunUrls (sitemap discovery — already provider-
+ * independent) gathers each brand's own due URLs, then a single actor run crawls all of them; the
+ * page function resolves each page's own brand by hostname. Never throws. The same budget, switch
+ * and permanent-failure checks startProductRun applies, just once for the whole call instead of
+ * once per brand. A brand with nothing to crawl, or whose last error is permanent, is left out of
+ * this call (skippedBrands says why) rather than failing the whole batch.
+ */
+export async function startMultiBrandRun(brands: CommerceBrand[], trigger: string, now = new Date()): Promise<MultiBrandResult> {
+  const empty = (code: string, reason: string, skippedBrands: Array<{ slug: string; reason: string }> = []): MultiBrandResult => ({ status: "SKIPPED", code, reason, brands: 0, urls: 0, skippedBrands });
+  if (!apifyConfigured()) return empty("APIFY_NOT_CONFIGURED", "APIFY_API_TOKEN not configured (BLOCKED_BY_ENVIRONMENT)");
+  if (!(await getSwitches()).commerce_engine) return empty("SWITCH_OFF", "paused in Admin → Automation: Commerce engine is off");
+  const budget = await commerceBudget();
+  if (budget.exhausted) return empty("BUDGET_EXHAUSTED", `monthly Apify budget exhausted ($${budget.spentUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
+  if (budget.wouldExceed) return empty("BUDGET_EXHAUSTED", `monthly Apify budget would be exceeded (spent $${budget.spentUsd.toFixed(2)} + in flight ≈$${budget.inFlightUsd.toFixed(2)} + this run ≈$${budget.avgRunUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
+
+  const targets: Array<{ brand: CommerceBrand; host: string; urls: string[]; robotsRules: RobotsRule[] | null }> = [];
+  const skippedBrands: Array<{ slug: string; reason: string }> = [];
+  for (const brand of brands) {
+    if (!trigger.startsWith("admin:") && brand.crawlStatus && isErrorCode(brand.crawlStatus) && !ERROR_CODES[brand.crawlStatus].retryable) {
+      skippedBrands.push({ slug: brand.slug, reason: `permanent error, not retried automatically: ${ERROR_CODES[brand.crawlStatus].message}` });
+      continue;
+    }
+    const b = await brandRunUrls(brand, now);
+    const urls = cleanUrls(brand, [...b.urls, ...b.listingUrls]);
+    if (!urls.length) {
+      skippedBrands.push({ slug: brand.slug, reason: b.reason ?? "no product URLs discovered" });
+      continue;
+    }
+    let host: string;
+    try {
+      host = new URL(urls[0]).host.toLowerCase();
+    } catch {
+      skippedBrands.push({ slug: brand.slug, reason: "could not read a host from its own URL" });
+      continue;
+    }
+    targets.push({ brand, host, urls, robotsRules: b.robots?.rules ?? null });
+  }
+  const totalUrls = targets.reduce((n, t) => n + t.urls.length, 0);
+  if (!targets.length) return empty("NO_URLS", "no brand in this batch has product URLs to crawl", skippedBrands);
+
+  const body = buildMultiBrandActorInput(targets);
+  const q = new URLSearchParams({ timeout: String(config.apify.runTimeoutSecs()), memory: String(config.apify.memoryMb()) });
+  try {
+    const guarded = await guardedApiCall({
+      api: "apify",
+      unit: `start:multibrand:${now.toISOString().slice(0, 10)}`,
+      idempotencyBasis: targets.map((t) => t.brand.id).sort().join(","),
+      trigger,
+      params: () => (targets.every((t) => t.urls.every((u) => /^https?:\/\//i.test(u))) ? null : { code: "INVALID_PARAMS", reason: "a start URL is not http(s)" }),
+      call: () => apify<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body }),
+      validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+    });
+    if (guarded.status === "SKIPPED") return empty(guarded.code, guarded.reason, skippedBrands);
+    if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+    const { data } = guarded.value;
+    if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
+    const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: null, actorId: commerceActorId(), apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, trigger, status: "RUNNING", startUrls: totalUrls } });
+    await db.commerceBrand.updateMany({ where: { id: { in: targets.map((t) => t.brand.id) } }, data: { crawlStatus: "RUNNING" } });
+    log.info("commerce multi-brand run started", { stage: "CONTENT_FETCH", runId: data.id, brands: targets.length, urls: totalUrls });
+    return { status: "STARTED", runId: run.id, apifyRunId: data.id, brands: targets.length, urls: totalUrls, skippedBrands };
+  } catch (error) {
+    const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
+    log.warn("commerce multi-brand run start failed", { stage: "CONTENT_FETCH", trigger, code: e.code, reason: e.message.slice(0, 300) });
+    return empty(e.code, e.message, skippedBrands);
+  }
+}
+
+/** commerce-multibrand-crawl: every due brand (up to COMMERCE_BRANDS_PER_RUN) in one Apify call instead of one call each. Admin-triggered (no cron entry yet — see Admin → Jobs). */
+export async function runMultiBrandCrawl(trigger: string, now = new Date()) {
+  await ensureBrandsSeeded();
+  try {
+    await syncSeedFields();
+  } catch (error) {
+    log.warn("commerce seed sync failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
+  }
+  const limit = brandsPerRun();
+  const brands = (await dueBrands(now, limit)).slice(0, limit);
+  if (!brands.length) return { status: "OK", reason: "no brand is due", brands: 0, urls: 0, started: 0, skippedBrands: [] as Array<{ slug: string; reason: string }> };
+  const r = await startMultiBrandRun(brands, trigger, now);
+  return { status: r.status === "STARTED" ? "OK" : r.status, reason: r.reason, brands: r.brands, urls: r.urls, started: r.status === "STARTED" ? 1 : 0, runId: r.runId, skippedBrands: r.skippedBrands };
+}
+
 /** Starts one product run for a brand, or records why it was skipped. Never throws. */
 export async function startProductRun(brand: CommerceBrand, urls: string[], trigger: string, note?: string, opts: StartRunOptions = {}): Promise<StartResult> {
   const list = cleanUrls(brand, urls);
@@ -192,6 +302,13 @@ export async function startProductRun(brand: CommerceBrand, urls: string[], trig
   const skip = async (code: string, reason: string): Promise<StartResult> => ({ status: "SKIPPED", code, reason, runId: await recordSkip(brand, trigger, total, code, reason) });
   if (!apifyConfigured()) return skip("APIFY_NOT_CONFIGURED", "APIFY_API_TOKEN not configured (BLOCKED_BY_ENVIRONMENT)");
   if (!(await getSwitches()).commerce_engine) return skip("SWITCH_OFF", "paused in Admin → Automation: Commerce engine is off");
+  // A permanent failure (an Apify account/permission block, a bad token — lib/errors.ts retryable:
+  // false) will not change on its own: an automatic pass does not repeat the same doomed call every
+  // time the backoff expires. A deliberate admin call ("admin:" trigger, e.g. "Crawl next") always
+  // tries again, since the admin may just have fixed the underlying problem.
+  if (!trigger.startsWith("admin:") && brand.crawlStatus && isErrorCode(brand.crawlStatus) && !ERROR_CODES[brand.crawlStatus].retryable) {
+    return skip(brand.crawlStatus, `last attempt failed with a permanent error (${ERROR_CODES[brand.crawlStatus].message}); not retried automatically or by "Retry failed" — fix it, then use "Crawl next" on this brand`);
+  }
   const budget = await commerceBudget();
   if (budget.exhausted) return skip("BUDGET_EXHAUSTED", `monthly Apify budget exhausted ($${budget.spentUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
   if (budget.wouldExceed) return skip("BUDGET_EXHAUSTED", `monthly Apify budget would be exceeded (spent $${budget.spentUsd.toFixed(2)} + in flight ≈$${budget.inFlightUsd.toFixed(2)} + this run ≈$${budget.avgRunUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)})`);
@@ -532,7 +649,6 @@ async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null
   if (!claimed.count) return { runId: run.id, apifyRunId: run.apifyRunId, status: "ALREADY_COLLECTED" };
   const brand = run.brand;
   try {
-    if (!brand) throw new PipelineError("APIFY_RESPONSE_INVALID", "run has no brand", undefined, false);
     const datasetId = data.defaultDatasetId ?? run.datasetId;
     if (!datasetId) throw new PipelineError("APIFY_RESPONSE_INVALID", "Run has no dataset", undefined, false);
     // A run with deal pages also holds the pages it followed (at most COMMERCE_DEAL_PAGES_PER_RUN).
@@ -555,14 +671,45 @@ async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null
       if (got.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", got.reason);
       raws = await storeRaws(run, got.value as unknown[]);
     }
+    // A multi-brand run (startMultiBrandRun: one Apify call, many brands) has no single run.brand;
+    // each raw record's own URL host says which enabled brand it belongs to.
+    let brandByHost: Map<string, CommerceBrand> | null = null;
+    if (!brand) {
+      brandByHost = new Map();
+      for (const b of await db.commerceBrand.findMany({ where: { enabled: true } })) {
+        const host = b.officialDomain.trim().toLowerCase().replace(/^www\./, "");
+        brandByHost.set(host, b);
+        brandByHost.set(`www.${host}`, b);
+      }
+    }
+    const resolveBrand = (url: string): CommerceBrand | null => {
+      if (brand) return brand;
+      try {
+        return brandByHost!.get(new URL(url).host.toLowerCase()) ?? null;
+      } catch {
+        return null;
+      }
+    };
     const cache = new Map<string, Candidate[]>();
     const outcomes: ItemOutcome[] = [];
+    const perBrandExtracted = new Map<string, number>();
+    const perBrandTotal = new Map<string, number>();
+    const perBrandSlug = new Map<string, string>();
     for (const raw of raws) {
+      const b = resolveBrand(raw.url);
+      if (!b) {
+        outcomes.push({ url: raw.url, result: "NOT_EXTRACTED", reason: "UNKNOWN_BRAND: no enabled brand's official domain matches this page's host" });
+        continue;
+      }
+      perBrandTotal.set(b.id, (perBrandTotal.get(b.id) ?? 0) + 1);
+      perBrandSlug.set(b.id, b.slug);
       try {
-        outcomes.push(await processRaw(brand, raw, now, cache));
+        const outcome = await processRaw(b, raw, now, cache);
+        outcomes.push(outcome);
+        if (outcome.result !== "NOT_EXTRACTED" && outcome.result !== "ERROR") perBrandExtracted.set(b.id, (perBrandExtracted.get(b.id) ?? 0) + 1);
       } catch (error) {
         outcomes.push({ url: raw.url, result: "ERROR", reason: String(error).slice(0, 300) });
-        log.warn("commerce record processing failed", { stage: "CONTENT_FETCH", brand: brand.slug, url: raw.url, error: String(error).slice(0, 200) });
+        log.warn("commerce record processing failed", { stage: "CONTENT_FETCH", brand: b.slug, url: raw.url, error: String(error).slice(0, 200) });
       }
     }
     const count = (r: ItemOutcome["result"]) => outcomes.filter((o) => o.result === r).length;
@@ -571,10 +718,19 @@ async function collectSucceeded(run: CommerceRun & { brand: CommerceBrand | null
     const rejected = count("MATCH_REJECTED") + count("UNMATCHED") + count("NOT_EXTRACTED");
     const errors = outcomes.filter((o) => o.result === "NOT_EXTRACTED" || o.result === "ERROR").slice(0, 50).map((o) => ({ url: o.url, code: o.result, reason: o.reason ?? null }));
     await db.commerceRun.update({ where: { id: run.id }, data: { status: "COLLECTED", pagesProcessed: raws.length, extracted, accepted, rejected, errors: errors as Prisma.InputJsonValue, collectedAt: now } });
-    if (extracted > 0) await brandSucceeded(brand.id, "OK", now);
-    else await brandFailed(brand.id, "EMPTY", `run ${run.apifyRunId} returned ${raws.length} item(s) and no readable product page`, now);
-    log.info("commerce run collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.apifyRunId, items: raws.length, extracted, accepted });
-    await commerceAudit("APIFY_RUN_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, apifyRunId: run.apifyRunId, items: raws.length, extracted, accepted, rejected, usageUsd: data.usageTotalUsd ?? run.usageUsd ?? null } });
+    if (brand) {
+      if (extracted > 0) await brandSucceeded(brand.id, "OK", now);
+      else await brandFailed(brand.id, "EMPTY", `run ${run.apifyRunId} returned ${raws.length} item(s) and no readable product page`, now);
+    } else {
+      // Only brands this run actually returned at least one page for are touched (a brand with zero
+      // raw records back is left exactly as it was; its own next scheduled attempt decides).
+      for (const [brandId, total] of perBrandTotal) {
+        if ((perBrandExtracted.get(brandId) ?? 0) > 0) await brandSucceeded(brandId, "OK", now);
+        else await brandFailed(brandId, "EMPTY", `run ${run.apifyRunId} returned ${total} item(s) for this brand and no readable product page`, now);
+      }
+    }
+    log.info("commerce run collected", { stage: "CONTENT_FETCH", brand: brand?.slug ?? `${perBrandTotal.size} brands`, runId: run.apifyRunId, items: raws.length, extracted, accepted });
+    await commerceAudit("APIFY_RUN_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand?.slug ?? null, brands: brand ? undefined : [...perBrandSlug.values()], apifyRunId: run.apifyRunId, items: raws.length, extracted, accepted, rejected, usageUsd: data.usageTotalUsd ?? run.usageUsd ?? null } });
     const entityIds = [...new Set(outcomes.flatMap((o) => o.entityIds ?? []))];
     return { runId: run.id, apifyRunId: run.apifyRunId, status: "COLLECTED", items: raws.length, extracted, accepted, rejected, entityIds };
   } catch (error) {

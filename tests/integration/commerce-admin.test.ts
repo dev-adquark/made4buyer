@@ -41,7 +41,7 @@ describe("commerce retry-failed", () => {
     const runningRun = await run("RUNNING");
 
     const now = new Date();
-    expect(await retryFailed(admin, now)).toEqual({ brands: 2, runs: 1 });
+    expect(await retryFailed(admin, now)).toEqual({ brands: 2, runs: 1, skipped: { brands: 0, runs: 0 } });
 
     for (const id of [failing.id, crashed.id]) {
       const b = await db.commerceBrand.findUniqueOrThrow({ where: { id } });
@@ -61,7 +61,29 @@ describe("commerce retry-failed", () => {
     expect(log.metadata).toMatchObject({ brands: 2, runs: 1, runIds: [failedRun.id] });
 
     // Nothing left to retry: a second call touches nothing.
-    expect(await retryFailed(admin)).toEqual({ brands: 0, runs: 0 });
+    expect(await retryFailed(admin)).toEqual({ brands: 0, runs: 0, skipped: { brands: 0, runs: 0 } });
+  });
+
+  it("never re-queues a brand or run whose last error is permanent (lib/errors.ts retryable: false) — retrying would only repeat the same guaranteed failure", async () => {
+    const later = new Date(Date.now() + 7 * 86_400_000);
+    const blocked = await brand("blocked", { consecutiveFailures: 2, nextCrawlAt: later, crawlStatus: "APIFY_ACTOR_NOT_APPROVED" });
+    const transient = await brand("transient", { consecutiveFailures: 1, nextCrawlAt: later, crawlStatus: "APIFY_RUN_FAILED" }); // retryable: true
+    const blockedRun = await run("FAILED", { brandId: blocked.id, errors: [{ code: "APIFY_ACTOR_NOT_APPROVED", reason: "not approved" }] });
+
+    const now = new Date();
+    expect(await retryFailed(admin, now)).toEqual({ brands: 1, runs: 0, skipped: { brands: 1, runs: 1 } });
+
+    // Left exactly as it was: no nextCrawlAt bump, no failure-count reset, no RETRY_QUEUED.
+    const b = await db.commerceBrand.findUniqueOrThrow({ where: { id: blocked.id } });
+    expect(b).toMatchObject({ nextCrawlAt: later, consecutiveFailures: 2, crawlStatus: "APIFY_ACTOR_NOT_APPROVED" });
+    expect((await db.commerceRun.findUniqueOrThrow({ where: { id: blockedRun.id } })).status).toBe("FAILED");
+
+    // A retryable error is re-queued as before.
+    const t = await db.commerceBrand.findUniqueOrThrow({ where: { id: transient.id } });
+    expect(t).toMatchObject({ nextCrawlAt: now, consecutiveFailures: 0, crawlStatus: "RETRY_QUEUED" });
+
+    const log = await db.auditLog.findFirstOrThrow({ where: { action: "commerce.retry_failed" } });
+    expect(log.metadata).toMatchObject({ brands: 1, skippedRuns: 1 });
   });
 });
 

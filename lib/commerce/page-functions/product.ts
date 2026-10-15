@@ -25,6 +25,16 @@ export const PRODUCT_PAGE_FUNCTION = `async function pageFunction(context) {
   if (label !== "LISTING" && typeof context.skipLinks === "function") { try { await context.skipLinks(); } catch (e) {} }
   const test = (sources, u) => (sources || []).some((p) => { try { return new RegExp(p, "i").test(u); } catch (e) { return false; } });
   const hostOf = (u) => { try { return new URL(u).host.toLowerCase(); } catch (e) { return ""; } };
+  // Multi-brand run (lib/commerce/pipeline.ts buildMultiBrandActorInput): one run, many brands' start
+  // URLs. cd.brandsByHost maps each brand's own host to its own productPatterns/robotsRules/etc.;
+  // merging the match for this page's host over cd makes every check below (officialHost,
+  // productPatterns, followPatterns, robotsRules, localeCodes, usOnly) exactly as brand-specific as
+  // the single-brand run already was. A host not in the map is not one of this run's brands.
+  if (cd.brandsByHost) {
+    const bc = cd.brandsByHost[hostOf(url)];
+    if (!bc) return null;
+    Object.assign(cd, bc);
+  }
   const localeCodes = new Set(cd.localeCodes || []);
   const usPath = (u) => {
     if (!cd.usOnly) return true;

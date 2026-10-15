@@ -2,11 +2,19 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { collectCommerceRuns, markStaleOffers, startProductRun } from "@/lib/commerce/pipeline";
+import { buildMultiBrandActorInput, collectCommerceRuns, markStaleOffers, startMultiBrandRun, startProductRun } from "@/lib/commerce/pipeline";
 import { resetDb } from "../support/db";
 import { withEnv } from "../support/env";
+
+// startMultiBrandRun's own URL discovery (brandRunUrls) is covered by tests/unit/commerce-discovery.
+// test.ts; here each test brand names its own product URL directly (productUrls) so discovery is
+// skipped, and robots.txt (a real network fetch otherwise) is stubbed permissive.
+vi.mock("@/lib/commerce/deal-crawl", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/commerce/deal-crawl")>()),
+  fetchBrandRobots: async () => ({ status: "NONE", body: "", rules: [] }),
+}));
 
 // A local stand-in for the Apify API (runs, run status, dataset items). All data here is SAMPLE data.
 type RunState = { status: string; usageTotalUsd?: number; items: unknown[]; statusMessage?: string };
@@ -84,7 +92,7 @@ const item = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const addBrand = () => db.commerceBrand.create({ data: { name: "Breville", slug: "breville", officialDomain: "breville.com", productUrlPatterns: ["https://www.breville.com/us/en/products/**"], crawlFrequencyHours: 24 } });
+const addBrand = () => db.commerceBrand.create({ data: { name: "Breville", slug: "breville", officialDomain: "breville.com", productUrls: [EXPRESS_URL], productUrlPatterns: ["https://www.breville.com/us/en/products/**"], maxProductsPerRun: 1, crawlFrequencyHours: 24 } });
 const addEntity = (name: string, slug: string) => db.productEntity.create({ data: { slug, name, matchKey: slug, brand: "Breville", brandSlug: "breville" } });
 
 /** Starts a run for the brand with the given dataset, marks it SUCCEEDED and collects it. */
@@ -255,6 +263,17 @@ describe("commerce product runs", () => {
     expect(requests.filter((q) => q.method === "POST")).toHaveLength(0);
   });
 
+  it("never repeats a call that already failed permanently (an Apify account/permission block), but a deliberate admin trigger always tries again", async () => {
+    const brand = await db.commerceBrand.update({ where: { id: (await addBrand()).id }, data: { crawlStatus: "APIFY_ACTOR_NOT_APPROVED", consecutiveFailures: 3 } });
+    const r = await startProductRun(brand, [EXPRESS_URL], "cron");
+    expect(r).toMatchObject({ status: "SKIPPED", code: "APIFY_ACTOR_NOT_APPROVED" });
+    expect(requests.filter((q) => q.method === "POST")).toHaveLength(0); // no call to Apify at all
+
+    const admin = await startProductRun(brand, [EXPRESS_URL], "admin:owner");
+    expect(admin.status).toBe("STARTED");
+    expect(requests.filter((q) => q.method === "POST")).toHaveLength(1); // the admin's own "Crawl next" always tries again
+  });
+
   it("skips without a token or without URLs", async () => {
     const brand = await addBrand();
     expect(await startProductRun(brand, [], "test")).toMatchObject({ status: "SKIPPED", code: "NO_URLS" });
@@ -306,6 +325,75 @@ describe("commerce product runs", () => {
     expect(data.product.color).toBe("Brushed Stainless Steel");
     expect(data.preservedFields.sort()).toEqual(["color", "gtin"]);
     expect(await db.commerceRawRecord.count()).toBe(2); // one per run, both unchanged
+  });
+});
+
+describe("multi-brand run: one Apify call, many brands", () => {
+  const ACME_URL = "https://www.acme.example/products/widget-1";
+  const acmeItem = () => ({
+    m4bCommerce: 1,
+    url: ACME_URL,
+    canonicalUrl: ACME_URL,
+    title: "Widget One",
+    jsonLd: [{ "@context": "https://schema.org", "@type": "Product", name: "Widget One", sku: "WID-1", offers: { "@type": "Offer", price: "19.99", priceCurrency: "USD", availability: "https://schema.org/InStock" } }],
+    meta: {},
+    h1: "Widget One",
+    lang: "en-US",
+  });
+  const addAcme = () => db.commerceBrand.create({ data: { name: "Acme", slug: "acme", officialDomain: "www.acme.example", productUrls: [ACME_URL], productUrlPatterns: ["https://www.acme.example/products/**"], maxProductsPerRun: 1, crawlFrequencyHours: 24 } });
+
+  it("buildMultiBrandActorInput: one run, every brand's own productPatterns keyed by its own host", () => {
+    const body = buildMultiBrandActorInput([
+      { brand: { productUrlPatterns: ["https://a.example/products/**"] }, host: "a.example", urls: ["https://a.example/products/x"] },
+      { brand: { productUrlPatterns: [] }, host: "b.example", urls: ["https://b.example/p/y"] },
+    ]);
+    expect(body.startUrls).toEqual([{ url: "https://a.example/products/x" }, { url: "https://b.example/p/y" }]);
+    expect(Object.keys(body.customData.brandsByHost)).toEqual(["a.example", "b.example"]);
+    expect(body.customData.brandsByHost["b.example"].productPatterns).toEqual([expect.stringContaining("example")]); // falls back to an exact-URL pattern with no productUrlPatterns
+  });
+
+  it("one Apify call started for two brands at once, each page attributed to its own brand on collection", async () => {
+    const breville = await addBrand();
+    const acme = await addAcme();
+    nextItems = [item(), acmeItem()];
+    const started = await startMultiBrandRun([breville, acme], "test");
+    expect(started).toMatchObject({ status: "STARTED", brands: 2, urls: 2 });
+    expect(requests.filter((r) => r.method === "POST" && /\/runs$/.test(r.path))).toHaveLength(1); // exactly one Apify call for both brands
+    expect((await db.commerceRun.findUniqueOrThrow({ where: { id: started.runId } })).brandId).toBeNull();
+
+    runs.get(started.apifyRunId!)!.status = "SUCCEEDED";
+    const collected = await collectCommerceRuns("test");
+    expect(collected.collected).toBe(1);
+
+    expect((await db.commerceProduct.findUniqueOrThrow({ where: { canonicalUrl: EXPRESS_URL } })).brandId).toBe(breville.id);
+    const acmeProduct = await db.commerceProduct.findUniqueOrThrow({ where: { canonicalUrl: ACME_URL } });
+    expect(acmeProduct.brandId).toBe(acme.id);
+    expect((await db.commerceOffer.findFirstOrThrow({ where: { productId: acmeProduct.id } })).price).toBe(19.99);
+    for (const id of [breville.id, acme.id]) expect((await db.commerceBrand.findUniqueOrThrow({ where: { id } })).crawlStatus).toBe("OK");
+  });
+
+  it("a brand with no product URLs is left out of the call (and said why), instead of failing the whole batch", async () => {
+    const breville = await addBrand();
+    // No productUrls of its own, and its domain can't be reached for sitemap discovery either: left out, not a batch-wide failure.
+    const noUrls = await db.commerceBrand.create({ data: { name: "Empty", slug: "empty-brand", officialDomain: "empty.example", crawlFrequencyHours: 24 } });
+    nextItems = [item()];
+    const r = await startMultiBrandRun([breville, noUrls], "test");
+    expect(r).toMatchObject({ status: "STARTED", brands: 1, urls: 1 });
+    expect(r.skippedBrands).toHaveLength(1);
+    expect(r.skippedBrands[0].slug).toBe("empty-brand");
+  });
+
+  it("a brand with a permanent error is left out automatically, but an admin trigger includes it", async () => {
+    const breville = await addBrand();
+    const blocked = await db.commerceBrand.update({ where: { id: (await addAcme()).id }, data: { crawlStatus: "APIFY_ACTOR_NOT_APPROVED", consecutiveFailures: 2 } });
+    nextItems = [item()];
+    const auto = await startMultiBrandRun([breville, blocked], "cron");
+    expect(auto).toMatchObject({ brands: 1, urls: 1 });
+    expect(auto.skippedBrands).toEqual([{ slug: "acme", reason: expect.stringContaining("permanent error") }]);
+
+    nextItems = [item(), acmeItem()];
+    const admin = await startMultiBrandRun([breville, blocked], "admin:owner");
+    expect(admin).toMatchObject({ status: "STARTED", brands: 2, urls: 2 });
   });
 });
 
