@@ -36,9 +36,10 @@ export async function ReviewsView({ state }: { state: ReviewsState }) {
             <ul className="chips">
               {TYPES.map((t) => (
                 <li key={t.label}>
-                  <Link className="chip" href={href(1, t)} aria-current={t === type ? "page" : undefined}>
+                  {/* A full page load: the router would reuse its cached static /reviews for this ?type=/?page= URL (proxy.ts rewrites it to a different page). */}
+                  <a className="chip" href={href(1, t)} aria-current={t === type ? "page" : undefined}>
                     {t.label}
-                  </Link>
+                  </a>
                 </li>
               ))}
             </ul>
@@ -62,17 +63,17 @@ export async function ReviewsView({ state }: { state: ReviewsState }) {
           {pages > 1 && (
             <nav className="pagination" aria-label="Pagination">
               {page > 1 && (
-                <Link className="btn" href={href(page - 1)}>
+                <a className="btn" href={href(page - 1)}>
                   Previous page
-                </Link>
+                </a>
               )}
               <span className="muted">
                 Page {page} of {pages}
               </span>
               {page < pages && (
-                <Link className="btn" href={href(page + 1)}>
+                <a className="btn" href={href(page + 1)}>
                   Next page
-                </Link>
+                </a>
               )}
             </nav>
           )}
