@@ -150,6 +150,14 @@ export const config = {
     reviewMonthlyBudgetUsd: () => num("REVIEW_SCRAPE_MONTHLY_BUDGET_USD", 10, 0, 10_000),
     /** Expected cost of one review run, counted for runs whose usage Apify has not reported yet. */
     reviewRunEstimateUsd: () => num("REVIEW_SCRAPE_RUN_ESTIMATE_USD", 0.5, 0.01, 1_000),
+    /**
+     * Expected cost of one commerce (product/deal) run, counted for in-flight runs whose usage Apify
+     * has not reported yet (lib/commerce/pipeline.ts commerceBudget). Without this floor, a cold start
+     * or a long pause (no run has ever reported a cost yet) lets commerceBudget's in-flight estimate
+     * sit at $0 regardless of how many runs are actually running, so a burst of starts in one slot is
+     * not budget-gated until the first few settle. Tune this from the Apify console's real per-run cost.
+     */
+    commerceRunEstimateUsd: () => num("COMMERCE_RUN_ESTIMATE_USD", 0.1, 0.01, 1_000),
   },
 
   /**

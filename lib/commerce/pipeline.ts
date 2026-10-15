@@ -114,9 +114,12 @@ const actorPath = () => `/acts/${encodeURIComponent(commerceActorId().replace("/
 /**
  * Apify spend recorded this calendar month (UTC) across all commerce runs, plus the expected cost of
  * runs still in flight (their usage is only known once a status read stores it): each counts at the
- * average cost of the last 20 finished runs. `exhausted`: the recorded spend reached the budget.
- * `wouldExceed`: starting one more run would take the projected spend past it. A start is refused on
- * either, so no unapproved cost is incurred.
+ * average cost of the last 20 finished runs, floored at COMMERCE_RUN_ESTIMATE_USD so a run never
+ * projects as free (with no cost history yet — a cold start, or right after a long pause — the
+ * average would otherwise be $0, so a burst of starts in one slot would not be budget-gated until the
+ * first few settle). `exhausted`: the recorded spend reached the budget. `wouldExceed`: starting one
+ * more run would take the projected spend past it. A start is refused on either, so no unapproved
+ * cost is incurred.
  */
 export async function commerceBudget(now = new Date()) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -127,10 +130,11 @@ export async function commerceBudget(now = new Date()) {
   ]);
   const spentUsd = agg._sum.usageUsd ?? 0;
   const avgRunUsd = recent.length ? recent.reduce((s, r) => s + (r.usageUsd ?? 0), 0) / recent.length : 0;
-  const inFlightUsd = inFlight * avgRunUsd;
+  const projectedRunUsd = Math.max(avgRunUsd, config.apify.commerceRunEstimateUsd());
+  const inFlightUsd = inFlight * projectedRunUsd;
   const budgetUsd = monthlyBudgetUsd();
   const projected = spentUsd + inFlightUsd;
-  return { spentUsd, inFlightUsd, avgRunUsd, budgetUsd, remainingUsd: Math.max(0, budgetUsd - spentUsd), exhausted: spentUsd >= budgetUsd, wouldExceed: projected + avgRunUsd > budgetUsd };
+  return { spentUsd, inFlightUsd, avgRunUsd, budgetUsd, remainingUsd: Math.max(0, budgetUsd - spentUsd), exhausted: spentUsd >= budgetUsd, wouldExceed: projected + projectedRunUsd > budgetUsd };
 }
 
 // ── Start ────────────────────────────────────────────────────────────────────
