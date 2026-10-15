@@ -28,7 +28,7 @@ describe("cron parsing", () => {
 describe("next / previous run (UTC)", () => {
   // Jobs that call no paid/budget-limited API (plain HTTP GETs we fully control the volume of) may run
   // on their own cadence: there is no cost to pace against, unlike every Apify-calling job below.
-  const COST_FREE_EXEMPT: Record<string, [string, string]> = { "/api/cron/commerce-direct-crawl": ["*/5", "*"] };
+  const COST_FREE_EXEMPT: Record<string, [string, string]> = { "/api/cron/commerce-direct-crawl": ["*/2", "*"] };
 
   it("every vercel.json schedule is cost-free-job cadence, weekly (Monday-only) or biweekly (the 1st and 15th), never more often than that", () => {
     // Coupons and other Apify-calling jobs aside, data this site tracks (reviews, prices, images,
