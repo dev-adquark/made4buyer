@@ -568,7 +568,7 @@ async function writeOffers(productId: string, brand: CommerceBrand, n: Normalize
   return written;
 }
 
-type ItemOutcome = { url: string; result: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED" | "NOT_EXTRACTED" | "ERROR"; reason?: string; entityIds?: string[] };
+type ItemOutcome = { url: string; result: "MATCHED" | "MATCH_REJECTED" | "UNMATCHED" | "NOT_EXTRACTED" | "ERROR"; reason?: string; entityIds?: string[]; offersWritten?: number };
 
 /** A product identified by its own official page: official domain, a name and at least one identifier. */
 export function standaloneIdentity(n: NormalizedCommerceRecord & { ok: true }, brand: Pick<CommerceBrand, "officialDomain">): boolean {
@@ -608,15 +608,15 @@ async function processRaw(brand: CommerceBrand, raw: CommerceRawRecord, now: Dat
     // with a stated identity (name + SKU/GTIN/MPN/model), its price is the official price of that
     // exact product (the page IS the product). Store the offer so it can appear as a verified deal;
     // facts are never attached to a Made4Buyers product without an exact match.
-    if (standaloneIdentity(n, brand)) await writeOffers(product.id, brand, n, source, raw, now, { requirePrice: true });
-    return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds };
+    const written = standaloneIdentity(n, brand) ? await writeOffers(product.id, brand, n, source, raw, now, { requirePrice: true }) : 0;
+    return { url: n.canonicalUrl, result: decision.status, reason: decision.reason, entityIds, offersWritten: written };
   }
 
   const facts = factsFromPage(n.product, { source, sourceName: hostOf(n.pageUrl), sourceUrl: n.canonicalUrl, observedAt: now, matchBasis: decision.basis });
   await saveCommerceFacts(decision.entityId, facts, { confidence: confidenceOf(decision.basis), extractionMethod: n.extractionMethod, now });
-  await writeOffers(product.id, brand, n, source, raw, now);
+  const written = await writeOffers(product.id, brand, n, source, raw, now);
   await refreshSummary(decision.entityId, now);
-  return { url: n.canonicalUrl, result: "MATCHED", reason: decision.reason, entityIds };
+  return { url: n.canonicalUrl, result: "MATCHED", reason: decision.reason, entityIds, offersWritten: written };
 }
 
 // ── Collect ──────────────────────────────────────────────────────────────────
@@ -896,7 +896,7 @@ export async function runCommerceDiscover(trigger: string, now = new Date()) {
 // ── Direct crawl (no Apify) ──────────────────────────────────────────────────
 
 const DIRECT_ACTOR_ID = "direct-fetch";
-export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number };
+export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number; offersWritten?: number };
 
 /**
  * One brand, fetched directly: no Apify, no cloud actor, no proxy, no per-run cost. Reuses
@@ -944,18 +944,19 @@ export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string,
   const extracted = outcomes.length - count("NOT_EXTRACTED") - count("ERROR");
   const accepted = count("MATCHED");
   const rejected = count("MATCH_REJECTED") + count("UNMATCHED") + count("NOT_EXTRACTED");
+  const offersWritten = outcomes.reduce((n, o) => n + (o.offersWritten ?? 0), 0);
   const errors = [...fetchErrors, ...outcomes.filter((o) => o.result === "NOT_EXTRACTED" || o.result === "ERROR").map((o) => ({ url: o.url, code: o.result, reason: o.reason ?? null }))].slice(0, 50);
   await db.commerceRun.update({ where: { id: run.id }, data: { status: "COLLECTED", pagesProcessed: raws.length, extracted, accepted, rejected, errors: errors as Prisma.InputJsonValue, collectedAt: now, finishedAt: now } });
   if (extracted > 0) {
     await brandSucceeded(brand.id, "OK", now);
-    await commerceAudit("DIRECT_CRAWL_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, extracted, accepted, rejected } });
+    await commerceAudit("DIRECT_CRAWL_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, extracted, accepted, rejected, offersWritten } });
   } else {
     const reason = fetchErrors[0]?.reason ?? "no readable product page";
     await brandFailed(brand.id, "EMPTY", reason, now);
     await commerceAudit("DIRECT_CRAWL_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, reason } });
   }
-  log.info("commerce direct crawl collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.id, pages: raws.length, extracted, accepted });
-  return { brand: brand.slug, status: "OK", pages: raws.length, extracted, accepted, rejected };
+  log.info("commerce direct crawl collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.id, pages: raws.length, extracted, accepted, offersWritten });
+  return { brand: brand.slug, status: "OK", pages: raws.length, extracted, accepted, rejected, offersWritten };
 }
 
 /**
@@ -979,7 +980,10 @@ export async function runCommerceDirectCrawl(trigger: string, now = new Date()) 
     results.push(r);
     if (r.code === "SWITCH_OFF") break; // the same reason applies to every remaining brand
   }
-  const touched = results.some((r) => r.status === "OK" && (r.accepted ?? 0) > 0);
+  // Not just `accepted` (matched to a Made4Buyers review): a brand with no review yet still gets its
+  // official-site price written as a standalone offer (writeOffers, standaloneIdentity) — that offer
+  // must reach /deals too, so any page that actually wrote an offer purges the cache.
+  const touched = results.some((r) => r.status === "OK" && (r.offersWritten ?? 0) > 0);
   if (touched) await revalidateCommerce();
   const started = results.filter((r) => r.status === "OK").length;
   const stopped = results.find((r) => r.status === "SKIPPED" && r.code === "SWITCH_OFF");
