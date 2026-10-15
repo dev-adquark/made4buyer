@@ -6,10 +6,10 @@ import { CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 describe("data/commerce/brands.seed.json", () => {
   const brands = readBrandSeed(seed);
 
-  it("has exactly 100 brands with unique slugs and domains", () => {
-    expect(brands).toHaveLength(100);
-    expect(new Set(brands.map((b) => b.slug)).size).toBe(100);
-    expect(new Set(brands.map((b) => b.officialDomain.toLowerCase())).size).toBe(100);
+  it("has exactly 110 brands with unique slugs and domains", () => {
+    expect(brands).toHaveLength(110);
+    expect(new Set(brands.map((b) => b.slug)).size).toBe(110);
+    expect(new Set(brands.map((b) => b.officialDomain.toLowerCase())).size).toBe(110);
   });
 
   it("uses only Made4Buyers category slugs and the US market", () => {

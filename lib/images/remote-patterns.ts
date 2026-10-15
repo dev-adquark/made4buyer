@@ -28,15 +28,15 @@ export const EDITORIAL_IMAGE_PATTERNS: readonly ImageRemotePattern[] = [
 /** Registrable domains of the commerce brands' official sites (kept in sync with the brand seed by a unit test). */
 export const OFFICIAL_IMAGE_DOMAINS: readonly string[] = [
   "1password.com", "adobe.com", "anker.com", "anthropic.com", "apple.com", "asus.com", "atlassian.com", "audio-technica.com", "awaytravel.com",
-  "beatsbydre.com", "belkin.com", "benq.com", "bose.com", "breville.com", "brother-usa.com", "canva.com", "casper.com", "corsair.com", "dell.com",
-  "dewalt.com", "dji.com", "dropbox.com", "dyson.com", "ecobee.com", "ecoflow.com", "eero.com", "elgato.com", "epson.com", "eufy.com", "fujifilm.com",
-  "furbo.com", "garmin.com", "geappliances.com", "github.com", "google.com", "hermanmiller.com", "hisense-usa.com", "hp.com", "hyperx.com",
+  "beatsbydre.com", "belkin.com", "benq.com", "bitdefender.com", "bose.com", "breville.com", "brother-usa.com", "canva.com", "casper.com", "corsair.com", "dell.com",
+  "dewalt.com", "dji.com", "dropbox.com", "dyson.com", "ecobee.com", "ecoflow.com", "eero.com", "elgato.com", "epson.com", "eufy.com", "evernote.com", "figma.com", "fujifilm.com",
+  "furbo.com", "garmin.com", "geappliances.com", "github.com", "google.com", "hermanmiller.com", "hisense-usa.com", "hp.com", "hubspot.com", "hyperx.com",
   "insta360.com", "intel.com", "irobot.com", "jackery.com", "jbl.com", "jetbrains.com", "keychron.com", "kingston.com", "kobo.com", "lg.com",
-  "linksys.com", "logitech.com", "meta.com", "microsoft.com", "motorola.com", "netgear.com", "nikonusa.com", "nintendo.com", "nordvpn.com",
-  "notion.com", "nvidia.com", "onepeloton.com", "oneplus.com", "openai.com", "ouraring.com", "owletcare.com", "philips-hue.com", "philips.com",
-  "playstation.com", "purple.com", "razer.com", "ring.com", "roku.com", "ryobitools.com", "samsonite.com", "samsung.com", "sandisk.com",
+  "linksys.com", "logitech.com", "meta.com", "microsoft.com", "milwaukeetool.com", "motorola.com", "nanit.com", "netgear.com", "nikonusa.com", "nintendo.com", "nordvpn.com",
+  "notion.com", "nvidia.com", "onepeloton.com", "oneplus.com", "openai.com", "ouraring.com", "owletcare.com", "petsafe.com", "philips-hue.com", "philips.com",
+  "playstation.com", "purple.com", "razer.com", "ring.com", "rivian.com", "roku.com", "ryobitools.com", "saatva.com", "samsonite.com", "samsung.com", "sandisk.com",
   "seagate.com", "sennheiser-hearing.com", "sharkninja.com", "shopify.com", "shure.com", "slack.com", "sonos.com", "squarespace.com",
-  "steelseries.com", "synology.com", "tcl.com", "therabody.com", "tp-link.com", "traeger.com", "ui.com", "vercel.com", "vitamix.com", "vizio.com",
+  "steelcase.com", "steelseries.com", "synology.com", "tcl.com", "therabody.com", "tp-link.com", "traeger.com", "ui.com", "vercel.com", "vitamix.com", "vizio.com",
   "weber.com", "westerndigital.com", "wix.com", "wyze.com", "xbox.com", "zoom.com",
 ];
 

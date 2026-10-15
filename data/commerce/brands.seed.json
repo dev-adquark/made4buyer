@@ -1912,5 +1912,165 @@
     "promoUrls": [],
     "dealUrls": [],
     "notes": "Official site serving the US market. robots.txt fetched 2026-10-06 (HTTP 200). 1 of 1 sitemap(s) from robots.txt kept (US/global, product-oriented). No usable deals page 2026-10-07: sale pages render products client-side (only 1 product link in HTML)."
+  },
+  {
+    "name": "Bitdefender",
+    "slug": "bitdefender",
+    "officialDomain": "www.bitdefender.com",
+    "market": "US",
+    "categories": [
+      "security-software"
+    ],
+    "discoveryUrls": [
+      "https://www.bitdefender.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "HubSpot",
+    "slug": "hubspot",
+    "officialDomain": "www.hubspot.com",
+    "market": "US",
+    "categories": [
+      "business-software"
+    ],
+    "discoveryUrls": [
+      "https://www.hubspot.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Evernote",
+    "slug": "evernote",
+    "officialDomain": "evernote.com",
+    "market": "US",
+    "categories": [
+      "productivity-software"
+    ],
+    "discoveryUrls": [
+      "https://evernote.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Rivian",
+    "slug": "rivian",
+    "officialDomain": "rivian.com",
+    "market": "US",
+    "categories": [
+      "automotive-tech"
+    ],
+    "discoveryUrls": [
+      "https://rivian.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Nanit",
+    "slug": "nanit",
+    "officialDomain": "www.nanit.com",
+    "market": "US",
+    "categories": [
+      "baby-kids"
+    ],
+    "discoveryUrls": [
+      "https://www.nanit.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "PetSafe",
+    "slug": "petsafe",
+    "officialDomain": "www.petsafe.com",
+    "market": "US",
+    "categories": [
+      "pet-supplies"
+    ],
+    "discoveryUrls": [
+      "https://www.petsafe.com/sitemap-index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market (petsafe.net redirects here). robots.txt lists sitemap-index.xml, checked 2026-10-15. Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Steelcase",
+    "slug": "steelcase",
+    "officialDomain": "www.steelcase.com",
+    "market": "US",
+    "categories": [
+      "furniture"
+    ],
+    "discoveryUrls": [
+      "https://www.steelcase.com/sitemap_index.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap_index.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Milwaukee Tool",
+    "slug": "milwaukee-tool",
+    "officialDomain": "www.milwaukeetool.com",
+    "market": "US",
+    "categories": [
+      "tools-diy"
+    ],
+    "discoveryUrls": [
+      "https://www.milwaukeetool.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Figma",
+    "slug": "figma",
+    "officialDomain": "www.figma.com",
+    "market": "US",
+    "categories": [
+      "creative-software"
+    ],
+    "discoveryUrls": [
+      "https://www.figma.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
+  },
+  {
+    "name": "Saatva",
+    "slug": "saatva",
+    "officialDomain": "www.saatva.com",
+    "market": "US",
+    "categories": [
+      "mattresses"
+    ],
+    "discoveryUrls": [
+      "https://www.saatva.com/sitemap.xml"
+    ],
+    "productUrlPatterns": [],
+    "promoUrls": [],
+    "dealUrls": [],
+    "notes": "Official site serving the US market. sitemap.xml reachable 2026-10-15 (HTTP 200, after a redirect to www). Product URL patterns not yet verified; relies on the discovery heuristic until set."
   }
 ]

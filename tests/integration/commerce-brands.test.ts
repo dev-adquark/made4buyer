@@ -14,11 +14,11 @@ beforeEach(async () => {
 describe("seed import", () => {
   it("creates every seed brand once and is idempotent", async () => {
     const first = await importSeedBrands();
-    expect(first).toMatchObject({ created: 100, filled: 0, unchanged: 0, invalid: [], total: 100 });
-    expect(await db.commerceBrand.count()).toBe(100);
+    expect(first).toMatchObject({ created: 110, filled: 0, unchanged: 0, invalid: [], total: 110 });
+    expect(await db.commerceBrand.count()).toBe(110);
     const second = await importSeedBrands();
-    expect(second).toMatchObject({ created: 0, filled: 0, unchanged: 100, invalid: [] });
-    expect(await db.commerceBrand.count()).toBe(100);
+    expect(second).toMatchObject({ created: 0, filled: 0, unchanged: 110, invalid: [] });
+    expect(await db.commerceBrand.count()).toBe(110);
   });
 
   it("never overwrites admin edits; only fills empty lists", async () => {
@@ -245,7 +245,7 @@ describe("ensureBrandsSeeded (first job on an empty production database)", () =>
     const { ensureBrandsSeeded } = await import("@/lib/commerce/brands");
     expect(await ensureBrandsSeeded()).toBe(true);
     const n = await db.commerceBrand.count();
-    expect(n).toBe(100);
+    expect(n).toBe(110);
     expect(await ensureBrandsSeeded()).toBe(false);
     expect(await db.commerceBrand.count()).toBe(n);
   });
