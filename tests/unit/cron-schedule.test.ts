@@ -26,13 +26,22 @@ describe("cron parsing", () => {
 });
 
 describe("next / previous run (UTC)", () => {
-  it("every vercel.json schedule is weekly (Monday-only) or biweekly (the 1st and 15th), never more often", () => {
-    // Coupons aside, data this site tracks (reviews, prices, images, links) does not change fast
-    // enough to need daily runs; every schedule here is capped at a 2-week gap between runs.
+  // Jobs that call no paid/budget-limited API (plain HTTP GETs we fully control the volume of) may run
+  // daily: there is no cost to pace against, unlike every Apify-calling job below.
+  const DAILY_EXEMPT = new Set(["/api/cron/commerce-direct-crawl"]);
+
+  it("every vercel.json schedule is daily (cost-free jobs only), weekly (Monday-only) or biweekly (the 1st and 15th), never more often", () => {
+    // Coupons and other Apify-calling jobs aside, data this site tracks (reviews, prices, images,
+    // links) does not change fast enough to need daily runs; every Apify-backed schedule here is
+    // capped at a 2-week gap between runs.
     const crons = (vercelConfig as { crons: Array<{ path: string; schedule: string }> }).crons;
     expect(crons.length).toBeGreaterThan(0);
     for (const { path, schedule } of crons) {
       const [, , dom, , dow] = schedule.split(" ");
+      if (DAILY_EXEMPT.has(path)) {
+        expect([dom, dow], `${path}: ${schedule}`).toEqual(["*", "*"]);
+        continue;
+      }
       expect([dom, dow], `${path}: ${schedule}`).toEqual(dow === "1" ? ["*", "1"] : ["1,15", "*"]);
     }
   });

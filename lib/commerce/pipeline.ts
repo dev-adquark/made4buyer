@@ -17,6 +17,7 @@ import { dueBrands, ensureBrandsSeeded } from "./brands";
 import { classifyOfferStatusesSafe } from "./classify";
 import { buildDealActorInput, crawlableStartUrls, dealPagesPerRun, fetchBrandRobots, followedPageAllowed, type BrandRobots, type RobotsRule } from "./deal-crawl";
 import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from "./discovery";
+import { fetchDirectPage } from "./direct-crawl";
 import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { loadSummaryFacts } from "@/lib/products/current-facts";
@@ -733,6 +734,99 @@ export async function runCommerceDiscover(trigger: string, now = new Date()) {
   }
   const started = results.filter((r) => r.status === "STARTED").length;
   const stopped = results.find((r) => r.status === "SKIPPED" && /budget|paused|not configured/i.test(r.reason ?? ""));
+  return { status: stopped && !started ? "SKIPPED" : "OK", reason: stopped?.reason, brands: brands.length, started, results };
+}
+
+// ── Direct crawl (no Apify) ──────────────────────────────────────────────────
+
+const DIRECT_ACTOR_ID = "direct-fetch";
+export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number };
+
+/**
+ * One brand, fetched directly: no Apify, no cloud actor, no proxy, no per-run cost. Reuses
+ * brandRunUrls (sitemap-based discovery, already provider-independent — only the page-fetch step
+ * used Apify) for which URLs to read, fetchDirectPage (lib/commerce/direct-crawl.ts) to read each one
+ * itself, then the exact same normalize → identity match → facts/offers pipeline Apify-sourced pages
+ * use (processRaw) — nothing downstream of "the raw page was fetched" changes. Synchronous: the run
+ * is COLLECTED by the time this returns; there is no cloud run to poll later.
+ *
+ * Deal/listing pages (brand.dealUrls) are fetched the same way a product page is, but links are not
+ * followed from them here (the Apify path's browser can click through a collection page; a direct
+ * fetch only reads the one page it is given) — a listing page that is itself a single product's page
+ * (common for a brand's "deal of the day") still yields a product; a pure category/collection page
+ * does not. Product-catalogue coverage instead comes from sitemap discovery (brandRunUrls), which is
+ * unaffected by this limitation.
+ */
+export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string, now = new Date()): Promise<DirectCrawlResult> {
+  if (!(await getSwitches()).commerce_engine) return { brand: brand.slug, status: "SKIPPED", code: "SWITCH_OFF", reason: "paused in Admin → Automation: Commerce engine is off" };
+  const b = await brandRunUrls(brand, now);
+  const targets = [...b.listingUrls.map((url) => ({ url, label: "LISTING" as const })), ...b.urls.map((url) => ({ url, label: "PRODUCT" as const }))];
+  if (!targets.length) {
+    await brandFailed(brand.id, `DISCOVERY_${b.discovery}`, b.reason ?? "no product URLs discovered", now);
+    return { brand: brand.slug, status: "SKIPPED", code: "NO_URLS", reason: b.reason ?? "no product URLs discovered" };
+  }
+  const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: DIRECT_ACTOR_ID, trigger, status: "COLLECTING", startUrls: targets.length } });
+  const items: unknown[] = [];
+  const fetchErrors: Array<{ url: string; code: string; reason: string | null }> = [];
+  for (const t of targets) {
+    const r = await fetchDirectPage(t.url, t.label);
+    if (r.ok) items.push(r.page);
+    else fetchErrors.push({ url: t.url, code: r.code, reason: r.reason });
+  }
+  const raws = await storeRaws(run, items);
+  const cache = new Map<string, Candidate[]>();
+  const outcomes: ItemOutcome[] = [];
+  for (const raw of raws) {
+    try {
+      outcomes.push(await processRaw(brand, raw, now, cache));
+    } catch (error) {
+      outcomes.push({ url: raw.url, result: "ERROR", reason: String(error).slice(0, 300) });
+      log.warn("commerce record processing failed", { stage: "CONTENT_FETCH", brand: brand.slug, url: raw.url, error: String(error).slice(0, 200) });
+    }
+  }
+  const count = (r: ItemOutcome["result"]) => outcomes.filter((o) => o.result === r).length;
+  const extracted = outcomes.length - count("NOT_EXTRACTED") - count("ERROR");
+  const accepted = count("MATCHED");
+  const rejected = count("MATCH_REJECTED") + count("UNMATCHED") + count("NOT_EXTRACTED");
+  const errors = [...fetchErrors, ...outcomes.filter((o) => o.result === "NOT_EXTRACTED" || o.result === "ERROR").map((o) => ({ url: o.url, code: o.result, reason: o.reason ?? null }))].slice(0, 50);
+  await db.commerceRun.update({ where: { id: run.id }, data: { status: "COLLECTED", pagesProcessed: raws.length, extracted, accepted, rejected, errors: errors as Prisma.InputJsonValue, collectedAt: now, finishedAt: now } });
+  if (extracted > 0) {
+    await brandSucceeded(brand.id, "OK", now);
+    await commerceAudit("DIRECT_CRAWL_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, extracted, accepted, rejected } });
+  } else {
+    const reason = fetchErrors[0]?.reason ?? "no readable product page";
+    await brandFailed(brand.id, "EMPTY", reason, now);
+    await commerceAudit("DIRECT_CRAWL_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, reason } });
+  }
+  log.info("commerce direct crawl collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.id, pages: raws.length, extracted, accepted });
+  return { brand: brand.slug, status: "OK", pages: raws.length, extracted, accepted, rejected };
+}
+
+/**
+ * commerce-direct-crawl: discovers and fetches due brands' product pages directly. No Apify token,
+ * no monthly budget and no polling — every call here is a plain HTTP GET (lib/net/safe-fetch.ts),
+ * robots.txt-checked. Independent of commerce-discover/commerce-collect; both may run (a brand
+ * crawled by either keeps the same nextCrawlAt/backoff fields, so they never duplicate a crawl).
+ */
+export async function runCommerceDirectCrawl(trigger: string, now = new Date()) {
+  await ensureBrandsSeeded();
+  try {
+    await syncSeedFields();
+  } catch (error) {
+    log.warn("commerce seed sync failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
+  }
+  const limit = brandsPerRun();
+  const brands = (await dueBrands(now, limit)).slice(0, limit);
+  const results: DirectCrawlResult[] = [];
+  for (const brand of brands) {
+    const r = await runDirectBrandCrawl(brand, trigger, now);
+    results.push(r);
+    if (r.code === "SWITCH_OFF") break; // the same reason applies to every remaining brand
+  }
+  const touched = results.some((r) => r.status === "OK" && (r.accepted ?? 0) > 0);
+  if (touched) await revalidateCommerce();
+  const started = results.filter((r) => r.status === "OK").length;
+  const stopped = results.find((r) => r.status === "SKIPPED" && r.code === "SWITCH_OFF");
   return { status: stopped && !started ? "SKIPPED" : "OK", reason: stopped?.reason, brands: brands.length, started, results };
 }
 

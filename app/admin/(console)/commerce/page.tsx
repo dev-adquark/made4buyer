@@ -20,6 +20,7 @@ const RUN_TONE: Record<string, "ok" | "warn" | "error" | "info" | "neutral"> = {
 const JOBS: Array<[string, string]> = [
   ["commerce-discover", "Run discovery now"],
   ["commerce-collect", "Run collection now"],
+  ["commerce-direct-crawl", "Run direct crawl now (no Apify)"],
 ];
 
 function duration(start: Date, end: Date | null): string {
@@ -95,7 +96,7 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
       <h1>Commerce engine</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">
-        Apify crawls official brand sites (and reviewed sources) for products, prices and first-party promo codes. Raw records are kept exactly as returned; a product is attached to a Made4Buyers product only after an exact identity match, and an offer is shown only while it is fresh.
+        Official brand sites are crawled for products and prices, either via Apify (budget-capped below) or directly with no Apify at all (commerce-direct-crawl, daily, no cost — see Admin → Jobs). Raw records are kept exactly as returned; a product is attached to a Made4Buyers product only after an exact identity match, and an offer is shown only while it is fresh.
       </p>
 
       <WeeklyRefreshPanel returnTo={returnTo} />
@@ -125,7 +126,13 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
               label={label}
               returnTo={returnTo}
               disabledReason={isJobName(job) ? undefined : `job "${job}" is not registered in this build`}
-              confirm={budget.exhausted ? `This month's Apify budget is used up ($${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)}) — the run will refuse to spend more. Run it anyway?` : `Paid (Apify): $${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)} used this month. Run now?`}
+              confirm={
+                job === "commerce-direct-crawl"
+                  ? undefined
+                  : budget.exhausted
+                    ? `This month's Apify budget is used up ($${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)}) — the run will refuse to spend more. Run it anyway?`
+                    : `Paid (Apify): $${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)} used this month. Run now?`
+              }
             />
           ))}
           <ActionForm

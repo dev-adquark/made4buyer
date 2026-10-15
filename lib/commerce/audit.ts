@@ -25,6 +25,8 @@ export type CommerceAuditAction =
   | "DEAL_DEACTIVATED"
   | "APIFY_RUN_COMPLETED"
   | "APIFY_RUN_FAILED"
+  | "DIRECT_CRAWL_COMPLETED"
+  | "DIRECT_CRAWL_FAILED"
   | "BRAND_LOGO_UPDATED";
 
 export type CommerceEntityType = "commerce_product" | "commerce_offer" | "commerce_coupon" | "commerce_run" | "product_entity" | "commerce_brand";

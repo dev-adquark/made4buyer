@@ -37,6 +37,7 @@ function jobCosts(review: CostInfo, commerce: CostInfo, kwToBlog: CostInfo, pexe
     "data-audit": FREE,
     "deals-weekly-refresh": commerce,
     "brand-logos": FREE,
+    "commerce-direct-crawl": FREE,
   };
 }
 
@@ -68,6 +69,7 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "data-audit": "Scan published content and commerce data for unverified, stale, conflicting, duplicate, broken and unsourced items (Admin → Data audit); only fixes are FRESH→STALE for offers past 48 h and VERIFIED→EXPIRED for expired coupons, both audited. Never deletes or rewrites.",
   "deals-weekly-refresh": "Weekly deals refresh (slot set in Admin → Commerce; default Sunday 06:00 UTC). Called daily; runs once per week: collect runs → stale offers/expired coupons (Feedico's own rule) → price re-check runs for brands with deals → discovery for brands not crawled in 7 days → every offer link → official verification → data audit → summary. Resumable across invocations (hourly discover passes continue it); one brand failing never stops it. Run now forces a sweep.",
   "brand-logos": "Official brand logos for brands never checked, checked over 30 days ago or FAILED over a day ago (BRAND_LOGOS_PER_RUN, default 15; robots.txt respected, ≤ 1 request/s per site): the official home page's JSON-LD Organization logo, else its SVG / ≥ 96 px icons (on the brand's own domain only), else the Wikidata item with the brand's official website and name → its Commons logo (free licence). Every file is fetched and checked; nothing is guessed. Admin overrides (Sources) are never overwritten.",
+  "commerce-direct-crawl": "Daily, no Apify: for due brands, discovers product URLs the same way commerce-discover does (sitemap, robots.txt respected), then fetches each page directly (a plain HTTP GET) and runs it through the same normalize/match/offer pipeline. No budget, no cloud actor, no cost. Independent of commerce-discover/commerce-collect; a brand crawled by either keeps the same next-crawl schedule.",
 };
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {

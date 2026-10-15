@@ -185,7 +185,7 @@ export type CandidateRejection = { url: string | null; source: LogoSource; reaso
 
 const ORG_TYPES = new Set(["organization", "corporation", "brand", "onlinestore", "onlinebusiness", "store", "localbusiness", "electronicsstore", "company"]);
 
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s
     .replace(/&quot;/g, '"')
     .replace(/&#0*39;|&apos;/g, "'")

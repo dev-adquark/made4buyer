@@ -10,7 +10,7 @@ import { withApiInvocation } from "@/lib/ops/api-guard";
 import { LockHeldError, withLock } from "./lock";
 import { errorSummary, finishJobRun, recordJobRun, runStatusFor, startJobRun } from "./run-log";
 import { runDataAudit } from "@/lib/ops/data-audit";
-import { runCommerceCollect, runCommerceDiscover } from "@/lib/commerce/pipeline";
+import { runCommerceCollect, runCommerceDirectCrawl, runCommerceDiscover } from "@/lib/commerce/pipeline";
 import { runFeedicoSync } from "@/lib/commerce/feedico";
 import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
@@ -127,6 +127,10 @@ export const JOBS = {
   },
   // Affiliate links on demand (Admin → Jobs / `npm run job -- affiliate-links`).
   "affiliate-links": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runAffiliateLinks(trigger), locked: true },
+  // Direct crawl (lib/commerce/direct-crawl.ts): no Apify, no cloud actor, no budget, no cost. A plain
+  // HTTP GET per page (robots.txt checked first), reusing the same sitemap discovery and
+  // normalize/match/offer pipeline Apify-sourced pages use. Independent of commerce-discover/collect.
+  "commerce-direct-crawl": { lockTtlMs: 20 * 60_000, run: (trigger: string) => runCommerceDirectCrawl(trigger), locked: true },
   // Feedico coupon feed (lib/commerce/feedico.ts): the only coupon source now (brand-site coupon
   // crawling via Apify was removed); every brand; codes older than 14 days deactivated; current
   // codes shown publicly as "Via Feedico".
@@ -162,8 +166,8 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "enrich-products": ["product_enrichment"],
   "commerce-discover": ["commerce_engine"],
   "commerce-collect": ["commerce_engine"],
+  "commerce-direct-crawl": ["commerce_engine"],
   "affiliate-links": ["commerce_engine"],
-  "commerce-coupons": ["commerce_engine"],
   "feedico-coupons": ["commerce_engine"],
   "commerce-validate-links": ["commerce_engine"],
   "commerce-official-verify": ["commerce_engine"],
