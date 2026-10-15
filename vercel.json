@@ -187,7 +187,7 @@
     },
     {
       "path": "/api/cron/commerce-direct-crawl",
-      "schedule": "30 5 * * *"
+      "schedule": "30 5 */5 * *"
     }
   ]
 }

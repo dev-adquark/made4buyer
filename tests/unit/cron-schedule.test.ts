@@ -27,10 +27,10 @@ describe("cron parsing", () => {
 
 describe("next / previous run (UTC)", () => {
   // Jobs that call no paid/budget-limited API (plain HTTP GETs we fully control the volume of) may run
-  // daily: there is no cost to pace against, unlike every Apify-calling job below.
-  const DAILY_EXEMPT = new Set(["/api/cron/commerce-direct-crawl"]);
+  // on their own cadence: there is no cost to pace against, unlike every Apify-calling job below.
+  const COST_FREE_EXEMPT: Record<string, [string, string]> = { "/api/cron/commerce-direct-crawl": ["*/5", "*"] };
 
-  it("every vercel.json schedule is daily (cost-free jobs only), weekly (Monday-only) or biweekly (the 1st and 15th), never more often", () => {
+  it("every vercel.json schedule is cost-free-job cadence, weekly (Monday-only) or biweekly (the 1st and 15th), never more often than that", () => {
     // Coupons and other Apify-calling jobs aside, data this site tracks (reviews, prices, images,
     // links) does not change fast enough to need daily runs; every Apify-backed schedule here is
     // capped at a 2-week gap between runs.
@@ -38,8 +38,8 @@ describe("next / previous run (UTC)", () => {
     expect(crons.length).toBeGreaterThan(0);
     for (const { path, schedule } of crons) {
       const [, , dom, , dow] = schedule.split(" ");
-      if (DAILY_EXEMPT.has(path)) {
-        expect([dom, dow], `${path}: ${schedule}`).toEqual(["*", "*"]);
+      if (path in COST_FREE_EXEMPT) {
+        expect([dom, dow], `${path}: ${schedule}`).toEqual(COST_FREE_EXEMPT[path]);
         continue;
       }
       expect([dom, dow], `${path}: ${schedule}`).toEqual(dow === "1" ? ["*", "1"] : ["1,15", "*"]);
