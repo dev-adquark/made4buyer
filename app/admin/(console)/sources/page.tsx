@@ -1,9 +1,11 @@
-import { ActionForm, Badge, when } from "@/components/admin-ui";
+import { ActionForm, Badge, CostBadge, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { db } from "@/lib/db";
 import { sourceHealth } from "@/lib/admin/source-health";
 import { apifyConfigured } from "@/lib/pipeline/apify";
+import { apifyReviewCost } from "@/lib/ops/api-costs";
+import { reviewRunCostsForMonth } from "@/lib/pipeline/review-budget";
 import { CATEGORIES } from "@/lib/taxonomy/definitions";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +17,16 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
   await requireAdminPage();
   const sp = await searchParams;
   const editId = param(sp, "edit");
-  const [sources, runs, latest] = await Promise.all([
+  const [sources, runs, latest, cost, ledger] = await Promise.all([
     db.reviewSource.findMany({ orderBy: { name: "asc" } }),
     db.apifyRun.findMany({ orderBy: { startedAt: "desc" }, take: 30, include: { source: { select: { name: true } } } }),
     db.apifyRun.findMany({ orderBy: { startedAt: "desc" }, distinct: ["sourceId"] }),
+    apifyReviewCost(),
+    reviewRunCostsForMonth(),
   ]);
+  const usd = (apifyRunId: string) => (apifyRunId in ledger ? `$${ledger[apifyRunId].toFixed(ledger[apifyRunId] < 1 ? 4 : 2)}` : "—");
   const health = await sourceHealth(sources.map((s) => s.id));
+  const runCost = cost.nature === "PAID_TRACKED" && cost.exhausted ? `${cost.label}: this month's review-scrape budget is used up — a run will refuse to start. Run anyway?` : `Paid (Apify): ${cost.label}. Start this run now?`;
   const edit = editId ? sources.find((s) => s.id === editId) : undefined;
   const last = (id: string) => latest.find((r) => r.sourceId === id);
   return (
@@ -32,6 +38,20 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
         extraction and show a summary that links to the original.
       </p>
       {!apifyConfigured() && <p className="notice warn">APIFY_API_TOKEN is not configured (BLOCKED_BY_ENVIRONMENT). Sources can be set up, but no crawl will run.</p>}
+
+      <h2 id="budget-h">Apify budget (review scraping, this UTC month)</h2>
+      <div className="stats" aria-labelledby="budget-h">
+        <Stat label="Cost" value={<CostBadge cost={cost} />} />
+        {cost.nature === "PAID_TRACKED" && (
+          <>
+            <Stat label="Spent" value={`$${(cost.spentUsd ?? 0).toFixed(2)}`} note={cost.basis === "estimated" ? "includes an estimate for unreported runs" : "Apify-reported actual"} />
+            <Stat label="Budget" value={`$${(cost.budgetUsd ?? 0).toFixed(2)}`} note="REVIEW_SCRAPE_MONTHLY_BUDGET_USD" />
+            <Stat label="Remaining" value={`$${(cost.remainingUsd ?? 0).toFixed(2)}`} />
+          </>
+        )}
+      </div>
+      {cost.nature === "PAID_TRACKED" && cost.exhausted && <p className="notice error" role="alert">This month&rsquo;s review-scrape budget is used up: new runs are refused until the budget resets. Raise REVIEW_SCRAPE_MONTHLY_BUDGET_USD or wait for next month.</p>}
+      <p className="small muted">This budget is separate from the commerce engine&rsquo;s (Admin → Commerce): review scraping has its own cap.</p>
 
       <div className="table-wrap">
         <table className="table responsive">
@@ -111,7 +131,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                   <td data-label="Actions">
                     <div className="btnrow" style={{ margin: 0 }}>
                       <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "toggle" }} label={s.enabled ? "Disable" : "Enable"} returnTo="/admin/sources" />
-                      <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "run" }} label="Run now" returnTo="/admin/sources" disabledReason={apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured"} />
+                      <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "run" }} label="Run now" returnTo="/admin/sources" disabledReason={apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured"} confirm={apifyConfigured() ? runCost : undefined} />
                       {(s.pausedUntil || s.priority !== 100) && <ActionForm action="/api/admin/sources" fields={{ id: s.id, action: "resume" }} label="Resume now" returnTo="/admin/sources" />}
                       <a className="btn small" href={`/admin/sources?edit=${s.id}`}>
                         Edit
@@ -218,6 +238,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
               <th className="num">Pages</th>
               <th className="num">Accepted</th>
               <th className="num">Rejected</th>
+              <th className="num">Cost</th>
             </tr>
           </thead>
           <tbody>
@@ -240,11 +261,14 @@ export default async function SourcesPage({ searchParams }: { searchParams: Sear
                 <td className="num" data-label="Rejected">
                   {r.rejected ?? "–"}
                 </td>
+                <td className="num" data-label="Cost">
+                  {usd(r.apifyRunId)}
+                </td>
               </tr>
             ))}
             {!runs.length && (
               <tr>
-                <td colSpan={7}>No runs yet.</td>
+                <td colSpan={8}>No runs yet.</td>
               </tr>
             )}
           </tbody>

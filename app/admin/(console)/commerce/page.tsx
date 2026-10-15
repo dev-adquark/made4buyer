@@ -118,7 +118,15 @@ export default async function CommercePage({ searchParams }: { searchParams: Sea
             <ActionForm action="/api/admin/commerce" fields={{ action: "resume" }} label="Resume engine" returnTo={returnTo} />
           )}
           {JOBS.map(([job, label]) => (
-            <ActionForm key={job} action="/api/admin/jobs" fields={{ job }} label={label} returnTo={returnTo} disabledReason={isJobName(job) ? undefined : `job "${job}" is not registered in this build`} />
+            <ActionForm
+              key={job}
+              action="/api/admin/jobs"
+              fields={{ job }}
+              label={label}
+              returnTo={returnTo}
+              disabledReason={isJobName(job) ? undefined : `job "${job}" is not registered in this build`}
+              confirm={budget.exhausted ? `This month's Apify budget is used up ($${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)}) — the run will refuse to spend more. Run it anyway?` : `Paid (Apify): $${budget.usedUsd.toFixed(2)} of $${budget.budgetUsd.toFixed(2)} used this month. Run now?`}
+            />
           ))}
           <ActionForm
             action="/api/admin/commerce"

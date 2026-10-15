@@ -1,4 +1,4 @@
-import { ActionForm, Badge, when } from "@/components/admin-ui";
+import { ActionForm, Badge, CostBadge, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import {
@@ -11,6 +11,7 @@ import {
 import { config } from "@/lib/config";
 import { getSwitches, SWITCHES, type SwitchKey } from "@/lib/automation/settings";
 import { db } from "@/lib/db";
+import { keywordToBlogCost } from "@/lib/ops/api-costs";
 import EngineSections from "./engine";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function AutomationPage({
   const sp = await searchParams;
   const now = new Date();
   const { day } = istParts(now);
-  const [slots, recent, queue, counts, health] = await Promise.all([
+  const [slots, recent, queue, counts, health, kwCost] = await Promise.all([
     db.automationSlot.findMany({ where: { day } }),
     db.automationSlot.findMany({
       orderBy: [{ day: "desc" }, { slot: "asc" }],
@@ -52,6 +53,7 @@ export default async function AutomationPage({
     }),
     db.contentQueueItem.groupBy({ by: ["status"], _count: { _all: true } }),
     automationHealth(now),
+    keywordToBlogCost(now),
   ]);
   const switches = await getSwitches();
   const ids = [...slots, ...recent]
@@ -87,6 +89,10 @@ export default async function AutomationPage({
       <p className="muted">
         A buying guide at 08:00 and an informational article at 19:00 (Asia/Kolkata): relevant topic from the queue → exact-duplicate check (no API call is spent on a repeat) → Keyword-to-Blog → published exactly as returned. No quality, SEO or approval gate; only an exact repeat (same topic or same title, same post type) is stopped. Up to {MAX_SLOT_ATTEMPTS} attempts per slot with backoff, within the Keyword-to-Blog quota of {config.aiGuides.dailyLimit()} requests/day.
       </p>
+      <p className="small">
+        Keyword-to-Blog cost: <CostBadge cost={kwCost} />
+      </p>
+      {kwCost.nature === "PAID_UNTRACKED" && kwCost.exhausted && <p className="notice warn">Today&rsquo;s Keyword-to-Blog quota is used up: &ldquo;Run the due slot now&rdquo; will refuse to run until it resets tomorrow.</p>}
       {!enabled && (
         <p className="notice warn">
           GUIDE_AUTOGEN_ENABLED is not true: the scheduler will not publish
@@ -224,6 +230,7 @@ export default async function AutomationPage({
           disabledReason={
             enabled ? undefined : "GUIDE_AUTOGEN_ENABLED is not true"
           }
+          confirm={kwCost.nature === "PAID_UNTRACKED" && !kwCost.exhausted ? `Paid plan: ${kwCost.label}. Run the due slot now?` : undefined}
         />
       </div>
 

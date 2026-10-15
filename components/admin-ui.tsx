@@ -1,4 +1,5 @@
 import ConfirmButton from "./confirm-button";
+import type { CostInfo } from "@/lib/ops/api-costs";
 
 type Tone = "ok" | "warn" | "error" | "info" | "neutral";
 
@@ -27,6 +28,21 @@ export function Stat({ label, value, note }: { label: string; value: React.React
       <span className="stat-value">{value}</span>
       {note && <div className="stat-note">{note}</div>}
     </div>
+  );
+}
+
+/**
+ * Cost of one external API (lib/ops/api-costs.ts): Free (ok), a real tracked $ budget (info, or error
+ * once exhausted), a paid provider this app cannot price per-request (warn), or unavailable (neutral).
+ * Never renders "Free" for anything other than nature "FREE".
+ */
+export function CostBadge({ cost }: { cost: CostInfo }) {
+  const tone = cost.nature === "FREE" ? "ok" : cost.nature === "UNKNOWN" ? "neutral" : cost.exhausted ? "error" : cost.nature === "PAID_TRACKED" ? "info" : "warn";
+  return (
+    <span className="small">
+      <Badge value={cost.label} tone={tone} />
+      {cost.detail && <div className="muted">{cost.detail}</div>}
+    </span>
   );
 }
 

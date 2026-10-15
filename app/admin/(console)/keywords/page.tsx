@@ -1,10 +1,11 @@
 import type { ContentQueueItem } from "@prisma/client";
-import { ActionForm, Badge, when } from "@/components/admin-ui";
+import { ActionForm, Badge, CostBadge, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { nextSlotRun } from "@/lib/automation/daily-article";
 import { DEFAULT_ADMIN_FREQUENCY, FREQUENCIES, IN_PROGRESS, isFrequency, isKeywordKind, itemType, KEYWORD_KINDS, KEYWORD_LIMITS, keywordItemsPerSlot, listKeywords, type KeywordFilter } from "@/lib/automation/keywords";
 import { db } from "@/lib/db";
+import { keywordToBlogCost } from "@/lib/ops/api-costs";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { businessTimezone, formatInZone } from "@/lib/util/timezone";
 
@@ -126,9 +127,10 @@ export default async function KeywordsPage({ searchParams }: { searchParams: Sea
     q,
   };
 
-  const [items, counts] = await Promise.all([
+  const [items, counts, kwCost] = await Promise.all([
     listKeywords(filter),
     db.contentQueueItem.groupBy({ by: ["source", "enabled"], _count: { _all: true } }),
+    keywordToBlogCost(now),
   ]);
   const reviewIds = items.map((i) => i.normalizedReviewId).filter((x): x is string => Boolean(x));
   const reviews = reviewIds.length ? await db.normalizedReview.findMany({ where: { id: { in: reviewIds } }, select: { id: true, slug: true, status: true, canonicalTitle: true } }) : [];
@@ -154,6 +156,10 @@ export default async function KeywordsPage({ searchParams }: { searchParams: Sea
         Batch: {perSlot} post{perSlot === 1 ? "" : "s"} per slot (KEYWORD_ITEMS_PER_SLOT) · GUIDE keywords run in the morning slot ({when(nextSlotRun("MORNING", now))} · {formatInZone(nextSlotRun("MORNING", now), tz)}), ARTICLE keywords in the evening slot ({when(nextSlotRun("EVENING", now))} ·{" "}
         {formatInZone(nextSlotRun("EVENING", now), tz)}). Business time zone: {tz}. {keywordTotal} keyword{keywordTotal === 1 ? "" : "s"} ({total((c) => c.source !== "calendar" && c.enabled)} enabled) · {total((c) => c.source === "calendar")} calendar topics.
       </p>
+      <p className="small">
+        Cost: <CostBadge cost={kwCost} />
+      </p>
+      {kwCost.nature === "PAID_UNTRACKED" && kwCost.exhausted && <p className="notice warn">Today&rsquo;s Keyword-to-Blog quota is used up: &ldquo;Publish now&rdquo; and the scheduled slots will refuse to run until it resets tomorrow.</p>}
 
       <form className="btnrow" method="get" action={PAGE}>
         <label className="small" htmlFor="f-source">

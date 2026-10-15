@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ActionForm, Badge, safeHref, Stat, when } from "@/components/admin-ui";
+import { ActionForm, Badge, CostBadge, safeHref, Stat, when } from "@/components/admin-ui";
 import Flash from "@/components/flash";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { brandRegistryStats } from "@/lib/commerce/admin-queries";
 import { brandCounts, inCrawlWindow, listBrands, readBrandSeed, windowLabel, windowOverdue } from "@/lib/commerce/brands";
 import { db } from "@/lib/db";
+import { apifyCommerceCost } from "@/lib/ops/api-costs";
 import { CATEGORIES, CATEGORY_BY_SLUG } from "@/lib/taxonomy/definitions";
 import { AddBrandForm, BRAND_API, BrandForm } from "./brand-form";
 import BrandLogoCell from "./brand-logo-cell";
@@ -56,12 +57,13 @@ export default async function CommerceSourcesPage({ searchParams }: { searchPara
   const editId = param(sp, "edit");
   const enabled = enabledParam === "yes" ? true : enabledParam === "no" ? false : undefined;
 
-  const [brands, counts, stats, sources, bySource] = await Promise.all([
+  const [brands, counts, stats, sources, bySource, cost] = await Promise.all([
     listBrands({ enabled, category, q }),
     brandCounts(),
     brandRegistryStats(),
     db.commerceSource.findMany({ orderBy: [{ enabled: "desc" }, { name: "asc" }] }),
     db.commerceRun.groupBy({ by: ["sourceId"], where: { sourceId: { not: null } }, _sum: { extracted: true, accepted: true }, _count: { _all: true } }),
+    apifyCommerceCost(),
   ]);
   let seedCount: number | null = null;
   try {
@@ -91,6 +93,7 @@ export default async function CommerceSourcesPage({ searchParams }: { searchPara
         <Stat label="Due now" value={counts.due} />
         <Stat label="With failures" value={counts.failing} note={<Link href="/admin/commerce">Retry from the overview</Link>} />
         <Stat label="Non-brand sources" value={`${sources.filter((s) => s.enabled).length} / ${sources.length}`} note="enabled / total" />
+        <Stat label="Crawl cost" value={<CostBadge cost={cost} />} note={<Link href="/admin/commerce">Full budget (Admin → Commerce)</Link>} />
       </div>
 
       <div className="btnrow">

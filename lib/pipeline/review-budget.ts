@@ -26,6 +26,11 @@ async function readLedger(now: Date): Promise<Ledger> {
 
 export type ReviewBudget = { budgetUsd: number; recordedUsd: number; unknownRuns: number; perRunUsd: number; spentUsd: number; remainingUsd: number; allowed: boolean };
 
+/** The recorded per-run $ costs for a UTC month (Admin → Sources "Recent Apify runs"), keyed by apifyRunId. A run not in the ledger has no reported cost yet. */
+export async function reviewRunCostsForMonth(now = new Date()): Promise<Ledger> {
+  return readLedger(now);
+}
+
 export async function reviewScrapeBudget(now = new Date()): Promise<ReviewBudget> {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const [ledger, runs] = await Promise.all([readLedger(now), db.apifyRun.findMany({ where: { startedAt: { gte: monthStart } }, select: { apifyRunId: true } })]);

@@ -1,10 +1,44 @@
+import Link from "next/link";
 import Flash from "@/components/flash";
-import { ActionForm, Badge, when } from "@/components/admin-ui";
+import { ActionForm, Badge, CostBadge, when } from "@/components/admin-ui";
 import { param, requireAdminPage, type SearchParams } from "@/lib/admin/guard";
 import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import { jobOutcome, JOBS } from "@/lib/jobs/registry";
 import { apifyConfigured } from "@/lib/pipeline/apify";
+import { affiliateCost, apifyCommerceCost, apifyReviewCost, contentApiCost, feedicoCost, gscCost, keywordToBlogCost, pexelsCost, type CostInfo } from "@/lib/ops/api-costs";
+
+const FREE: CostInfo = { nature: "FREE", label: "Free", detail: "No external paid/quota API is called." };
+
+/** Which external cost (lib/ops/api-costs.ts) each job's "Run now" can incur. Computed once per page load, not invented per job. */
+function jobCosts(review: CostInfo, commerce: CostInfo, kwToBlog: CostInfo, pexels: CostInfo, feedico: CostInfo, gsc: CostInfo, contentApi: CostInfo, affiliate: CostInfo): Record<keyof typeof JOBS, CostInfo> {
+  return {
+    ingest: contentApi,
+    "scrape-sources": review,
+    "collect-scrapes": review,
+    "retry-failed": FREE,
+    "cleanup-cache": FREE,
+    "publish-cycle": FREE,
+    "fix-title-years": FREE,
+    "enrich-products": FREE,
+    "daily-article": kwToBlog,
+    "reclassify-content": FREE,
+    "enrich-images": pexels,
+    "image-integrity": FREE,
+    "detect-stale": FREE,
+    "inspect-index": gsc,
+    "commerce-discover": commerce,
+    "commerce-collect": commerce,
+    "affiliate-links": affiliate,
+    "feedico-coupons": feedico,
+    "commerce-validate-links": FREE,
+    "commerce-official-verify": FREE,
+    "commerce-classify-deals": FREE,
+    "data-audit": FREE,
+    "deals-weekly-refresh": commerce,
+    "brand-logos": FREE,
+  };
+}
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs & runs" };
@@ -39,12 +73,16 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
   const sp = await searchParams;
-  const [locks, runs, lastRuns] = await Promise.all([
+  const [locks, runs, lastRuns, review, commerce, kwToBlog] = await Promise.all([
     db.jobLock.findMany(),
     db.revalidationRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
     db.auditLog.findMany({ where: { entityType: "job", action: { startsWith: "job.run." } }, orderBy: { createdAt: "desc" }, distinct: ["entityId"], select: { entityId: true, actor: true, createdAt: true, metadata: true } }),
+    apifyReviewCost(),
+    apifyCommerceCost(),
+    keywordToBlogCost(),
   ]);
   const integrations = integrationStatus();
+  const costs = jobCosts(review, commerce, kwToBlog, pexelsCost(), feedicoCost(), gscCost(), contentApiCost(), affiliateCost());
   const blocked: Partial<Record<keyof typeof JOBS, string | undefined>> = {
     ingest: integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured" : undefined,
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
@@ -56,12 +94,16 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       <h1>Jobs &amp; runs</h1>
       <Flash ok={param(sp, "ok")} error={param(sp, "error")} />
       <p className="muted">Scheduled daily via Vercel Cron (vercel.json) and hourly or six-hourly via the GitHub Actions workflow, both at /api/cron/&lt;job&gt; (Bearer CRON_SECRET — {integrations.cron}). Every job holds a DB lock; stale locks expire automatically.</p>
+      <p className="small muted">
+        Cost (lib/ops/api-costs.ts): Free · Paid with a real tracked $ budget (basis: {review.basis === "estimated" || commerce.basis === "estimated" ? "includes an estimate for runs Apify has not reported yet" : "Apify-reported actual"}) · a paid plan this app cannot price per request (a quota is shown instead) · or unavailable. Full provider list and $ figures: <Link href="/admin/integrations">Integrations</Link>.
+      </p>
       <div className="table-wrap">
         <table className="table responsive">
           <thead>
             <tr>
               <th scope="col">Job</th>
               <th scope="col">What it does</th>
+              <th scope="col">Cost</th>
               <th scope="col">Last run</th>
               <th scope="col">Lock</th>
               <th scope="col">Run</th>
@@ -72,12 +114,16 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
               const last = lastRuns.find((r) => r.entityId === name);
               const outcome = last ? jobOutcome(last.metadata) : undefined;
               const lock = locks.find((l) => l.name === (name === "ingest" ? "ingestion" : `job:${name}`));
+              const cost = costs[name];
               return (
                 <tr key={name}>
                   <td data-label="Job">
                     <code>{name}</code>
                   </td>
                   <td data-label="What it does" className="small">{DESCRIPTIONS[name]}</td>
+                  <td data-label="Cost">
+                    <CostBadge cost={cost} />
+                  </td>
                   <td data-label="Last run" className="small">
                     {last && outcome ? (
                       <>
@@ -90,7 +136,14 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                   </td>
                   <td data-label="Lock">{lock ? <Badge value={lock.expiresAt > new Date() ? `held until ${when(lock.expiresAt)}` : "stale (will be recovered)"} tone="warn" /> : "free"}</td>
                   <td data-label="Run">
-                    <ActionForm action="/api/admin/jobs" fields={{ job: name }} label="Run now" returnTo="/admin/jobs" disabledReason={blocked[name]} />
+                    <ActionForm
+                      action="/api/admin/jobs"
+                      fields={{ job: name }}
+                      label="Run now"
+                      returnTo="/admin/jobs"
+                      disabledReason={blocked[name]}
+                      confirm={cost.nature === "PAID_TRACKED" && cost.exhausted ? `${cost.label}: this month's budget is used up — the job will refuse to spend more. Run it anyway?` : cost.nature === "PAID_TRACKED" || cost.nature === "PAID_UNTRACKED" ? `${name} is paid (${cost.label}). Run it now?` : undefined}
+                    />
                   </td>
                 </tr>
               );
