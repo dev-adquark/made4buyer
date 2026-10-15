@@ -331,12 +331,10 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
     }
     read++;
     const parsed = parseSitemap(res.body, res.finalUrl);
-    if (parsed.kind === "index") {
-      sitemaps.push({ url, status: "READ", kind: "index", entries: parsed.sitemaps.length });
+    const queueChildren = (children: SitemapEntry[]) => {
       // Product-looking and recently changed child sitemaps first, so the cap keeps the useful ones.
       const since = brand.lastCrawlAt?.getTime() ?? 0;
-      const children = [...parsed.sitemaps].sort((a, b) => childScore(b, since) - childScore(a, since));
-      for (const c of children) {
+      for (const c of [...children].sort((a, b) => childScore(b, since) - childScore(a, since))) {
         let cu: URL;
         try {
           cu = new URL(c.loc, res.finalUrl);
@@ -350,9 +348,27 @@ async function discover(brand: DiscoveryBrand, options: DiscoveryOptions, now: D
         else if (usOnly && !isUsStorefront(key)) counts0.nonUsSitemaps++;
         else queue.push(key);
       }
+    };
+    if (parsed.kind === "index") {
+      sitemaps.push({ url, status: "READ", kind: "index", entries: parsed.sitemaps.length });
+      queueChildren(parsed.sitemaps);
     } else {
-      sitemaps.push({ url, status: "READ", kind: parsed.kind, entries: parsed.urls.length });
-      entries.push(...parsed.urls);
+      // Some sites publish a non-standard "index of sitemaps" as a <urlset> instead of a proper
+      // <sitemapindex> (e.g. 1Password's /sitemap.xml, whose <url><loc> entries are themselves
+      // per-locale sitemap.xml files, not pages). A <loc> that is itself named like a sitemap file
+      // is queued as a child sitemap rather than tested as a product candidate.
+      const isSitemapRef = (loc: string) => /\/sitemap[^/]*\.xml(?:\.gz)?$/i.test(new URL(loc, res.finalUrl).pathname.toLowerCase());
+      const nested = parsed.urls.filter((e) => {
+        try {
+          return isSitemapRef(e.loc);
+        } catch {
+          return false;
+        }
+      });
+      const pages = parsed.urls.filter((e) => !nested.includes(e));
+      sitemaps.push({ url, status: "READ", kind: parsed.kind, entries: pages.length });
+      entries.push(...pages);
+      if (nested.length) queueChildren(nested);
     }
   }
 

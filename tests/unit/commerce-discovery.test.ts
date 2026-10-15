@@ -126,6 +126,21 @@ describe("discoverProductUrls", () => {
     expect(hits).not.toContain("/sitemap-archive.xml.gz");
   });
 
+  it("follows a non-standard <urlset> whose <loc> entries are themselves sitemap.xml files (1Password's actual sitemap), instead of testing them as product candidates", async () => {
+    routes["/robots.txt"] = { body: `Sitemap: ${origin}/sitemap.xml\n` };
+    // A real site (1Password) publishes this as <urlset>, not the standard <sitemapindex>.
+    routes["/sitemap.xml"] = { body: urlset([[`${origin}/en/sitemap.xml`], [`${origin}/fr/sitemap.xml`]]) };
+    routes["/en/sitemap.xml"] = { body: urlset([[`${origin}/product/enterprise-password-manager`, "2026-10-10"], [`${origin}/pricing`, "2026-10-08"]]) };
+    routes["/fr/sitemap.xml"] = { body: urlset([[`${origin}/fr/produit/exemple`, "2026-10-10"]]) };
+    const r = await run(brand());
+    expect(r.status).toBe("OK");
+    expect(r.urls).toEqual([`${origin}/product/enterprise-password-manager`]);
+    // Only the English child sitemap was fetched: the French one is filtered as non-US before being queued.
+    expect(hits).toContain("/en/sitemap.xml");
+    expect(hits).not.toContain("/fr/sitemap.xml");
+    expect(r.sitemaps?.find((s) => s.url === `${origin}/sitemap.xml`)).toMatchObject({ kind: "urlset", entries: 0 });
+  });
+
   it("uses the brand's discovery URLs instead of robots Sitemap lines and applies productUrlPatterns", async () => {
     routes["/robots.txt"] = { body: `User-agent: *\nAllow: /\nSitemap: ${origin}/ignored.xml\n` };
     routes["/feeds/catalog.xml"] = { body: urlset([[`${origin}/catalog/item-1`], [`${origin}/catalog/sub/item-2`], [`${origin}/products/heuristic-x1`]]) };
