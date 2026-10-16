@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildExternalScraperInput, rowToRawPayload } from "@/lib/commerce/external-scraper";
 import { normalizeCommerceRecord } from "@/lib/commerce/normalize";
+import { extractOfficialProductImages } from "@/lib/images/deal-image";
 
 /**
  * The digital_influx/product-data actor's own documented output (lib/commerce/external-scraper.ts
@@ -61,6 +62,14 @@ describe("rowToRawPayload", () => {
       const n = normalizeCommerceRecord(rowToRawPayload({ ...SAMPLE, availability: raw }), { market: "US" });
       expect(n.ok && n.product.availability, raw).toBe(expected);
     }
+  });
+});
+
+describe("official product photo from an external-scraper row", () => {
+  it("puts the row's image into the JSON-LD Product, so the deal card shows the store's own photo", () => {
+    const payload = rowToRawPayload(SAMPLE)!;
+    expect((payload.jsonLd as Array<{ image?: string }>)[0].image).toBe(SAMPLE.image);
+    expect(extractOfficialProductImages(payload, SAMPLE.url).map((i) => i.src)).toEqual([SAMPLE.image]);
   });
 });
 

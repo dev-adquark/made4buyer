@@ -60,6 +60,9 @@ export function rowToRawPayload(row: ExternalProductRow): Record<string, unknown
     offer.priceSpecification = [{ "@type": "UnitPriceSpecification", priceType: "https://schema.org/ListPrice", price: row.listPrice, priceCurrency: row.currency ?? "USD" }];
   }
   const jsonLd: Record<string, unknown> = { "@context": "https://schema.org", "@type": "Product", name: row.name ?? undefined, offers: offer };
+  // The actor reads the image from the store page's own product data: it is the product's official
+  // photo, so it goes where every other source's JSON-LD image is read from (deal-card photos).
+  if (row.image) jsonLd.image = row.image;
   if (row.brand) jsonLd.brand = row.brand;
   if (row.sku) jsonLd.sku = row.sku;
   if (row.gtin) jsonLd.gtin13 = row.gtin;
