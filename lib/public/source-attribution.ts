@@ -43,6 +43,20 @@ function publisherHost(value: string | null): string | null {
   }
 }
 
+function isSuppressedSourceUrl(value: string | null): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return (
+      url.hostname.toLowerCase().replace(/^www\./, "") === "packhacker.com" &&
+      url.pathname.replace(/\/+$/, "").toLowerCase() ===
+        "/travel-gear/fjallraven/high-coast-pro-foldsack-26"
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Builds an absolute canonical URL on Made4Buyers, never on an origin supplied by content. */
 export function made4buyersCanonicalUrl(path: string): string {
   const safePath = path.startsWith("/") && !path.startsWith("//") && !/[\r\n\\]/.test(path) ? path : "/";
@@ -68,6 +82,10 @@ export function resolveSourceAttribution(input: SourceAttributionInput): PublicS
       publishedAt: dateString(input.publishedAt),
       isMade4Buyers: true,
     };
+  }
+
+  if (isSuppressedSourceUrl(displayUrl(input.sourceUrl))) {
+    return { name: null, url: null, author: null, publishedAt: null, isMade4Buyers: false };
   }
 
   const candidate = displayText(input.sourceName);

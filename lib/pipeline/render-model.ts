@@ -21,7 +21,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 13;
+export const RENDER_MODEL_VERSION = 14;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {

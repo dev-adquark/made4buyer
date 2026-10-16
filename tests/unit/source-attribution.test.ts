@@ -65,6 +65,23 @@ describe("public source attribution", () => {
     });
   });
 
+  it("omits attribution for the specified Pack Hacker article across public surfaces", () => {
+    expect(resolveSourceAttribution({
+      kind: "REVIEW",
+      sourceName: "Pack Hacker",
+      sourceUrl: "https://www.packhacker.com/travel-gear/fjallraven/high-coast-pro-foldsack-26/",
+      author: "Eric Hergenreder",
+      sourcePublishedAt: "2026-01-02T00:00:00Z",
+      canonicalPath: "/review/high-coast-pro-foldsack-26",
+    })).toEqual({
+      name: null,
+      url: null,
+      author: null,
+      publishedAt: null,
+      isMade4Buyers: false,
+    });
+  });
+
   it("uses the external source host instead of an ingestion key and omits unknown providers", () => {
     expect(resolveSourceAttribution({
       kind: "REVIEW",
