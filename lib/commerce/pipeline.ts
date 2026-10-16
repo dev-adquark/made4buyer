@@ -18,6 +18,7 @@ import { classifyOfferStatusesSafe } from "./classify";
 import { buildDealActorInput, crawlableStartUrls, dealPagesPerRun, fetchBrandRobots, followedPageAllowed, type BrandRobots, type RobotsRule } from "./deal-crawl";
 import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from "./discovery";
 import { fetchDirectCouponPage, fetchDirectPage } from "./direct-crawl";
+import { buildExternalScraperInput, EXTERNAL_SCRAPER_ACTOR_ID, rowToRawPayload, type ExternalProductRow } from "./external-scraper";
 import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, recordDisappearances, type NormalizedCoupon, upsertCoupons } from "./coupons";
 import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
@@ -293,6 +294,111 @@ export async function runMultiBrandCrawl(trigger: string, now = new Date()) {
   if (!brands.length) return { status: "OK", reason: "no brand is due", brands: 0, urls: 0, started: 0, skippedBrands: [] as Array<{ slug: string; reason: string }> };
   const r = await startMultiBrandRun(brands, trigger, now);
   return { status: r.status === "STARTED" ? "OK" : r.status, reason: r.reason, brands: r.brands, urls: r.urls, started: r.status === "STARTED" ? 1 : 0, runId: r.runId, skippedBrands: r.skippedBrands };
+}
+
+// ── External scraper actor (digital_influx/product-data): one call, every brand's whole store ──────
+
+/**
+ * Starts one call to the digital_influx/product-data actor (lib/commerce/external-scraper.ts) for
+ * every given brand's store at once — real concurrency (up to 10 stores in parallel), its own
+ * robots.txt + Crawl-delay handling, blocked/JS-only stores reported and free rather than bypassed.
+ * One CommerceRun (brandId null, like startMultiBrandRun) tracks it; collectExternalScrape reads
+ * the result once it finishes.
+ */
+export async function startExternalScrape(brands: CommerceBrand[], trigger: string, opts: { maxProductsPerStore?: number; timeoutSecs?: number } = {}): Promise<{ status: "STARTED" | "SKIPPED"; code?: string; reason?: string; runId?: string; apifyRunId?: string; stores?: number }> {
+  if (!apifyConfigured()) return { status: "SKIPPED", code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured (BLOCKED_BY_ENVIRONMENT)" };
+  if (!(await getSwitches()).commerce_engine) return { status: "SKIPPED", code: "SWITCH_OFF", reason: "paused in Admin → Automation: Commerce engine is off" };
+  if (!brands.length) return { status: "SKIPPED", code: "NO_URLS", reason: "no brands given" };
+  const body = buildExternalScraperInput(brands, opts.maxProductsPerStore ?? 20);
+  const q = new URLSearchParams({ timeout: String(opts.timeoutSecs ?? 7200), memory: String(config.apify.memoryMb()) });
+  try {
+    const guarded = await guardedApiCall({
+      api: "apify",
+      unit: `start:external-scrape:${new Date().toISOString().slice(0, 10)}`,
+      idempotencyBasis: brands.map((b) => b.id).sort().join(","),
+      trigger,
+      call: () => apify<{ data?: ApifyRunData }>(`/acts/${EXTERNAL_SCRAPER_ACTOR_ID}/runs?${q}`, { method: "POST", body }),
+      validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+    });
+    if (guarded.status === "SKIPPED") return { status: "SKIPPED", code: guarded.code, reason: guarded.reason };
+    if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+    const { data } = guarded.value;
+    if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
+    const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: null, actorId: EXTERNAL_SCRAPER_ACTOR_ID, apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, trigger, status: "RUNNING", startUrls: (body.storeUrls as string[]).length } });
+    log.info("external scrape run started", { stage: "CONTENT_FETCH", runId: data.id, stores: (body.storeUrls as string[]).length });
+    return { status: "STARTED", runId: run.id, apifyRunId: data.id, stores: (body.storeUrls as string[]).length };
+  } catch (error) {
+    const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
+    log.warn("external scrape run start failed", { stage: "CONTENT_FETCH", trigger, code: e.code, reason: e.message.slice(0, 300) });
+    return { status: "SKIPPED", code: e.code, reason: e.message };
+  }
+}
+
+/**
+ * Polls one external-scraper run; once it finishes, reads its dataset, turns each successfully-read
+ * product row into the same raw-page shape every other source produces (rowToRawPayload), resolves
+ * its brand by hostname (the same brandByHost lookup collectSucceeded uses for a multi-brand Apify
+ * run), and runs it through the unchanged normalize → match → facts/offers pipeline (processRaw).
+ */
+export async function collectExternalScrape(runId: string, now = new Date()): Promise<{ status: string; pages?: number; extracted?: number; accepted?: number; reason?: string }> {
+  const run = await db.commerceRun.findUnique({ where: { id: runId } });
+  if (!run || !run.apifyRunId) return { status: "NOT_FOUND" };
+  const { data } = await apify<{ data?: ApifyRunData }>(`/actor-runs/${encodeURIComponent(run.apifyRunId)}`);
+  if (!data?.status) return { status: "APIFY_RESPONSE_INVALID" };
+  if (data.status === "RUNNING" || data.status === "READY") return { status: data.status };
+  if (FAILED.includes(data.status)) {
+    const reason = (data.statusMessage ?? data.status).slice(0, 500);
+    await db.commerceRun.update({ where: { id: run.id }, data: { status: data.status, usageUsd: data.usageTotalUsd ?? run.usageUsd, finishedAt: data.finishedAt ? new Date(data.finishedAt) : now, errors: [{ code: "APIFY_RUN_FAILED", reason }] } });
+    return { status: data.status, reason };
+  }
+  const datasetId = data.defaultDatasetId ?? run.datasetId;
+  if (!datasetId) return { status: "APIFY_RESPONSE_INVALID", reason: "run has no dataset" };
+  const rows = await apify<ExternalProductRow[]>(`/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json&limit=10000`);
+  const items = rows.map((r) => rowToRawPayload(r)).filter((p): p is Record<string, unknown> => p !== null);
+  const raws = await storeRaws(run, items);
+  const brandByHost = new Map<string, CommerceBrand>();
+  for (const b of await db.commerceBrand.findMany({ where: { enabled: true } })) {
+    const host = b.officialDomain.trim().toLowerCase().replace(/^www\./, "");
+    brandByHost.set(host, b);
+    brandByHost.set(`www.${host}`, b);
+  }
+  const cache = new Map<string, Candidate[]>();
+  const outcomes: ItemOutcome[] = [];
+  const perBrandExtracted = new Map<string, number>();
+  const perBrandTotal = new Map<string, number>();
+  for (const raw of raws) {
+    let brand: CommerceBrand | null = null;
+    try {
+      brand = brandByHost.get(new URL(raw.url).host.toLowerCase()) ?? null;
+    } catch {
+      brand = null;
+    }
+    if (!brand) {
+      outcomes.push({ url: raw.url, result: "NOT_EXTRACTED", reason: "UNKNOWN_BRAND" });
+      continue;
+    }
+    perBrandTotal.set(brand.id, (perBrandTotal.get(brand.id) ?? 0) + 1);
+    try {
+      const outcome = await processRaw(brand, raw, now, cache);
+      outcomes.push(outcome);
+      if (outcome.result !== "NOT_EXTRACTED" && outcome.result !== "ERROR") perBrandExtracted.set(brand.id, (perBrandExtracted.get(brand.id) ?? 0) + 1);
+    } catch (error) {
+      outcomes.push({ url: raw.url, result: "ERROR", reason: String(error).slice(0, 300) });
+    }
+  }
+  const count = (r: ItemOutcome["result"]) => outcomes.filter((o) => o.result === r).length;
+  const extracted = outcomes.length - count("NOT_EXTRACTED") - count("ERROR");
+  const accepted = count("MATCHED");
+  const rejected = count("MATCH_REJECTED") + count("UNMATCHED") + count("NOT_EXTRACTED");
+  await db.commerceRun.update({ where: { id: run.id }, data: { status: "COLLECTED", pagesProcessed: raws.length, extracted, accepted, rejected, usageUsd: data.usageTotalUsd ?? run.usageUsd, collectedAt: now, finishedAt: data.finishedAt ? new Date(data.finishedAt) : now } });
+  for (const [brandId, total] of perBrandTotal) {
+    if ((perBrandExtracted.get(brandId) ?? 0) > 0) await brandSucceeded(brandId, "OK", now);
+    else await brandFailed(brandId, "EMPTY", `external scrape returned ${total} item(s) for this brand and no readable product`, now);
+  }
+  await commerceAudit("APIFY_RUN_COMPLETED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", apifyRunId: run.apifyRunId, actorId: EXTERNAL_SCRAPER_ACTOR_ID, items: raws.length, extracted, accepted, rejected, usageUsd: data.usageTotalUsd ?? null } });
+  if (accepted > 0 || extracted > 0) await revalidateCommerce();
+  log.info("external scrape collected", { stage: "CONTENT_FETCH", runId: run.id, items: raws.length, extracted, accepted });
+  return { status: "COLLECTED", pages: raws.length, extracted, accepted };
 }
 
 /** Starts one product run for a brand, or records why it was skipped. Never throws. */
