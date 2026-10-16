@@ -7,7 +7,7 @@ import { recordEvent } from "@/lib/analytics/events";
 import { recordFailure, resolveFailures } from "./failures";
 import { allowed } from "@/lib/automation/settings";
 import { evaluateFreshness, freshnessExempt, freshnessMaxDays } from "./freshness";
-import { persistPageRenderModel } from "./render-model";
+import { persistPageRenderModel, textRightsFor } from "./render-model";
 import { revalidateReviewPaths } from "./revalidate-paths";
 
 /**
@@ -46,6 +46,12 @@ export async function evaluateQa(reviewId: string): Promise<QaFailure[]> {
   if (review.body.length < 120) failures.push({ code: "BODY_TOO_SHORT", message: "Body must be at least 120 characters" });
   const primary = review.assignments[0];
   if (!primary || !review.categorySlug) failures.push({ code: "NO_PRIMARY_CATEGORY", message: "Review has no primary category" });
+  // Owner's rule (2026-10-16): a third-party-sourced review/guide/comparison never publishes with
+  // its original source's name or link — only once lib/pipeline/rewrite.ts has rewritten it into
+  // Made4Buyers' own original wording. Ingestion keeps running; publishing waits for the rewrite.
+  if (review.kind !== "AI_GUIDE" && !review.contentRewritten && (await textRightsFor(review.source)) === "EXCERPT") {
+    failures.push({ code: "CONTENT_NOT_REWRITTEN", message: "This source's content has not yet been rewritten into Made4Buyers' own original wording (lib/pipeline/rewrite.ts); it cannot publish with third-party attribution" });
+  }
   if (review.kind === "COMPARISON" && review._count.contentEntities < 2) {
     failures.push({ code: "COMPARISON_ENTITIES_MISSING", message: `A comparison needs at least two products; ${review._count.contentEntities} resolved. Add them under Products in this article` });
   }

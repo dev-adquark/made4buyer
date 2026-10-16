@@ -20,7 +20,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 11;
+export const RENDER_MODEL_VERSION = 12;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -99,6 +99,8 @@ export type PageRenderModel = {
   /** Direct "where to buy" links built only from stored URLs (lib/public/retailer-links.ts). Never a price or a deal. */
   retailerLinks?: Array<Pick<RetailerLink, "url" | "label" | "merchant" | "kind">>;
   source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
+  /** True once the body is Made4Buyers' own rewritten wording (lib/pipeline/rewrite.ts): no third-party attribution is shown even though the source was once EXCERPT-rights. */
+  contentRewritten: boolean;
   publishedAt: string | null;
   updatedAt: string;
 };
@@ -132,6 +134,8 @@ export type RenderInputs = {
   offers: PublicOffer[];
   /** EXCERPT for scraped third-party sources we may not republish in full. */
   textRights?: "FULL" | "EXCERPT";
+  /** True once lib/pipeline/rewrite.ts has rewritten the body in original wording: shown in full, as Made4Buyers' own content, regardless of textRights. */
+  contentRewritten?: boolean;
   products?: PageRenderModel["products"];
   productData?: ProductData | null;
   retailerLinks?: RetailerLink[];
@@ -146,7 +150,10 @@ function sourceHighlights(data: unknown): { pros: string[]; cons: string[] } | n
   return pros.length || cons.length ? { pros, cons } : null;
 }
 
-export function composeRenderModel({ review, entities: e, assignments, image, offers, textRights = "FULL", products = [], productData = null, retailerLinks = [] }: RenderInputs): PageRenderModel {
+export function composeRenderModel({ review, entities: e, assignments, image, offers, textRights = "FULL", contentRewritten = false, products = [], productData = null, retailerLinks = [] }: RenderInputs): PageRenderModel {
+  // A rewritten review's body is Made4Buyers' own original wording: full rights regardless of the
+  // source's own EXCERPT setting, and the page attributes it to Made4Buyers, not the original site.
+  const effectiveRights = contentRewritten ? "FULL" : textRights;
   const byType = (type: string) => assignments.filter((a) => a.tagType === type).sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || b.confidence - a.confidence);
   const tag = (a?: { categoryTag: { slug: string; name: string } }) => (a ? { slug: a.categoryTag.slug, name: a.categoryTag.name } : null);
   // Only a relevant image is shown; a failing stock photo falls back to the neutral category image.
@@ -179,9 +186,10 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     priceTier: tag(byType("PRICE_TIER")[0]),
     summary: review.summary,
     // Excerpt-only sources: the full text stays private (used for extraction); the page links out.
-    bodyParagraphs: textRights === "EXCERPT" ? [] : paragraphs(review.body),
-    textRights,
-    highlights: textRights === "EXCERPT" ? null : sourceHighlights(review.sourceData),
+    bodyParagraphs: effectiveRights === "EXCERPT" ? [] : paragraphs(review.body),
+    textRights: effectiveRights,
+    contentRewritten,
+    highlights: effectiveRights === "EXCERPT" ? null : sourceHighlights(review.sourceData),
     image: {
       url: pub.url,
       alt: pub.isFallback
@@ -206,7 +214,9 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     offers,
     retailerLinks: dedupeRetailerLinks(retailerLinks, offers).map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
-    source: { name: displayText(e?.source) ?? review.source, url: displayUrl(review.sourceUrl), author: displayText(review.author), publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
+    source: contentRewritten
+      ? { name: "Made4Buyers", url: null, author: null, publishedAt: review.sourcePublishedAt?.toISOString() ?? null }
+      : { name: displayText(e?.source) ?? review.source, url: displayUrl(review.sourceUrl), author: displayText(review.author), publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
   };
@@ -240,7 +250,7 @@ export async function buildPageRenderModel(reviewId: string): Promise<PageRender
   const products = review.contentEntities.map((c) => ({ name: c.entity.name, slug: c.entity.slug, role: c.role, brand: c.entity.brand }));
   const primary = review.contentEntities.find((c) => c.role === "PRIMARY");
   const productData = primary ? productDataOf((await db.productEntity.findUnique({ where: { id: primary.productEntityId }, select: { factSummary: true } }))?.factSummary) : null;
-  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], offers: await freshOffersForReview(review.id), textRights: await textRightsFor(review.source), products, productData, retailerLinks: await loadRetailerLinks(review.id) });
+  return composeRenderModel({ review, entities: review.entities, assignments: review.assignments, image: review.images[0], offers: await freshOffersForReview(review.id), textRights: await textRightsFor(review.source), contentRewritten: review.contentRewritten, products, productData, retailerLinks: await loadRetailerLinks(review.id) });
 }
 
 /**

@@ -20,6 +20,7 @@ export const SWITCHES = {
   coupons: { label: "Coupon enrichment", help: "Legacy switch kept for stored settings; first-party brand codes are collected by the commerce engine.", default: true },
   commerce_engine: { label: "Commerce engine", help: "Apify crawls of official brand sites: product discovery, extraction, exact matching, offers and first-party coupons (budget-capped).", default: true },
   retries: { label: "Automatic retries", help: "Retry of failed pipeline stages.", default: true },
+  content_rewrite: { label: "Content rewrite", help: "AI rewrite of EXCERPT-rights reviews into original wording (Claude API, budget-capped), so they publish as Made4Buyers' own content with no third-party attribution.", default: true },
 } as const;
 
 export type SwitchKey = keyof typeof SWITCHES;

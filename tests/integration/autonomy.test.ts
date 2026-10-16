@@ -73,7 +73,12 @@ describe("7-day freshness for external content", () => {
 });
 
 describe("source health and fallback", () => {
-  const source = () => db.reviewSource.create({ data: { slug: "example", name: "Example", homepageUrl: "https://reviews.example.test/", allowedDomains: ["example.test"], startUrls: [], reviewUrlPatterns: [], enabled: true } });
+  // resetDb() already seeds a LICENSED "example" ReviewSource (for the many fixtures that just
+  // need a published review); upsert so this test's own fields replace it rather than collide.
+  const source = () => {
+    const data = { slug: "example", name: "Example", homepageUrl: "https://reviews.example.test/", allowedDomains: ["example.test"], startUrls: [], reviewUrlPatterns: [], enabled: true };
+    return db.reviewSource.upsert({ where: { slug: "example" }, create: data, update: data });
+  };
 
   it("pauses a source after repeated runs with nothing fresh, then fully restores it on a fresh run", async () => {
     const s = await source();

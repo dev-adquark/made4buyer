@@ -20,6 +20,7 @@ import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import { commerceBudget } from "@/lib/commerce/pipeline";
 import { reviewScrapeBudget } from "@/lib/pipeline/review-budget";
+import { rewriteUsage } from "@/lib/pipeline/rewrite";
 import { istParts } from "@/lib/automation/daily-article";
 
 export type CostNature = "FREE" | "PAID_TRACKED" | "PAID_UNTRACKED" | "UNKNOWN";
@@ -133,3 +134,23 @@ export const affiliateCost = (): CostInfo => ({ nature: "FREE", label: "Free", d
 
 /** First-party analytics: our own database, no external call. */
 export const analyticsCost = (): CostInfo => ({ nature: "FREE", label: "Free", detail: "First-party events, stored in our own database." });
+
+/** Content rewrite (Claude API): budget tracked by this app's own per-call estimate (Claude does not report cost back to us), never the exact invoice figure. */
+export async function rewriteCost(): Promise<CostInfo> {
+  if (!config.rewrite.apiKey()) return { nature: "PAID_UNTRACKED", label: "Paid (Claude API) — not configured", detail: "ANTHROPIC_API_KEY is not set, so no rewrite can run." };
+  try {
+    const { spentUsd, budgetUsd } = await rewriteUsage();
+    return {
+      nature: "PAID_TRACKED",
+      label: `Paid · $${spentUsd.toFixed(2)} / $${budgetUsd.toFixed(2)} this month`,
+      spentUsd,
+      budgetUsd,
+      remainingUsd: Math.max(0, budgetUsd - spentUsd),
+      exhausted: spentUsd >= budgetUsd,
+      basis: "estimated",
+      detail: `Estimated at $${config.rewrite.runEstimateUsd().toFixed(3)}/review (REWRITE_RUN_ESTIMATE_USD); Claude does not report the exact cost back to this app.`,
+    };
+  } catch (error) {
+    return unavailable(`could not read the rewrite budget: ${String(error).slice(0, 150)}`);
+  }
+}

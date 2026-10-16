@@ -9,4 +9,10 @@ const TABLES = [
 /** Empties all data tables (keeps the seeded taxonomy). */
 export async function resetDb() {
   await db.$executeRawUnsafe(`TRUNCATE ${TABLES.map((t) => `"${t}"`).join(", ")} RESTART IDENTITY CASCADE`);
+  // The generic "apify:example" source almost every test's fixture ingests from is treated as a
+  // LICENSED ReviewSource, so an ordinary test fixture auto-publishes as it always has, without
+  // tripping the CONTENT_NOT_REWRITTEN QA gate (lib/pipeline/publish.ts) — a test of that gate
+  // itself (tests/integration/content-rewrite-gate.test.ts) creates its own, differently named
+  // EXCERPT_ONLY source instead.
+  await db.reviewSource.create({ data: { slug: "example", name: "Example (test fixture)", homepageUrl: "https://reviews.example.test/", allowedDomains: ["reviews.example.test"], startUrls: ["https://reviews.example.test/reviews"], reviewUrlPatterns: ["https://reviews.example.test/reviews/**"], rights: "LICENSED" } });
 }

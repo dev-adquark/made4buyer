@@ -16,6 +16,7 @@ import { runLinkValidation } from "@/lib/commerce/link-check";
 import { runOfficialVerify } from "@/lib/commerce/official";
 import { runClassifyDeals } from "@/lib/commerce/classify";
 import { runBrandLogos } from "@/lib/commerce/brand-logos";
+import { runContentRewrite } from "@/lib/pipeline/rewrite";
 import { pruneVerificationEvents } from "@/lib/commerce/verification-events";
 import { continueWeeklyRefresh, runWeeklyRefresh } from "@/lib/commerce/weekly-refresh";
 import { allowed, type SwitchKey } from "@/lib/automation/settings";
@@ -150,6 +151,10 @@ export const JOBS = {
   "deals-weekly-refresh": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runWeeklyRefresh(trigger), locked: true },
   // Official brand logos (lib/commerce/brand-logos.ts): official site JSON-LD/icons, then Wikidata P154 → Commons; bounded, polite.
   "brand-logos": { lockTtlMs: 10 * 60_000, run: (trigger: string) => runBrandLogos(trigger), locked: true },
+  // Content rewrite (lib/pipeline/rewrite.ts): Claude API rewrites EXCERPT-rights reviews into
+  // original wording (budget-capped), so they publish with no third-party attribution. Covers the
+  // backfill of already-published reviews too, a batch per run.
+  "content-rewrite": { lockTtlMs: 15 * 60_000, run: (trigger: string) => runContentRewrite(trigger), locked: true },
 } as const;
 
 export type JobName = keyof typeof JOBS;
@@ -179,6 +184,7 @@ export const JOB_SWITCHES: Partial<Record<string, SwitchKey[]>> = {
   "commerce-classify-deals": ["commerce_engine"],
   "deals-weekly-refresh": ["commerce_engine"],
   "brand-logos": ["commerce_engine"],
+  "content-rewrite": ["content_rewrite"],
 };
 
 const DID_NOT_RUN = new Set(["PAUSED", "BLOCKED_BY_ENVIRONMENT", "NOT_AVAILABLE_IN_ENVIRONMENT", "NOT_CONFIGURED", "DISABLED", "SKIPPED", "FAILED", "AUTH_FAILED", "NOT_DUE", "BLOCKED", "RETRYING", "REJECTED", "BUDGET_EXHAUSTED"]);

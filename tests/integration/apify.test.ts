@@ -22,10 +22,12 @@ afterAll(async () => {
 });
 beforeEach(() => resetDb());
 
-const addSource = (over: Record<string, unknown> = {}) =>
-  db.reviewSource.create({
-    data: { slug: "example", name: "Example Reviews", homepageUrl: `${stub.base}/`, allowedDomains: ["example.test"], startUrls: [`${stub.base}/listing`], reviewUrlPatterns: ["https://reviews.example.test/reviews/**"], enabled: true, ...over },
-  });
+// resetDb() already seeds a LICENSED "example" ReviewSource (for the many fixtures that just need
+// a published review); upsert so this test's own stub URLs/fields replace it rather than collide.
+const addSource = (over: Record<string, unknown> = {}) => {
+  const data = { slug: "example", name: "Example Reviews", homepageUrl: `${stub.base}/`, allowedDomains: ["example.test"], startUrls: [`${stub.base}/listing`], reviewUrlPatterns: ["https://reviews.example.test/reviews/**"], enabled: true, rights: "LICENSED" as const, ...over };
+  return db.reviewSource.upsert({ where: { slug: "example" }, create: data, update: data });
+};
 
 describe("Apify scrape → collect → ingestion", () => {
   it("starts due runs, ingests valid pages into QA and rejects the rest with reasons", async () => {
@@ -59,7 +61,7 @@ describe("Apify scrape → collect → ingestion", () => {
   });
 
   it("shows scraped text as an excerpt unless the source is licensed", async () => {
-    const source = await addSource();
+    const source = await addSource({ rights: "EXCERPT_ONLY" });
     await runScrapeSources("test");
     await runCollectScrapes("test");
     const review = await db.normalizedReview.findFirstOrThrow({ where: { source: sourceKey("example") } });

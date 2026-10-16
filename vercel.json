@@ -62,6 +62,10 @@
       "schedule": "0 6 1,15 * *"
     },
     {
+      "path": "/api/cron/content-rewrite",
+      "schedule": "30 6 1,15 * *"
+    },
+    {
       "path": "/api/cron/data-audit",
       "schedule": "0 12 1,15 * *"
     },

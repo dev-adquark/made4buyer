@@ -54,7 +54,7 @@ describe("Integrations readiness", () => {
     const r = withEnv({ PEXELS_API_KEY: undefined, GSC_SITE_URL: undefined, GSC_SERVICE_ACCOUNT_JSON: undefined, KEYWORD_TO_BLOG_API_URL: undefined, KEYWORD_TO_BLOG_API_KEY: undefined, APIFY_API_TOKEN: undefined, CRON_SECRET: undefined, FEEDICO_API_KEY: undefined });
     const rows = await integrationReadiness();
     r();
-    expect(rows.map((x) => x.key)).toEqual(["contentApi", "apify", "pexels", "feedico", "keywordToBlog", "affiliate", "gsc", "analytics", "cron"]);
+    expect(rows.map((x) => x.key)).toEqual(["contentApi", "apify", "pexels", "feedico", "rewrite", "keywordToBlog", "affiliate", "gsc", "analytics", "cron"]);
     const by = Object.fromEntries(rows.map((x) => [x.key, x]));
     expect(by.apify).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["APIFY_API_TOKEN"] });
     expect(by.pexels).toMatchObject({ status: "BLOCKED_BY_ENVIRONMENT", missingEnv: ["PEXELS_API_KEY"] });

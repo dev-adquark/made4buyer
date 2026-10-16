@@ -306,6 +306,11 @@ export async function integrationReadiness(now = new Date()): Promise<Integratio
     const err = src?.lastError && src.lastCrawlAt && src.crawlStatus !== "OK" ? { at: src.lastCrawlAt, message: `${src.crawlStatus}: ${src.lastError}` } : null;
     rows.push(row({ key: "feedico", name: "Feedico coupon feed", missingEnv: need("FEEDICO_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: err, note: "Feed codes are public (labelled Via Feedico) while listed within 14 days. Verify with `npx tsx scripts/verify-feedico.ts`." }));
   }
+  // Content rewrite (Claude API)
+  {
+    const ok = await jobRun("content-rewrite", "SUCCEEDED");
+    rows.push(row({ key: "rewrite", name: "Content rewrite (Claude)", missingEnv: need("ANTHROPIC_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: liveError("rewrite"), note: "Rewritten reviews publish in full as Made4Buyers' own content, with no third-party name or link." }));
+  }
   // Keyword-to-Blog
   {
     const ok = await q(() => db.normalizedReview.findFirst({ where: { kind: "AI_GUIDE" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }), null);

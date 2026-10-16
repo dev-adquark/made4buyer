@@ -191,6 +191,25 @@ export const config = {
     maxAgeDays: () => num("COUPONVAULT_MAX_AGE_DAYS", 10, 1, 30),
   },
 
+  /**
+   * Content rewrite (lib/pipeline/rewrite.ts): a server-side Claude API call that rewrites one
+   * EXCERPT-rights review's body in original wording (every factual claim preserved, no copied
+   * phrasing), so it can be shown in full as Made4Buyers' own content with no third-party
+   * attribution. A rewrite too similar to the original (REWRITE_MAX_SIMILARITY_PCT) is rejected,
+   * not stored, and retried later (up to REWRITE_MAX_ATTEMPTS).
+   */
+  rewrite: {
+    apiKey: () => str("ANTHROPIC_API_KEY"),
+    baseUrl: () => (str("ANTHROPIC_API_BASE_URL") ?? "https://api.anthropic.com").replace(/\/+$/, ""),
+    model: () => str("REWRITE_MODEL") ?? "claude-sonnet-5-5",
+    monthlyBudgetUsd: () => num("REWRITE_MONTHLY_BUDGET_USD", 10, 1, 1_000),
+    runEstimateUsd: () => num("REWRITE_RUN_ESTIMATE_USD", 0.02, 0.001, 10),
+    perRunLimit: () => num("REWRITE_PER_RUN_LIMIT", 10, 1, 200),
+    maxAttempts: () => num("REWRITE_MAX_ATTEMPTS", 3, 1, 10),
+    /** A rewrite sharing more than this fraction of 5-word shingles with the original is too similar: rejected. */
+    maxSimilarityPct: () => num("REWRITE_MAX_SIMILARITY_PCT", 35, 1, 100) / 100,
+  },
+
   /** Test-only escape hatch so integration/E2E suites can verify links against loopback stubs. */
   allowLoopbackForTests: () =>
     bool("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS", false) && process.env.VERCEL_ENV !== "production",

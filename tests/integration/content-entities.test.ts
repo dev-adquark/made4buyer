@@ -216,16 +216,17 @@ describe("reclassify-content", () => {
 
 describe("source health counts and integrity", () => {
   it("counts a source's articles by state and reports a clean integrity audit", async () => {
-    const src = await db.reviewSource.create({
-      data: {
-        slug: "example",
-        name: "Example",
-        homepageUrl: "https://example.com/",
-        allowedDomains: ["example.com"],
-        startUrls: ["https://example.com/r"],
-        reviewUrlPatterns: ["https://example.com/r/**"],
-      },
-    });
+    // resetDb() already seeds a LICENSED "example" ReviewSource (for the many fixtures that just
+    // need a published review); upsert so this test's own fields replace it rather than collide.
+    const srcData = {
+      slug: "example",
+      name: "Example",
+      homepageUrl: "https://example.com/",
+      allowedDomains: ["example.com"],
+      startUrls: ["https://example.com/r"],
+      reviewUrlPatterns: ["https://example.com/r/**"],
+    };
+    const src = await db.reviewSource.upsert({ where: { slug: "example" }, create: srcData, update: srcData });
     await runIngestion({
       trigger: "test",
       items: [

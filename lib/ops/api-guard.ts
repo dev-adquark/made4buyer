@@ -26,7 +26,7 @@ import { checkSchema } from "./schema-check";
  * serial() makes calls to one API one at a time (no parallel calls) within the process.
  */
 
-export type PaidApi = "apify" | "feedico" | "pexels" | "image-service" | "keyword-to-blog" | "content-api";
+export type PaidApi = "apify" | "feedico" | "pexels" | "image-service" | "keyword-to-blog" | "content-api" | "rewrite";
 export type GuardFailure = { code: string; reason: string };
 export type PreflightCheck = () => GuardFailure | null | Promise<GuardFailure | null>;
 

@@ -328,6 +328,10 @@ model NormalizedReview {
   canonicalTitle           String
   kind                     ContentKind                @default(REVIEW)
   generationMeta           Json?
+  /** True once contentRewrite.ts has rewritten this review's body in original wording (lib/pipeline/render-model.ts then treats it as FULL rights, no third-party attribution). */
+  contentRewritten         Boolean                    @default(false)
+  rewriteAttempts          Int                        @default(0)
+  rewrittenAt              DateTime?
   editorApprovedAt         DateTime?
   editorApprovedBy         String?
   slug                     String                     @unique

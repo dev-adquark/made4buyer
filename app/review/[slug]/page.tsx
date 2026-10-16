@@ -365,7 +365,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             {isGuide ? (
               <p className="small muted">Drafted with an AI writing tool and edited by Made4Buyers.</p>
             ) : (
-              sourceName && (
+              !m.contentRewritten && sourceName && (
                 <p className="small muted">
                   Source:{" "}
                   {sourceUrl ? (

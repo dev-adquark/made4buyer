@@ -6,13 +6,14 @@ import { integrationStatus } from "@/lib/config";
 import { db } from "@/lib/db";
 import { jobOutcome, JOBS } from "@/lib/jobs/registry";
 import { apifyConfigured } from "@/lib/pipeline/apify";
-import { affiliateCost, apifyCommerceCost, apifyReviewCost, contentApiCost, feedicoCost, gscCost, keywordToBlogCost, pexelsCost, type CostInfo } from "@/lib/ops/api-costs";
+import { affiliateCost, apifyCommerceCost, apifyReviewCost, contentApiCost, feedicoCost, gscCost, keywordToBlogCost, pexelsCost, rewriteCost, type CostInfo } from "@/lib/ops/api-costs";
 
 const FREE: CostInfo = { nature: "FREE", label: "Free", detail: "No external paid/quota API is called." };
 
 /** Which external cost (lib/ops/api-costs.ts) each job's "Run now" can incur. Computed once per page load, not invented per job. */
-function jobCosts(review: CostInfo, commerce: CostInfo, kwToBlog: CostInfo, pexels: CostInfo, feedico: CostInfo, gsc: CostInfo, contentApi: CostInfo, affiliate: CostInfo): Record<keyof typeof JOBS, CostInfo> {
+function jobCosts(review: CostInfo, commerce: CostInfo, kwToBlog: CostInfo, pexels: CostInfo, feedico: CostInfo, gsc: CostInfo, contentApi: CostInfo, affiliate: CostInfo, rewrite: CostInfo): Record<keyof typeof JOBS, CostInfo> {
   return {
+    "content-rewrite": rewrite,
     ingest: contentApi,
     "scrape-sources": review,
     "collect-scrapes": review,
@@ -72,26 +73,29 @@ const DESCRIPTIONS: Record<keyof typeof JOBS, string> = {
   "brand-logos": "Official brand logos for brands never checked, checked over 30 days ago or FAILED over a day ago (BRAND_LOGOS_PER_RUN, default 15; robots.txt respected, ≤ 1 request/s per site): the official home page's JSON-LD Organization logo, else its SVG / ≥ 96 px icons (on the brand's own domain only), else the Wikidata item with the brand's official website and name → its Commons logo (free licence). Every file is fetched and checked; nothing is guessed. Admin overrides (Sources) are never overwritten.",
   "commerce-direct-crawl": "Every 2 days, no Apify: for due brands, discovers product URLs the same way commerce-discover does (sitemap, robots.txt respected), then fetches each page directly (a plain HTTP GET) and runs it through the same normalize/match/offer pipeline. Also fetches the brand's own promo page(s) (promoUrls) the same way and verifies any real code it finds (same rules as the Feedico feed). No budget, no cloud actor, no cost. Independent of commerce-discover/commerce-collect; a brand crawled by either keeps the same next-crawl schedule.",
   "commerce-multibrand-crawl": "One Apify call for every due brand (up to COMMERCE_BRANDS_PER_RUN) instead of one call per brand: the page function resolves each page's own brand by hostname. Admin-triggered only (no cron entry yet); a brand with a permanent error (an Apify account/permission block) or nothing to crawl is left out of the call, not retried.",
+  "content-rewrite": "Biweekly (1st/15th): rewrites up to REWRITE_PER_RUN_LIMIT published reviews still on EXCERPT rights (scraped third-party reviews, including the one-time backfill of already-published ones) into original wording via the Claude API, every factual claim preserved — budget-capped (REWRITE_MONTHLY_BUDGET_USD). A rewrite sharing too much phrasing with the source is rejected and retried later, up to REWRITE_MAX_ATTEMPTS. A successful rewrite publishes in full as Made4Buyers' own content, with no third-party name or link.",
 };
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdminPage();
   const sp = await searchParams;
-  const [locks, runs, lastRuns, review, commerce, kwToBlog] = await Promise.all([
+  const [locks, runs, lastRuns, review, commerce, kwToBlog, rewrite] = await Promise.all([
     db.jobLock.findMany(),
     db.revalidationRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
     db.auditLog.findMany({ where: { entityType: "job", action: { startsWith: "job.run." } }, orderBy: { createdAt: "desc" }, distinct: ["entityId"], select: { entityId: true, actor: true, createdAt: true, metadata: true } }),
     apifyReviewCost(),
     apifyCommerceCost(),
     keywordToBlogCost(),
+    rewriteCost(),
   ]);
   const integrations = integrationStatus();
-  const costs = jobCosts(review, commerce, kwToBlog, pexelsCost(), feedicoCost(), gscCost(), contentApiCost(), affiliateCost());
+  const costs = jobCosts(review, commerce, kwToBlog, pexelsCost(), feedicoCost(), gscCost(), contentApiCost(), affiliateCost(), rewrite);
   const blocked: Partial<Record<keyof typeof JOBS, string | undefined>> = {
     ingest: integrations.contentApi !== "READY" ? "CONTENT_API_URL not configured" : undefined,
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
     "scrape-sources": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
     "collect-scrapes": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
+    "content-rewrite": rewrite.nature === "PAID_UNTRACKED" && rewrite.label.includes("not configured") ? "ANTHROPIC_API_KEY not configured" : undefined,
   };
   return (
     <>
