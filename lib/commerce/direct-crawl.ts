@@ -25,6 +25,7 @@
 import { checkRobots } from "@/lib/pipeline/apify";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { decodeEntities, jsonLdBlocks, LOGO_USER_AGENT } from "./brand-logos";
+import { CODE_SHAPE, CODE_TEXT_PATTERN } from "./page-functions/coupon";
 
 const PAGE_MAX_BYTES = 3_000_000;
 const PAGE_TIMEOUT_MS = 15_000;
@@ -182,6 +183,97 @@ export async function fetchDirectPage(url: string, label: "PRODUCT" | "LISTING" 
     shopifyCountry: shopifyInlineVar(html, "country"),
     shopifyNote,
     lang: /<html\b[^>]*\blang\s*=\s*["']([^"']+)["']/i.exec(html)?.[1] ?? null,
+  };
+  return { ok: true, page };
+}
+
+// ── Coupons (no browser; text-pattern scan of the raw HTML) ─────────────────
+
+const BLOCK_TAG_RE = /<\/?(?:p|li|td|th|dd|dt|h[1-6]|section|article|aside|div|label|span|button|a|br|tr|table|ul|ol)\b[^>]*>/gi;
+const SKIP_TAG_RE = /<(script|style|noscript|template|nav|footer)\b[^>]*>[\s\S]*?<\/\1>/gi;
+
+/**
+ * The page's text, one line per block-level element (the same granularity the browser page function
+ * reads innerText at, lib/commerce/page-functions/coupon.ts) — close enough to build a usable
+ * "context" string per code candidate without a renderer. Script/style/nav/footer content is removed
+ * first so JS/CSS source text is never scanned for a code.
+ */
+function textLines(html: string): string[] {
+  const noScripts = html.replace(SKIP_TAG_RE, " ");
+  const withBreaks = noScripts.replace(BLOCK_TAG_RE, "\n");
+  const text = decodeEntities(withBreaks.replace(/<[^>]+>/g, " "));
+  return text
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter((l) => l && l.length <= 2000);
+}
+
+/** Candidate promo codes named in the page's own text ("Use code XYZ", "Promo code: XYZ" …), with the line they appear in as context — the server-side twin of COUPON_PAGE_FUNCTION's DOM scan. */
+function findCouponCandidates(html: string): Array<{ code: string; context: string; element: string }> {
+  const out: Array<{ code: string; context: string; element: string }> = [];
+  const seen = new Set<string>();
+  const re = new RegExp(CODE_TEXT_PATTERN, "gi");
+  for (const line of textLines(html)) {
+    if (out.length >= 50) break;
+    re.lastIndex = 0;
+    for (const m of line.matchAll(re)) {
+      const code = m[1];
+      if (!CODE_SHAPE.test(code)) continue;
+      const context = line.slice(0, 300);
+      const key = `${code}|${context}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ code, context, element: "text" });
+      if (out.length >= 50) break;
+    }
+  }
+  return out;
+}
+
+/** Offer/promotion/sale-event JSON-LD, kept whole as raw evidence (same filter as the browser page function). */
+function offerLikeJsonLd(html: string): unknown[] {
+  const out: unknown[] = [];
+  const isOfferLike = (v: Record<string, unknown>): boolean => {
+    const types = ([] as unknown[]).concat(v["@type"] as never).map((t) => String(t).toLowerCase());
+    return types.some((t) => /offer|promotion|saleevent|discount/.test(t));
+  };
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 8 || out.length >= 20) return;
+    if (Array.isArray(v)) {
+      for (const x of v) walk(x, depth + 1);
+      return;
+    }
+    const o = v as Record<string, unknown>;
+    if (isOfferLike(o)) {
+      if (JSON.stringify(o).length <= 10_000) out.push(o);
+      return;
+    }
+    for (const k of Object.keys(o)) if (k !== "@context") walk(o[k], depth + 1);
+  };
+  for (const b of jsonLdBlocks(html)) walk(b, 0);
+  return out;
+}
+
+/**
+ * Fetches one official promotions page directly (no Apify, no browser) and returns the same shape
+ * COUPON_PAGE_FUNCTION (Apify) returns, so lib/commerce/coupons.ts's normalizeCoupons reads it
+ * identically either way. robots.txt is checked first. The one trade-off of not rendering the page:
+ * a code revealed only after a click/reveal interaction (never present in the raw HTML) is not seen —
+ * a code already printed in the page's markup (the overwhelming majority of promo pages) is read
+ * exactly as reliably as the Apify path reads it.
+ */
+export async function fetchDirectCouponPage(url: string): Promise<DirectPageResult> {
+  const robots = await checkRobots(url).catch((error: unknown) => ({ allowed: false, reason: String(error).slice(0, 150) }));
+  if (!robots.allowed) return { ok: false, code: "ROBOTS_DISALLOWED", reason: robots.reason ?? `robots.txt disallows ${url}` };
+  const res = await safeFetch(url, { headers: { "User-Agent": LOGO_USER_AGENT(), Accept: "text/html,application/xhtml+xml" }, timeoutMs: PAGE_TIMEOUT_MS, maxRedirects: 5, readBody: true, maxBytes: PAGE_MAX_BYTES });
+  if (!res.ok || !res.body) return { ok: false, code: res.error ? res.error.kind : `HTTP_${res.status}`, reason: res.error?.message ?? `HTTP ${res.status}` };
+  const html = res.body;
+  const page: Record<string, unknown> = {
+    m4bCoupon: 1,
+    url: res.finalUrl,
+    title: firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i),
+    candidates: findCouponCandidates(html),
+    jsonLd: offerLikeJsonLd(html),
   };
   return { ok: true, page };
 }

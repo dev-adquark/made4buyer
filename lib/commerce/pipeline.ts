@@ -17,7 +17,8 @@ import { dueBrands, ensureBrandsSeeded } from "./brands";
 import { classifyOfferStatusesSafe } from "./classify";
 import { buildDealActorInput, crawlableStartUrls, dealPagesPerRun, fetchBrandRobots, followedPageAllowed, type BrandRobots, type RobotsRule } from "./deal-crawl";
 import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from "./discovery";
-import { fetchDirectPage } from "./direct-crawl";
+import { fetchDirectCouponPage, fetchDirectPage } from "./direct-crawl";
+import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, recordDisappearances, type NormalizedCoupon, upsertCoupons } from "./coupons";
 import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { loadSummaryFacts } from "@/lib/products/current-facts";
@@ -896,7 +897,41 @@ export async function runCommerceDiscover(trigger: string, now = new Date()) {
 // ── Direct crawl (no Apify) ──────────────────────────────────────────────────
 
 const DIRECT_ACTOR_ID = "direct-fetch";
-export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number; offersWritten?: number };
+export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number; offersWritten?: number; coupons?: { pages: number; candidates: number; found: number } };
+
+/**
+ * One brand's official promo page(s) (brand.promoUrls), fetched directly (no Apify, no browser):
+ * fetchDirectCouponPage reads the raw HTML for "Use code XYZ"-style text and offer-like JSON-LD,
+ * then the exact same evidence → verified-code pipeline Apify-sourced pages used (lib/commerce/
+ * coupons.ts: normalizeCoupons, markCrossPageConflicts, upsertCoupons, recordDisappearances) decides
+ * what is real. A code shown only after a click/reveal interaction (never in the raw HTML) is the
+ * one thing this cannot see — a code already printed on the page is read just as reliably.
+ */
+async function runDirectBrandCoupons(brand: CommerceBrand, now: Date): Promise<{ pages: number; candidates: number; found: number }> {
+  const urls = cleanUrls(brand, brand.promoUrls ?? []);
+  if (!urls.length) return { pages: 0, candidates: 0, found: 0 };
+  const pages: Array<{ url: string; page: Record<string, unknown> }> = [];
+  for (const url of urls) {
+    const r = await fetchDirectCouponPage(url);
+    if (r.ok) pages.push({ url, page: r.page });
+  }
+  if (!pages.length) return { pages: 0, candidates: 0, found: 0 };
+  let candidates = 0;
+  const all: NormalizedCoupon[] = [];
+  for (const { page } of pages) {
+    const n = normalizeCoupons(page, brand);
+    candidates += (page.candidates as unknown[] | undefined)?.length ?? 0;
+    all.push(...n.coupons);
+  }
+  markCrossPageConflicts(all);
+  const summary = await upsertCoupons({ brandId: brand.id, coupons: all, observedAt: now, now });
+  for (const { url } of pages) {
+    const present = all.filter((c) => c.sourceUrl === url).map((c) => c.code);
+    await recordDisappearances({ merchant: brand.name, sourceUrl: url, presentCodes: present, now });
+  }
+  await markExpiredCoupons(now);
+  return { pages: pages.length, candidates, found: summary.changed };
+}
 
 /**
  * One brand, fetched directly: no Apify, no cloud actor, no proxy, no per-run cost. Reuses
@@ -915,11 +950,21 @@ export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?
  */
 export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string, now = new Date()): Promise<DirectCrawlResult> {
   if (!(await getSwitches()).commerce_engine) return { brand: brand.slug, status: "SKIPPED", code: "SWITCH_OFF", reason: "paused in Admin → Automation: Commerce engine is off" };
+  // Independent of product discovery below: a brand's promo page(s) are tried either way, so a
+  // temporary sitemap/product-URL problem never skips its coupon check too.
+  const tryCoupons = async (): Promise<DirectCrawlResult["coupons"]> => {
+    try {
+      return await runDirectBrandCoupons(brand, now);
+    } catch (error) {
+      log.warn("commerce direct coupon crawl failed", { stage: "CONTENT_FETCH", brand: brand.slug, error: String(error).slice(0, 200) });
+      return undefined;
+    }
+  };
   const b = await brandRunUrls(brand, now);
   const targets = [...b.listingUrls.map((url) => ({ url, label: "LISTING" as const })), ...b.urls.map((url) => ({ url, label: "PRODUCT" as const }))];
   if (!targets.length) {
     await brandFailed(brand.id, `DISCOVERY_${b.discovery}`, b.reason ?? "no product URLs discovered", now);
-    return { brand: brand.slug, status: "SKIPPED", code: "NO_URLS", reason: b.reason ?? "no product URLs discovered" };
+    return { brand: brand.slug, status: "SKIPPED", code: "NO_URLS", reason: b.reason ?? "no product URLs discovered", coupons: await tryCoupons() };
   }
   const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: DIRECT_ACTOR_ID, trigger, status: "COLLECTING", startUrls: targets.length } });
   const items: unknown[] = [];
@@ -955,8 +1000,9 @@ export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string,
     await brandFailed(brand.id, "EMPTY", reason, now);
     await commerceAudit("DIRECT_CRAWL_FAILED", "commerce_run", run.id, { metadata: { purpose: "PRODUCT", brand: brand.slug, actorId: DIRECT_ACTOR_ID, pages: raws.length, reason } });
   }
-  log.info("commerce direct crawl collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.id, pages: raws.length, extracted, accepted, offersWritten });
-  return { brand: brand.slug, status: "OK", pages: raws.length, extracted, accepted, rejected, offersWritten };
+  const coupons = await tryCoupons();
+  log.info("commerce direct crawl collected", { stage: "CONTENT_FETCH", brand: brand.slug, runId: run.id, pages: raws.length, extracted, accepted, offersWritten, coupons });
+  return { brand: brand.slug, status: "OK", pages: raws.length, extracted, accepted, rejected, offersWritten, coupons };
 }
 
 /**

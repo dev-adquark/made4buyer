@@ -159,6 +159,20 @@ describe("direct crawl: no Apify, a plain HTTP fetch per page", () => {
     expect(await db.commerceOffer.count()).toBe(0);
   });
 
+  it("also crawls the brand's promo page directly (no Apify, no browser) and verifies a real code", async () => {
+    const { brand: seeded } = await seedReviewAndBrand();
+    const promoUrl = `${site()}/promotions`;
+    const brand = await db.commerceBrand.update({ where: { id: seeded.id }, data: { promoUrls: [promoUrl] } });
+    discovered.urls = []; // no product pages this time: only the promo page is under test
+    pages.set("/promotions", { html: `<!doctype html><title>Offers</title><body><p>Use code SAVE20 for 20% off sitewide. Offer ends Dec 31, 2026.</p></body></html>` });
+
+    const r = await runDirectBrandCrawl(brand, "test");
+    expect(r.coupons).toMatchObject({ pages: 1, candidates: 1, found: 1 });
+
+    const coupon = await db.commerceCoupon.findFirstOrThrow({ where: { merchant: brand.name, code: "SAVE20" } });
+    expect(coupon).toMatchObject({ status: "VERIFIED", discount: "20% off", sourceUrl: promoUrl });
+  });
+
   it("commerce-direct-crawl: processes every due brand, no Apify token needed anywhere", async () => {
     const restore = withEnv({ APIFY_API_TOKEN: undefined });
     try {
