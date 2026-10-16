@@ -23,6 +23,8 @@ export const cardSelect = {
   slug: true,
   canonicalTitle: true,
   kind: true,
+  source: true,
+  sourceUrl: true,
   productName: true,
   brand: true,
   brandSlug: true,

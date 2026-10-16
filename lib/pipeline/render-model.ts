@@ -1,13 +1,14 @@
 import type { EnrichmentStatus, ImageSourceType, LicenseState, Prisma } from "@prisma/client";
 import { config } from "@/lib/config";
 import { db } from "@/lib/db";
-import { canonicalDestination, displayText, displayUrl } from "@/lib/public/display";
+import { canonicalDestination, displayText } from "@/lib/public/display";
 import { freshOffersForReview, offerDomain, type PublicOffer } from "@/lib/public/offers";
 import { loadRetailerLinks, type RetailerLink } from "@/lib/public/retailer-links";
 import { categoryName, subcategoryName } from "@/lib/taxonomy/definitions";
 import { paragraphs, sha256, stableStringify, truncateWords } from "@/lib/util/text";
 import { maxAgeMs, volatility } from "@/lib/products/facts";
 import type { FactField } from "@/lib/products/types";
+import { resolveSourceAttribution } from "@/lib/public/source-attribution";
 import { AI_GUIDE_SOURCE } from "./ai-guides";
 import { contentSourceName } from "./content-source";
 import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
@@ -20,7 +21,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 12;
+export const RENDER_MODEL_VERSION = 13;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -98,7 +99,7 @@ export type PageRenderModel = {
   offers: PublicOffer[];
   /** Direct "where to buy" links built only from stored URLs (lib/public/retailer-links.ts). Never a price or a deal. */
   retailerLinks?: Array<Pick<RetailerLink, "url" | "label" | "merchant" | "kind">>;
-  source: { name: string; url: string | null; author: string | null; publishedAt: string | null };
+  source: { name: string | null; url: string | null; author: string | null; publishedAt: string | null; isMade4Buyers: boolean };
   /** True once the body is Made4Buyers' own rewritten wording (lib/pipeline/rewrite.ts): no third-party attribution is shown even though the source was once EXCERPT-rights. */
   contentRewritten: boolean;
   publishedAt: string | null;
@@ -214,9 +215,17 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     offers,
     retailerLinks: dedupeRetailerLinks(retailerLinks, offers).map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
-    source: contentRewritten
-      ? { name: "Made4Buyers", url: null, author: null, publishedAt: review.sourcePublishedAt?.toISOString() ?? null }
-      : { name: displayText(e?.source) ?? review.source, url: displayUrl(review.sourceUrl), author: displayText(review.author), publishedAt: review.sourcePublishedAt?.toISOString() ?? null },
+    source: resolveSourceAttribution({
+      kind: review.kind ?? "REVIEW",
+      contentRewritten,
+      sourceName: e?.source ?? review.source,
+      sourceKey: review.source,
+      sourceUrl: review.sourceUrl,
+      author: review.author,
+      sourcePublishedAt: review.sourcePublishedAt,
+      publishedAt: review.publishedAt,
+      canonicalPath: `/review/${review.slug}`,
+    }),
     publishedAt: review.publishedAt?.toISOString() ?? null,
     updatedAt: review.updatedAt.toISOString(),
   };

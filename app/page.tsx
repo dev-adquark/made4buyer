@@ -6,7 +6,7 @@ import EmptyState from "@/components/empty-state";
 import HomeCouponCard from "@/components/home-coupon-card";
 import HomeDealCard from "@/components/home-deal-card";
 import HomeRail from "@/components/home-rail";
-import ReviewCard, { FeatureStory } from "@/components/review-card";
+import ReviewCard, { FeatureStory, shownDate } from "@/components/review-card";
 import SafeImg from "@/components/safe-img";
 import SearchCombobox from "@/components/search-combobox";
 import SectionHeader from "@/components/section-header";
@@ -163,7 +163,7 @@ export default async function Home() {
                   <span className="clip-body">
                     {categoryName(lead.categorySlug) && <span className="cat-tag">{categoryName(lead.categorySlug)}</span>}
                     <span className="clip-title">{lead.productName}</span>
-                    <span className="label muted">{dateline(lead.sourcePublishedAt ?? lead.publishedAt) ? `Latest review, ${dateline(lead.sourcePublishedAt ?? lead.publishedAt)}` : "Latest review"}</span>
+                    <span className="label muted">{dateline(shownDate(lead)) ? `Latest review, ${dateline(shownDate(lead))}` : "Latest review"}</span>
                   </span>
                 </Link>
               ) : (
@@ -237,7 +237,7 @@ export default async function Home() {
       <section className="section" aria-labelledby="now-title">
         <div className="wrap">
           <SectionHeader id="now-title" label={`${stats.published} published`} title="Worth buying now" action={reviews.length ? <Link className="arrow-link" href="/reviews">All reviews</Link> : undefined}>
-            The newest reviews from named publishers, by the source’s own date.
+            The newest publisher reviews and Made4Buyers rewrites, each by its publication date.
           </SectionHeader>
           {lead ? (
             <div className="lead-grid">
@@ -252,7 +252,7 @@ export default async function Home() {
             </div>
           ) : (
             <EmptyState title="The first reviews are on their way." label="Reviews" compact action={<Link className="btn" href="/about">How reviews get here</Link>}>
-              Every review comes from a named publisher and passes our checks before it’s published. Nothing here is a placeholder.
+              Publisher reviews and Made4Buyers rewrites pass our checks before they’re published. Nothing here is a placeholder.
             </EmptyState>
           )}
         </div>

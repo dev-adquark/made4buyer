@@ -20,6 +20,7 @@ import { displayDate, displayNumber, displayText, displayUrl, NO_VERIFIED_PRICE 
 import { commerceBrandIdForReview, freshOffersForReview, offerIsFresh, type PublicOffer } from "@/lib/public/offers";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
 import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
+import { MADE4BUYERS_SITE_URL, MADE4BUYERS_SOURCE_NAME } from "@/lib/public/source-attribution";
 
 export const revalidate = 300;
 
@@ -56,7 +57,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description: m.metaDescription,
       url: m.canonicalPath,
       images,
-      publishedTime: (m.kind === "AI_GUIDE" || m.contentRewritten ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
+      publishedTime: m.source.publishedAt ?? m.publishedAt ?? undefined,
       modifiedTime: m.updatedAt,
     },
     twitter: { card: images.length ? "summary_large_image" : "summary", title: m.title, description: m.metaDescription, images: images.map((i) => i.url) },
@@ -76,7 +77,7 @@ function schemaAvailability(v: string | null): string | undefined {
 function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb[]) {
   const site = config.siteUrl();
   const url = new URL(m.canonicalPath, site).toString();
-  const publisher = { "@type": "Organization", name: "Made4Buyers", url: site };
+  const publisher = { "@type": "Organization", name: MADE4BUYERS_SOURCE_NAME, url: MADE4BUYERS_SITE_URL };
   const out: unknown[] = [breadcrumbJsonLd(crumbs, site)];
   const brand = displayText(m.brand);
   const product = { "@type": "Product", name: displayText(m.productName), ...(brand ? { brand: { "@type": "Brand", name: brand } } : {}) };
@@ -106,9 +107,9 @@ function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb
       url,
       mainEntityOfPage: url,
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
-      datePublished: (m.kind === "AI_GUIDE" || m.contentRewritten ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
+      datePublished: m.source.publishedAt ?? m.publishedAt ?? undefined,
       dateModified: m.updatedAt,
-      ...(m.kind === "AI_GUIDE" || excerpt || m.contentRewritten ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
+      ...(m.source.isMade4Buyers || excerpt ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
       publisher,
       about: (m.products ?? []).length > 1 ? m.products.map((p) => ({ "@type": "Thing", name: p.name })) : { "@type": "Thing", name: m.products?.[0]?.name ?? m.productName },
       ...(excerpt && sourceUrl ? { isBasedOn: sourceUrl, citation: { "@type": "CreativeWork", url: sourceUrl, ...(author ? { author: { "@type": "Person", name: author } } : {}), publisher: { "@type": "Organization", name: displayText(m.source.name) } } } : {}),
@@ -181,8 +182,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const cons = (m.highlights?.cons ?? []).filter((t) => displayText(t));
   const published = displayDate(m.publishedAt);
   const sourceDate = displayDate(m.source.publishedAt);
-  const authoredByMade4Buyers = isGuide || m.contentRewritten;
-  const attributionDate = authoredByMade4Buyers ? published : sourceDate;
+  const authoredByMade4Buyers = m.source.isMade4Buyers;
+  const attributionDate = displayDate(m.source.publishedAt);
   const fact = (label: string) => displayText(m.keyEntities.find((e) => e.label === label)?.value);
   // Key facts: values a source stated (with provenance), never guessed. Rows that cannot apply
   // (a platform for a kettle, a model for a category guide) are left out instead of "Not available".
@@ -263,7 +264,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             <div>
               <div className="meta-row">
                 {m.category && <span className="cat-tag">{m.category.name}</span>}
-                <KindPill kind={m.kind} articleType={m.articleType} />
+                <KindPill kind={m.kind} articleType={m.articleType} contentRewritten={m.contentRewritten} />
               </div>
               <h1>{m.title}</h1>
               {summary && <p className="lede">{summary}</p>}
@@ -291,7 +292,13 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             {(authoredByMade4Buyers || sourceName) && (
               <div>
                 <dt>{authoredByMade4Buyers ? "Written by" : "Source"}</dt>
-                <dd>{authoredByMade4Buyers ? "Made4Buyers" : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}</dd>
+                <dd>
+                  {sourceUrl ? (
+                    <a href={sourceUrl} {...(!authoredByMade4Buyers ? { rel: "nofollow noopener", target: "_blank" } : {})}>
+                      {authoredByMade4Buyers ? MADE4BUYERS_SOURCE_NAME : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}
+                    </a>
+                  ) : authoredByMade4Buyers ? MADE4BUYERS_SOURCE_NAME : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}
+                </dd>
               </div>
             )}
             {attributionDate && (

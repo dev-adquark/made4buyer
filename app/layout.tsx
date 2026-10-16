@@ -14,6 +14,7 @@ import JsonLd from "@/components/json-ld";
 import { config } from "@/lib/config";
 import { gscVerificationMetadata } from "@/lib/gsc";
 import { CATEGORIES, DEPARTMENTS } from "@/lib/taxonomy/definitions";
+import { MADE4BUYERS_SITE_URL, MADE4BUYERS_SOURCE_NAME } from "@/lib/public/source-attribution";
 
 // Every face uses a hand-measured local fallback (app/globals.css, "M4B … Fallback", Arial/Times
 // on desktop and iOS, Roboto/Noto Serif on Android) instead of next/font's automatic Arial/Times
@@ -63,8 +64,8 @@ function siteJsonLd() {
   return {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "Organization", "@id": `${site}/#organization`, name: "Made4Buyers", url: site, logo: `${site}/icon.svg` },
-      { "@type": "WebSite", "@id": `${site}/#website`, name: "Made4Buyers", url: site, publisher: { "@id": `${site}/#organization` }, inLanguage: "en", potentialAction: { "@type": "SearchAction", target: `${site}/search?q={search_term_string}`, "query-input": "required name=search_term_string" } },
+      { "@type": "Organization", "@id": `${MADE4BUYERS_SITE_URL}/#organization`, name: MADE4BUYERS_SOURCE_NAME, url: MADE4BUYERS_SITE_URL, logo: `${MADE4BUYERS_SITE_URL}/icon.svg` },
+      { "@type": "WebSite", "@id": `${site}/#website`, name: MADE4BUYERS_SOURCE_NAME, url: site, publisher: { "@id": `${MADE4BUYERS_SITE_URL}/#organization` }, inLanguage: "en", potentialAction: { "@type": "SearchAction", target: `${site}/search?q={search_term_string}`, "query-input": "required name=search_term_string" } },
     ],
   };
 }

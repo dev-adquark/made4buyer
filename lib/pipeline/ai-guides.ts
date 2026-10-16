@@ -6,6 +6,7 @@ import { log } from "@/lib/log";
 import { guardedApiCall } from "@/lib/ops/api-guard";
 import { safeFetch } from "@/lib/net/safe-fetch";
 import { cleanText, sha256, stableStringify } from "@/lib/util/text";
+import { MADE4BUYERS_SOURCE_NAME } from "@/lib/public/source-attribution";
 
 /**
  * AI-assisted buying guides via the Keyword-to-Blog API (POST /v1/generate).
@@ -84,7 +85,7 @@ export function guideToContentItem(res: KtbResponse, req: GuideRequest, now = ne
     category: req.category,
     tags: req.keywords,
     publishedAt: now.toISOString(),
-    publisher: "Made4Buyers",
+    publisher: MADE4BUYERS_SOURCE_NAME,
     contentKind: "AI_GUIDE",
     generation: {
       provider: AI_GUIDE_SOURCE,

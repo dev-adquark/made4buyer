@@ -8,14 +8,16 @@ import { categoryName } from "@/lib/taxonomy/definitions";
 import { themeStyle } from "@/lib/taxonomy/themes";
 import { displayText } from "@/lib/public/display";
 import { dateline } from "@/lib/util/format";
+import { MADE4BUYERS_SOURCE_NAME, resolveSourceAttribution } from "@/lib/public/source-attribution";
 
 /** Keyword-to-Blog post type, from the stored generation metadata. */
 export function aiPostType(meta: unknown): "ARTICLE" | "GUIDE" {
   return (meta as { articleType?: string } | null)?.articleType === "ARTICLE" ? "ARTICLE" : "GUIDE";
 }
 
-export function KindPill({ kind, articleType }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null }) {
+export function KindPill({ kind, articleType, contentRewritten = false }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null; contentRewritten?: boolean }) {
   if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "Article" : "Guide"}</TrustLabel>;
+  if (contentRewritten) return <TrustLabel kind="ai">{MADE4BUYERS_SOURCE_NAME} rewrite</TrustLabel>;
   if (kind === "COMPARISON") return <TrustLabel kind="source">Source comparison</TrustLabel>;
   if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Source buying guide</TrustLabel>;
   return <TrustLabel kind="source" />;
@@ -26,14 +28,37 @@ export function kindNoun(kind: string): string {
   return kind === "COMPARISON" ? "comparison" : kind === "BUYING_GUIDE" ? "buying guide" : kind === "AI_GUIDE" ? "guide" : "review";
 }
 
-/** Who wrote it: the publisher for source content; Made4Buyers for its own guides and rewrites. */
-export function sourceOf(r: Pick<Card, "kind" | "contentRewritten" | "entities" | "author">): string | null {
-  return r.kind === "AI_GUIDE" || r.contentRewritten ? "Made4Buyers" : displayText(r.entities?.source) ?? displayText(r.author);
+type CardAttributionFields = Pick<Card, "kind" | "contentRewritten" | "source" | "sourceUrl" | "slug"> & Partial<Pick<Card, "entities" | "author">>;
+
+/** Shared attribution policy for published cards; the card link is also the internal source link. */
+export function sourceOf(r: CardAttributionFields): string | null {
+  return resolveCardAttribution(r).name;
+}
+
+function resolveCardAttribution(r: CardAttributionFields) {
+  return resolveSourceAttribution({
+    kind: r.kind,
+    contentRewritten: r.contentRewritten,
+    sourceName: r.entities?.source || r.source,
+    sourceKey: r.source,
+    sourceUrl: r.sourceUrl,
+    canonicalPath: `/review/${r.slug}`,
+  });
 }
 
 /** Source publication date for source content; our publication date for our own guides and rewrites. */
-export function shownDate(r: Pick<Card, "kind" | "contentRewritten" | "sourcePublishedAt" | "publishedAt">) {
-  return r.kind === "AI_GUIDE" || r.contentRewritten ? r.publishedAt : r.sourcePublishedAt ?? r.publishedAt;
+export function shownDate(r: CardAttributionFields & Pick<Card, "sourcePublishedAt" | "publishedAt">) {
+  const source = resolveSourceAttribution({
+    kind: r.kind,
+    contentRewritten: r.contentRewritten,
+    sourceName: r.entities?.source || r.source,
+    sourceKey: r.source,
+    sourceUrl: r.sourceUrl,
+    sourcePublishedAt: r.sourcePublishedAt,
+    publishedAt: r.publishedAt,
+    canonicalPath: `/review/${r.slug}`,
+  });
+  return source.publishedAt ? new Date(source.publishedAt) : null;
 }
 
 function Meta({ r }: { r: Card }) {
@@ -47,6 +72,11 @@ function Meta({ r }: { r: Card }) {
       {d && when && <time dateTime={d.toISOString()}>{when}</time>}
     </div>
   );
+}
+
+function cardHref(r: Card): string {
+  const attribution = resolveCardAttribution(r);
+  return attribution.isMade4Buyers && attribution.url ? attribution.url : `/review/${r.slug}`;
 }
 
 /**
@@ -80,11 +110,11 @@ export default async function ReviewCard({ review, headingLevel = 3, eager = fal
   const Heading = headingLevel === 2 ? "h2" : "h3";
   return (
     <article className={`review-card${variant ? ` ${variant}` : ""}`} style={themeStyle(review.categorySlug) as React.CSSProperties}>
-      <Link href={`/review/${review.slug}`} data-cursor="Read">
+      <Link href={cardHref(review)} data-cursor="Read">
         <div className="media">
           <SafeImg src={img.url} alternates={img.alternates} fallback={placeholderPath(review.categorySlug)} alt="" width={640} height={427} loading={eager ? "eager" : "lazy"} decoding="async" {...(variant === "row" ? ROW_IMAGE : { sizes })} />
           <span className="kind">
-            <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
+            <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} contentRewritten={review.contentRewritten} />
           </span>
           {img.representative && <RepresentativeTag credit={img.credit} />}
         </div>
@@ -106,14 +136,14 @@ export async function FeatureStory({ review, image }: { review: Card; image?: Ca
   const img = image ?? (await resolveCardImage(review));
   return (
     <article className="feature-story" style={themeStyle(review.categorySlug) as React.CSSProperties}>
-      <Link href={`/review/${review.slug}`} data-cursor="Read">
+      <Link href={cardHref(review)} data-cursor="Read">
         <div className="media">
           <SafeImg src={img.url} alternates={img.alternates} fallback={placeholderPath(review.categorySlug)} alt="" width={1200} height={750} sizes="(max-width: 1000px) 100vw, (max-width: 1520px) 58vw, 860px" fetchPriority="high" decoding="async" />
           {img.representative && <RepresentativeTag credit={img.credit} />}
         </div>
         <div className="meta-row" style={{ marginTop: 16 }}>
           {categoryName(review.categorySlug) && <span className="cat-tag">{categoryName(review.categorySlug)}</span>}
-          <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} />
+          <KindPill kind={review.kind} articleType={aiPostType(review.generationMeta)} contentRewritten={review.contentRewritten} />
         </div>
         <h3>{review.canonicalTitle}</h3>
         {displayText(review.summary) && <p className="summary">{review.summary}</p>}

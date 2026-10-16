@@ -31,7 +31,7 @@ export async function ReviewsView({ state }: { state: ReviewsState }) {
         <div className="wrap">
           <Breadcrumbs items={[{ name: "Home", href: "/" }, { name: "Reviews", href: "/reviews" }]} />
           <h1>Reviews</h1>
-          <p className="lede">{total ? `${total} published, newest first. Every card says what it is: a source review, a source comparison, a source buying guide or a Made4Buyers guide.` : type.value ? `Nothing of this type has been published yet.` : "No reviews have been published yet."}</p>
+          <p className="lede">{total ? `${total} published, newest first. Cards identify publisher content, Made4Buyers rewrites and Made4Buyers guides.` : type.value ? `Nothing of this type has been published yet.` : "No reviews have been published yet."}</p>
           <nav aria-label="Filter by content type" style={{ marginBottom: 14 }}>
             <ul className="chips">
               {TYPES.map((t) => (
