@@ -100,3 +100,43 @@ export function onOfficialImageDomain(src: string): boolean {
   }
   return OFFICIAL_IMAGE_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
 }
+
+/**
+ * Commerce / digital-asset CDNs that brands serve their own product photos from (Nikon:
+ * commercetools, Anker/eufy: Shopify, Ring/ecobee: Contentful, Philips Hue: Signify…). A photo on
+ * one of these counts as the brand's own ONLY when the brand's own product page names it in its
+ * structured product data (JSON-LD Product.image, og:image, Shopify product JSON) — never a plain
+ * <img> on the page (cookie banners, ads). Generic hosts anyone can upload to (cloudfront,
+ * googleusercontent) are deliberately absent. "*" is one host label, "**" any number.
+ */
+export const OFFICIAL_IMAGE_CDN_HOSTS: readonly string[] = [
+  "cdn.shopify.com",
+  "images.ctfassets.net",
+  "**.commercetools.com",
+  "static.parastorage.com",
+  "*.imgix.net",
+  "*.bigcommerce.com",
+  "*.static.pub",
+  "cdn.cs.1worldsync.com",
+  "images.contentstack.io",
+  "store-images.s-microsoft.com",
+  "*.amplience.net",
+  "*.assetsadobe2.com",
+  "*.scene7.com",
+  "res.cloudinary.com",
+  "www.assets.signify.com",
+  "assets.signify.com",
+];
+
+/** True for an https image on one of OFFICIAL_IMAGE_CDN_HOSTS. */
+export function onOfficialImageCdn(src: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(src);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" || u.username || u.password || (u.port && u.port !== "443")) return false;
+  const host = u.hostname.toLowerCase();
+  return OFFICIAL_IMAGE_CDN_HOSTS.some((p) => globMatch(p, host));
+}

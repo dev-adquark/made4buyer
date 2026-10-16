@@ -1,5 +1,6 @@
 import type { CommerceBrand, CommerceRawRecord, CommerceRun, Prisma } from "@prisma/client";
 import { getSwitches } from "@/lib/automation/settings";
+import { PRODUCT_IMAGES_VERSION } from "@/lib/images/deal-image";
 import { config } from "@/lib/config";
 import { guardedApiCall, onceInInvocation } from "@/lib/ops/api-guard";
 import { db } from "@/lib/db";
@@ -564,6 +565,7 @@ async function upsertProduct(brand: CommerceBrand, n: NormalizedCommerceRecord &
     images: keepImages ? prev.images : n.images,
     // The official photo of this exact product/variant (deal cards); kept when the page stops stating one.
     productImages: n.productImages?.length ? n.productImages : Array.isArray(prev.productImages) ? prev.productImages : [],
+    productImagesV: PRODUCT_IMAGES_VERSION,
     // Deal-card image state written by the image jobs (lib/images/deal-card-images.ts, integrity.ts): kept across re-reads.
     ...(prev.cardImage ? { cardImage: prev.cardImage } : {}),
     ...(prev.brokenImages ? { brokenImages: prev.brokenImages } : {}),

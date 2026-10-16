@@ -99,6 +99,21 @@ describe("deal-images job", () => {
     expect(again).toMatchObject({ needed: 0, attached: 0, alreadyIllustrative: 1, requests: 0 });
   });
 
+  it("never shows one stock photo on two product cards: a duplicate is re-picked with a different on-topic photo", async () => {
+    const a = await seedDrop("Framework Laptop 13", "fw13");
+    await runDealCardImages("test");
+    const cardA = ((await db.commerceProduct.findUniqueOrThrow({ where: { id: a.id } })).data as { cardImage: Record<string, unknown> }).cardImage;
+    // A second laptop whose stored card photo is the first one's (as older runs could leave it).
+    const b = await seedDrop("Framework Laptop 16", "fw16");
+    const bData = (await db.commerceProduct.findUniqueOrThrow({ where: { id: b.id } })).data as Record<string, unknown>;
+    await db.commerceProduct.update({ where: { id: b.id }, data: { data: { ...bData, cardImage: { ...cardA, productId: b.id, productName: "Framework Laptop 16" } } as unknown as Prisma.InputJsonValue } });
+    const r = await runDealCardImages("test");
+    expect(r).toMatchObject({ duplicates: 1, attached: 1 });
+    const photoA = ((await db.commerceProduct.findUniqueOrThrow({ where: { id: a.id } })).data as { cardImage: { photoId: string } }).cardImage.photoId;
+    const photoB = ((await db.commerceProduct.findUniqueOrThrow({ where: { id: b.id } })).data as { cardImage: { photoId: string } }).cardImage.photoId;
+    expect(photoB).not.toBe(photoA);
+  });
+
   it("never guesses: a product whose page states no type keeps the category image; a Pexels rate limit stops the batch", async () => {
     const odd = await seedDrop("Zx-9", "zx9", { categories: ["laptops", "accessories"] });
     expect(await runDealCardImages("test")).toMatchObject({ needed: 1, attached: 0, noTopic: 1 });

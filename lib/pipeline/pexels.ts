@@ -239,8 +239,9 @@ export async function findPexelsImage(
   let requests = 0;
   let last: PexelsSearchResult | undefined;
   const search = async (q: string) => {
-    // 30 results per query: a wider pool so every article can get its own photo.
-    const r = await pexelsSearch(q, { cache: opts.cache, perPage: 30 });
+    // 80 results per query (Pexels' maximum, still one request): a wide pool so every article and
+    // every product card can get its own on-topic photo.
+    const r = await pexelsSearch(q, { cache: opts.cache, perPage: 80 });
     if (!r.fromCache && r.status !== "NOT_CONFIGURED") requests++;
     last = r;
     return r;

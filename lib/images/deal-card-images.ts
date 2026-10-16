@@ -91,8 +91,10 @@ export type DealCardImagesResult = {
   live: number;
   exact: number;
   alreadyIllustrative: number;
-  /** Products whose card would show the category image before this run. */
+  /** Products whose card would show the category image before this run, or a stock photo another card already shows. */
   needed: number;
+  /** Stock photos shown on more than one product card, re-picked this run. */
+  duplicates: number;
   attached: number;
   noTopic: number;
   noPhoto: number;
@@ -120,28 +122,34 @@ function withCardImage(data: unknown, card: StoredCardImage | null): Prisma.Inpu
  */
 export async function runDealCardImages(trigger: string, opts: { limit?: number; now?: number; cache?: Map<string, PexelsSearchResult> } = {}): Promise<DealCardImagesResult> {
   const now = opts.now ?? Date.now();
-  const out: DealCardImagesResult = { status: "OK", live: 0, exact: 0, alreadyIllustrative: 0, needed: 0, attached: 0, noTopic: 0, noPhoto: 0, requests: 0, items: [] };
-  const rows = await liveProducts(now);
+  const out: DealCardImagesResult = { status: "OK", live: 0, exact: 0, alreadyIllustrative: 0, needed: 0, duplicates: 0, attached: 0, noTopic: 0, noPhoto: 0, requests: 0, items: [] };
+  const rows = (await liveProducts(now)).sort((a, b) => a.id.localeCompare(b.id));
   out.live = rows.length;
   const ctx = await contextFor([...new Set(rows.map((r) => r.productEntityId).filter((x): x is string => Boolean(x)))]);
+  // Every product card shows its own photo: a stock photo already on another card (the first card,
+  // by id, keeps it) is re-picked, and every pick excludes the photos other cards show.
+  const used = new Set<string>();
   const todo: ProductRow[] = [];
   for (const r of rows) {
     const img = resolve(r, ctx);
-    if (img.exact) out.exact++;
-    else if (img.kind === "illustrative") out.alreadyIllustrative++;
-    else todo.push(r);
+    if (img.exact) {
+      out.exact++;
+      continue;
+    }
+    const stored = img.kind === "illustrative" ? storedCardImage(r, r.brand?.categories ?? []) : null;
+    if (stored && !used.has(stored.photoId)) {
+      used.add(stored.photoId);
+      out.alreadyIllustrative++;
+      continue;
+    }
+    if (stored) out.duplicates++;
+    todo.push(r);
   }
   out.needed = todo.length;
   if (!todo.length) return out;
   if (!pexelsConfigured()) return { ...out, status: "NOT_CONFIGURED", reason: "PEXELS_API_KEY not configured: cards keep the category image" };
 
   const cache = opts.cache ?? new Map<string, PexelsSearchResult>();
-  // Different products of one type get different photos where the pool allows (never required).
-  const used = new Set<string>();
-  for (const r of rows) {
-    const c = storedCardImage(r, r.brand?.categories ?? []);
-    if (c) used.add(c.photoId);
-  }
   for (const r of todo.slice(0, opts.limit ?? 80)) {
     const categories = r.brand?.categories ?? [];
     const topic = cardImageTopic(r, categories);
@@ -150,7 +158,8 @@ export async function runDealCardImages(trigger: string, opts: { limit?: number;
       out.items.push({ productId: r.id, name: r.name, outcome: "no product type stated: category image" });
       continue;
     }
-    const found = await findPexelsImage({ productName: r.name, categorySlug: categories[0] ?? null, kind: "PRODUCT_TYPE" }, { exclude: used, cache, topic: topic.topic });
+    // Never another card's photo: when the on-topic pool is exhausted the card keeps what it had.
+    const found = await findPexelsImage({ productName: r.name, categorySlug: categories[0] ?? null, kind: "PRODUCT_TYPE" }, { exclude: used, cache, topic: topic.topic, allowReuse: false });
     out.requests += found.requests;
     if (found.status === "RATE_LIMITED" || found.status === "AUTH_FAILED") {
       out.status = found.status;

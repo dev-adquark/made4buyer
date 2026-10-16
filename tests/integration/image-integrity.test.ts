@@ -243,7 +243,8 @@ describe("image-integrity job", () => {
     const pageUrl = "https://www.acme.com/p/widget";
     const raw = await db.commerceRawRecord.create({ data: { runId: runRow.id, url: pageUrl, purpose: "PRODUCT", contentHash: "h", payload: { url: pageUrl, jsonLd: [{ "@type": "Product", name: "Widget", image: "https://www.acme.com/widget.jpg" }] } } });
     const old = await db.commerceProduct.create({ data: { brandId: brand.id, canonicalUrl: pageUrl, name: "Widget", observedAt: new Date(), lastRawId: raw.id, data: { product: { name: "Widget" } } } });
-    const done = await db.commerceProduct.create({ data: { brandId: brand.id, canonicalUrl: "https://www.acme.com/p/other", name: "Other", observedAt: new Date(), lastRawId: raw.id, data: { productImages: [] } } });
+    // Already read under the current official-photo rule: skipped (an older version would be re-read).
+    const done = await db.commerceProduct.create({ data: { brandId: brand.id, canonicalUrl: "https://www.acme.com/p/other", name: "Other", observedAt: new Date(), lastRawId: raw.id, data: { productImages: [], productImagesV: 2 } } });
     const r = await runImageIntegrity("test", { ...fast, now: day(0) });
     expect(r.productImages).toMatchObject({ checked: 1, filled: 1 });
     const data = (await db.commerceProduct.findUniqueOrThrow({ where: { id: old.id } })).data as { product: unknown; productImages: Array<{ src: string }> };

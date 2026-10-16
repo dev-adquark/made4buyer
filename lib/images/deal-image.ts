@@ -1,6 +1,6 @@
 import { variantParam } from "@/lib/commerce/shopify";
 import { registrableDomain } from "@/lib/products/page-extract";
-import { onOfficialImageDomain } from "./remote-patterns";
+import { onOfficialImageCdn, onOfficialImageDomain } from "./remote-patterns";
 
 /**
  * Deal-card images: the official product page's OWN photo of that exact product / variant.
@@ -51,6 +51,27 @@ export function onDomainImageUrl(raw: string | undefined, pageUrl: string, domai
   if (registrableDomain(u.hostname.toLowerCase()) !== domain) return null;
   if (/\.svg$/i.test(u.pathname)) return null;
   return u.toString();
+}
+
+/** Bump when the official-photo rule changes: integrity.ts re-extracts every product stored under an older version. */
+export const PRODUCT_IMAGES_VERSION = 2;
+
+/**
+ * An official product photo URL: on the page's own domain, or on a known commerce CDN
+ * (OFFICIAL_IMAGE_CDN_HOSTS) — the caller guarantees it came from the brand page's structured
+ * product data, never from an arbitrary <img>.
+ */
+export function officialImageUrl(raw: string | undefined, pageUrl: string, domain: string): string | null {
+  const own = onDomainImageUrl(raw, pageUrl, domain);
+  if (own || !raw) return own;
+  let u: URL;
+  try {
+    u = new URL(raw.startsWith("//") ? `https:${raw}` : raw, pageUrl);
+  } catch {
+    return null;
+  }
+  if (/\.svg$/i.test(u.pathname)) return null;
+  return onOfficialImageCdn(u.toString()) ? u.toString() : null;
 }
 
 function imageValues(v: unknown): Array<{ url?: string; width?: number; height?: number; alt?: string }> {
@@ -118,7 +139,7 @@ export function extractOfficialProductImages(raw: unknown, canonicalUrl: string,
   const variantId = variantParam(canonicalUrl);
   const out: StoredDealImage[] = [];
   const add = (src: string | undefined, source: DealImageSource, extra: { alt?: string | null; width?: number; height?: number } = {}) => {
-    const url = onDomainImageUrl(src, pageUrl, domain);
+    const url = officialImageUrl(src, pageUrl, domain);
     if (!url || out.some((x) => x.src === url)) return;
     out.push({ src: url, alt: extra.alt ?? null, source, ...(extra.width ? { width: extra.width } : {}), ...(extra.height ? { height: extra.height } : {}) });
   };
@@ -222,11 +243,11 @@ export function dealImage(product: DealImageProduct | null | undefined, opts: { 
   const broken = brokenImageSrcs(product.data);
   for (const img of storedDealImages(product.data)) {
     if (broken.has(img.src)) continue; // the image-integrity job found it no longer loads
-    if (onDomainImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
-    // On the brand's own official domain (checked above): loads directly from that domain. Deal cards
-    // also require the domain to be on the reviewed list (OFFICIAL_IMAGE_DOMAINS); a review hero only
-    // needs the brand's own registered domain (opts.requireListedDomain = false).
-    if (opts.requireListedDomain !== false && !onOfficialImageDomain(img.src)) continue;
+    if (officialImageUrl(img.src, product.canonicalUrl, domain) !== img.src) continue;
+    // On the brand's own official domain (checked above) or its commerce CDN: loads directly. Deal
+    // cards also require the domain to be on the reviewed list (OFFICIAL_IMAGE_DOMAINS) or a listed
+    // CDN; a review hero only needs the brand's own registered domain (opts.requireListedDomain = false).
+    if (opts.requireListedDomain !== false && !onOfficialImageDomain(img.src) && !onOfficialImageCdn(img.src)) continue;
     return img;
   }
   return null;

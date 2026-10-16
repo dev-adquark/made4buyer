@@ -13,7 +13,7 @@ import { revalidateTag } from "next/cache";
 import { CATEGORY_PHOTOS_TAG, cachedCategoryPhotosForCheck, forgetCategoryPhoto } from "@/lib/public/category-images";
 import { storedCardImage } from "./deal-card-image";
 import { clearCardImage, dealCardImageContext, liveCommerceProducts, resolveDealCardImage, runDealCardImages, type DealCardImagesResult } from "./deal-card-images";
-import { brokenImageSrcs, extractOfficialProductImages } from "./deal-image";
+import { brokenImageSrcs, extractOfficialProductImages, PRODUCT_IMAGES_VERSION } from "./deal-image";
 
 /**
  * image-integrity: re-checks that every live hero image still loads, so a broken photo falls back to
@@ -204,12 +204,16 @@ const checkableWhere: Prisma.ImageAssetWhereInput = {
 
 export type ProductImageBackfill = { checked: number; filled: number; none: number; noRaw: number };
 
-/** Writes data.productImages for CommerceProducts stored before it existed, from their last raw record. */
+/**
+ * Writes data.productImages for CommerceProducts stored before it existed, or under an older
+ * official-photo rule (data.productImagesV < PRODUCT_IMAGES_VERSION), from their last raw record.
+ */
 export async function backfillCommerceProductImages(limit = 40): Promise<ProductImageBackfill> {
   const out: ProductImageBackfill = { checked: 0, filled: 0, none: 0, noRaw: 0 };
+  const version = String(PRODUCT_IMAGES_VERSION);
   const rows = await db.$queryRaw<Array<{ id: string }>>`
     SELECT id FROM "commerce_products"
-    WHERE "lastRawId" IS NOT NULL AND ("data" IS NULL OR jsonb_typeof("data") <> 'object' OR NOT jsonb_exists("data", 'productImages'))
+    WHERE "lastRawId" IS NOT NULL AND ("data" IS NULL OR jsonb_typeof("data") <> 'object' OR NOT jsonb_exists("data", 'productImages') OR ("data"->>'productImagesV') IS DISTINCT FROM ${version})
     ORDER BY "updatedAt" DESC LIMIT ${limit}`;
   for (const { id } of rows) {
     const p = await db.commerceProduct.findUnique({ where: { id }, select: { id: true, canonicalUrl: true, sku: true, data: true, lastRawId: true } });
@@ -222,7 +226,9 @@ export async function backfillCommerceProductImages(limit = 40): Promise<Product
     else out.none++;
     const data = (p.data && typeof p.data === "object" && !Array.isArray(p.data) ? p.data : {}) as Record<string, unknown>;
     // [] marks "looked, none stated" so the product is not re-read every run.
-    await db.commerceProduct.update({ where: { id: p.id }, data: { data: { ...data, productImages: images } as unknown as Prisma.InputJsonValue } });
+    // A photo already found is kept when the stored page no longer states one.
+    const kept = images.length ? images : Array.isArray(data.productImages) ? data.productImages : [];
+    await db.commerceProduct.update({ where: { id: p.id }, data: { data: { ...data, productImages: kept, productImagesV: PRODUCT_IMAGES_VERSION } as unknown as Prisma.InputJsonValue } });
   }
   return out;
 }
