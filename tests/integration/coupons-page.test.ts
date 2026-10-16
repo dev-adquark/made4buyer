@@ -41,7 +41,7 @@ async function seedFeed(n: number) {
 }
 
 describe("/coupons: every current US coupon, 60 per page", () => {
-  it("lists 60 per page, newest first, with working merchant links, Via Feedico labels and pagination", async () => {
+  it("lists 60 per page, newest first, with working merchant links, Via Made4Buyers labels and pagination", async () => {
     await seedFeed(130);
     const p1 = await html(CouponsView({ state: { page: 1, noindex: false } }));
     expect(COUPONS_PER_PAGE).toBe(60);
@@ -50,7 +50,7 @@ describe("/coupons: every current US coupon, 60 per page", () => {
     expect(p1).toContain("Page 1 of 3");
     expect(p1).toContain('href="/coupons?page=2"');
     expect(p1).not.toContain("Previous page");
-    expect(count(p1, />Via Feedico</g)).toBe(60);
+    expect(count(p1, />Via Made4Buyers</g)).toBe(60);
     expect(p1).toContain('href="https://extra.com/"'); // GOOD5, newest
     // Never listed: another country's storefront, an expired code, a code that has not started.
     const p3 = await html(CouponsView({ state: { page: 3, noindex: true } }));

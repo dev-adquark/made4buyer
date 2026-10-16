@@ -112,9 +112,9 @@ describe("normalizeFeedicoRows", () => {
     expect(publicCoupons([feed], NOW).map((c) => c.id)).toEqual(["f"]);
   });
 
-  it("a feed code is shown as 'Via Feedico', links to the brand's own website, never to the Feedico API", () => {
+  it("a feed code is shown as 'Made4Buyers' (the feed vendor is never named publicly), links to the brand's own website, never to the Feedico API", () => {
     const p = toPromoCode({ id: "f", code: "SAVE20", discount: "20% off", eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://www.acme.com", observedAt: NOW }, { name: "Acme", slug: "acme", categories: ["audio"], officialDomain: "acme.com", officialStoreUrl: null });
-    expect(p).toMatchObject({ viaFeed: true, sourceUrl: null, useUrl: "https://www.acme.com/", source: "Feedico (affiliate network)", verifiedVia: "Affiliate feed (Feedico)", lastVerifiedAt: null, checkedAt: NOW.toISOString() });
+    expect(p).toMatchObject({ viaFeed: true, sourceUrl: null, useUrl: "https://www.acme.com/", source: "Made4Buyers", verifiedVia: "Made4Buyers", lastVerifiedAt: null, checkedAt: NOW.toISOString() });
     const offsite = toPromoCode({ id: "g", code: "SAVE20", discount: null, eligibility: null, restrictions: null, expiresAt: null, lastVerifiedAt: null, sourceUrl: feedicoSourceUrl(brand), merchantUrl: "https://elsewhere.example", observedAt: NOW }, { name: "Acme", slug: "acme", categories: [], officialDomain: "acme.com", officialStoreUrl: null });
     expect(offsite?.useUrl).toBeNull();
   });
