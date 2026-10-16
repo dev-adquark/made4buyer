@@ -8,6 +8,7 @@ type SourceKind = "REVIEW" | "AI_GUIDE" | "COMPARISON" | "BUYING_GUIDE";
 export type SourceAttributionInput = {
   kind: SourceKind;
   contentRewritten?: boolean;
+  preserveExternalAttribution?: boolean;
   sourceName?: string | null;
   sourceKey?: string | null;
   sourceUrl?: string | null;
@@ -43,20 +44,6 @@ function publisherHost(value: string | null): string | null {
   }
 }
 
-function isSuppressedSourceUrl(value: string | null): boolean {
-  if (!value) return false;
-  try {
-    const url = new URL(value);
-    return (
-      url.hostname.toLowerCase().replace(/^www\./, "") === "packhacker.com" &&
-      url.pathname.replace(/\/+$/, "").toLowerCase() ===
-        "/travel-gear/fjallraven/high-coast-pro-foldsack-26"
-    );
-  } catch {
-    return false;
-  }
-}
-
 /** Builds an absolute canonical URL on Made4Buyers, never on an origin supplied by content. */
 export function made4buyersCanonicalUrl(path: string): string {
   const safePath = path.startsWith("/") && !path.startsWith("//") && !/[\r\n\\]/.test(path) ? path : "/";
@@ -64,11 +51,7 @@ export function made4buyersCanonicalUrl(path: string): string {
   return url.origin === MADE4BUYERS_SITE_URL ? url.toString() : `${MADE4BUYERS_SITE_URL}/`;
 }
 
-/**
- * Shared public attribution policy for review pages, cards, metadata and generated content.
- * Operational provider/source keys are not publisher names; use the actual source host when
- * available, otherwise omit the source rather than implying that a provider wrote the content.
- */
+/** Shared public attribution policy. Original citations are retained only for excerpt-only pages. */
 export function resolveSourceAttribution(input: SourceAttributionInput): PublicSourceAttribution {
   const isMade4Buyers =
     input.kind === "AI_GUIDE" ||
@@ -84,11 +67,17 @@ export function resolveSourceAttribution(input: SourceAttributionInput): PublicS
     };
   }
 
-  if (isSuppressedSourceUrl(displayUrl(input.sourceUrl))) {
-    return { name: null, url: null, author: null, publishedAt: null, isMade4Buyers: false };
+  const candidate = displayText(input.sourceName);
+  if (!input.preserveExternalAttribution) {
+    return {
+      name: MADE4BUYERS_SOURCE_NAME,
+      url: made4buyersCanonicalUrl(input.canonicalPath),
+      author: null,
+      publishedAt: dateString(input.publishedAt),
+      isMade4Buyers: false,
+    };
   }
 
-  const candidate = displayText(input.sourceName);
   const isIngestionKey = candidate && displayText(input.sourceKey)?.toLowerCase() === candidate.toLowerCase();
   const publisherName = candidate && !isIngestionKey && !INTERNAL_SOURCE_NAME.test(candidate)
     ? candidate

@@ -58,7 +58,19 @@ describe("composeRenderModel: content rewrite (lib/pipeline/rewrite.ts) override
     });
   });
 
-  it("preserves a real publisher name while never exposing an ingestion key", () => {
+  it("uses Made4Buyers attribution for fully licensed third-party reviews", () => {
+    const m = composeRenderModel({ ...minimalInputs, textRights: "FULL", contentRewritten: false });
+    expect(m.textRights).toBe("FULL");
+    expect(m.source).toEqual({
+      name: "Made4Buyers",
+      url: "https://made4buyers.com/review/westbreeze-packing-cubes",
+      author: null,
+      publishedAt: "2026-09-24T00:00:00.000Z",
+      isMade4Buyers: false,
+    });
+  });
+
+  it("preserves the external citation for excerpt-only content while never exposing an ingestion key", () => {
     const m = composeRenderModel({
       ...minimalInputs,
       review: { ...baseReview, source: "apify:packhacker" },

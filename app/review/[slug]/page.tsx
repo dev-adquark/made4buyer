@@ -12,7 +12,6 @@ import { placeholderPath } from "@/lib/pipeline/images";
 import { categoryFallbackPhoto } from "@/lib/public/category-images";
 import { heroImage } from "@/lib/images/hero-image";
 import SponsoredSlot from "@/components/sponsored-slot";
-import { config } from "@/lib/config";
 import { db } from "@/lib/db";
 import VerifiedCoupons from "@/components/verified-coupons";
 import { buildPageRenderModel, currentProductData, dedupeRetailerLinks, RENDER_MODEL_VERSION, type PageRenderModel } from "@/lib/pipeline/render-model";
@@ -20,7 +19,7 @@ import { displayDate, displayNumber, displayText, displayUrl, NO_VERIFIED_PRICE 
 import { commerceBrandIdForReview, freshOffersForReview, offerIsFresh, type PublicOffer } from "@/lib/public/offers";
 import { brandPageEligible, latestByKind, relatedReviews } from "@/lib/public/queries";
 import { availabilityLabel, dateline, money, shortDate } from "@/lib/util/format";
-import { MADE4BUYERS_SITE_URL, MADE4BUYERS_SOURCE_NAME } from "@/lib/public/source-attribution";
+import { made4buyersCanonicalUrl, MADE4BUYERS_SITE_URL, MADE4BUYERS_SOURCE_NAME } from "@/lib/public/source-attribution";
 
 export const revalidate = 300;
 
@@ -45,17 +44,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const page = await loadPage(slug);
   if (!page) return { title: "Review not found", robots: { index: false } };
   const m = page.model;
+  const canonicalUrl = made4buyersCanonicalUrl(m.canonicalPath);
   const images = m.image.isFallback ? [] : [{ url: m.image.url, width: m.image.width, height: m.image.height, alt: m.image.alt }];
   return {
     title: m.title,
     description: m.metaDescription,
-    alternates: { canonical: m.canonicalPath },
+    alternates: { canonical: canonicalUrl },
     openGraph: {
       siteName: "Made4Buyers",
       type: "article",
       title: m.title,
       description: m.metaDescription,
-      url: m.canonicalPath,
+      url: canonicalUrl,
       images,
       publishedTime: m.source.publishedAt ?? m.publishedAt ?? undefined,
       modifiedTime: m.updatedAt,
@@ -75,8 +75,8 @@ function schemaAvailability(v: string | null): string | undefined {
 }
 
 function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb[]) {
-  const site = config.siteUrl();
-  const url = new URL(m.canonicalPath, site).toString();
+  const site = MADE4BUYERS_SITE_URL;
+  const url = made4buyersCanonicalUrl(m.canonicalPath);
   const publisher = { "@type": "Organization", name: MADE4BUYERS_SOURCE_NAME, url: MADE4BUYERS_SITE_URL };
   const out: unknown[] = [breadcrumbJsonLd(crumbs, site)];
   const brand = displayText(m.brand);
@@ -94,7 +94,6 @@ function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb
       url,
       itemReviewed: product,
       reviewRating: { "@type": "Rating", ratingValue: rating.value, bestRating: rating.scale, worstRating: 0 },
-      author: author ? { "@type": "Person", name: author } : { "@type": "Organization", name: displayText(m.source.name) },
       publisher,
       datePublished: m.source.publishedAt ?? m.publishedAt ?? undefined,
     });
@@ -109,7 +108,7 @@ function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
       datePublished: m.source.publishedAt ?? m.publishedAt ?? undefined,
       dateModified: m.updatedAt,
-      ...(m.source.isMade4Buyers || excerpt ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
+      ...(m.contentRewritten || m.kind === "AI_GUIDE" ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
       publisher,
       about: (m.products ?? []).length > 1 ? m.products.map((p) => ({ "@type": "Thing", name: p.name })) : { "@type": "Thing", name: m.products?.[0]?.name ?? m.productName },
       ...(excerpt && sourceUrl ? { isBasedOn: sourceUrl, citation: { "@type": "CreativeWork", url: sourceUrl, ...(author ? { author: { "@type": "Person", name: author } } : {}), publisher: { "@type": "Organization", name: displayText(m.source.name) } } } : {}),
@@ -182,8 +181,10 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const cons = (m.highlights?.cons ?? []).filter((t) => displayText(t));
   const published = displayDate(m.publishedAt);
   const sourceDate = displayDate(m.source.publishedAt);
-  const authoredByMade4Buyers = m.source.isMade4Buyers;
+  const authoredByMade4Buyers = m.contentRewritten || m.kind === "AI_GUIDE";
+  const authorLabel = m.contentRewritten ? "Rewritten by" : "Written by";
   const attributionDate = displayDate(m.source.publishedAt);
+  const excerptCitation = m.textRights === "EXCERPT" && !m.contentRewritten;
   const fact = (label: string) => displayText(m.keyEntities.find((e) => e.label === label)?.value);
   // Key facts: values a source stated (with provenance), never guessed. Rows that cannot apply
   // (a platform for a kettle, a model for a category guide) are left out instead of "Not available".
@@ -197,7 +198,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   };
   const via = (k: string) => {
     const f = pd?.fields[k];
-    return displayText(f?.sourceName) && f ? `${f.source === "MANUFACTURER" ? "Manufacturer" : f.source === "RETAILER" ? "Retailer" : f.source === "STRUCTURED_FEED" ? "Product feed" : "Source"}: ${f.sourceName}${dateline(f.observedAt) ? `, checked ${dateline(f.observedAt)}` : ""}` : null;
+    if (!f || !displayText(f.sourceName)) return null;
+    const sourceType = f.source === "MANUFACTURER" ? "Manufacturer" : f.source === "RETAILER" ? "Retailer" : f.source === "STRUCTURED_FEED" ? "Product feed" : "Source";
+    return `${sourceType}${dateline(f.observedAt) ? `, checked ${dateline(f.observedAt)}` : ""}`;
   };
   // Guides, roundups and comparisons cover several products: single-product rows don't apply.
   const categoryLevel = (!m.products?.some((p) => p.role === "PRIMARY") && isGuide) || m.kind === "BUYING_GUIDE" || m.kind === "COMPARISON";
@@ -289,21 +292,21 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 {m.productName}
               </dd>
             </div>
-            {(authoredByMade4Buyers || sourceName) && (
+            {(authoredByMade4Buyers || sourceName || !excerptCitation) && (
               <div>
-                <dt>{authoredByMade4Buyers ? "Written by" : "Source"}</dt>
+                <dt>{authoredByMade4Buyers ? authorLabel : excerptCitation ? "Source" : "Published on"}</dt>
                 <dd>
                   {sourceUrl ? (
-                    <a href={sourceUrl} {...(!authoredByMade4Buyers ? { rel: "nofollow noopener", target: "_blank" } : {})}>
-                      {authoredByMade4Buyers ? MADE4BUYERS_SOURCE_NAME : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}
+                    <a href={sourceUrl} {...(excerptCitation ? { rel: "nofollow noopener", target: "_blank" } : {})}>
+                      {authoredByMade4Buyers ? MADE4BUYERS_SOURCE_NAME : excerptCitation ? sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName : MADE4BUYERS_SOURCE_NAME}
                     </a>
-                  ) : authoredByMade4Buyers ? MADE4BUYERS_SOURCE_NAME : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}
+                  ) : authoredByMade4Buyers || !excerptCitation ? MADE4BUYERS_SOURCE_NAME : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}
                 </dd>
               </div>
             )}
             {attributionDate && (
               <div>
-                <dt>{authoredByMade4Buyers ? "Published" : "Reviewed"}</dt>
+                <dt>{excerptCitation ? "Originally published" : "Published"}</dt>
                 <dd>
                   <time dateTime={attributionDate.toISOString()}>{dateline(attributionDate)}</time>
                 </dd>
@@ -311,7 +314,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             )}
             <div>
               <dt>Rating</dt>
-              <dd>{rating ? `${rating.value} / ${rating.scale}${m.contentRewritten ? ", as reported by the original publisher" : sourceName ? `, by ${sourceName}` : ""}` : <span className="na">{isGuide ? "Guides are never rated" : m.contentRewritten ? "Not provided by the original publisher" : "Not given by the source"}</span>}</dd>
+              <dd>{rating ? `${rating.value} / ${rating.scale}${m.contentRewritten ? ", as reported by the original publisher" : excerptCitation && sourceName ? `, by ${sourceName}` : !excerptCitation ? ", as reported in the original review" : ""}` : <span className="na">{isGuide ? "Guides are never rated" : m.contentRewritten ? "Not provided by the original publisher" : "Not given by the source"}</span>}</dd>
             </div>
             {m.kind === "REVIEW" && (
               <div>
@@ -333,10 +336,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
               <aside className="kind-banner review" aria-label="About this review">
                 <div>
                   <strong>
-                    {m.kind === "COMPARISON" ? "Comparison" : m.kind === "BUYING_GUIDE" ? "Buying guide" : "Review"}
-                    {sourceName ? ` from ${sourceName}` : ""}.
+                    {m.kind === "COMPARISON" ? "Comparison" : m.kind === "BUYING_GUIDE" ? "Buying guide" : "Review"}.
                   </strong>
-                  {sourceAuthor ? `Written by ${sourceAuthor}. ` : ""}We summarise and file it for buyers, and show prices only while recently checked.
+                  We organize review information for buyers, and show prices only while recently checked.
                 </div>
               </aside>
             )}
@@ -372,7 +374,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   {quote && i === quote.after && (
                     <blockquote className="pullquote" aria-hidden="true">
                       <p style={{ margin: 0, fontSize: "inherit", lineHeight: "inherit" }}>{quote.text}</p>
-                      <footer>{isGuide ? "From this guide" : sourceName ? `From the review, ${sourceName}` : "From the review"}</footer>
+                      <footer>{isGuide ? "From this guide" : "From the review"}</footer>
                     </blockquote>
                   )}
                 </Fragment>
@@ -381,7 +383,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             {isGuide ? (
               <p className="small muted">Drafted with an AI writing tool and edited by Made4Buyers.</p>
             ) : (
-              !m.contentRewritten && sourceName && (
+              excerptCitation && sourceName && (
                 <p className="small muted">
                   Source:{" "}
                   {sourceUrl ? (
@@ -437,7 +439,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
           {(pros.length > 0 || cons.length > 0) && (
             <section id="pros-cons" aria-labelledby="pc-heading">
               <h2 id="pc-heading">Pros and cons</h2>
-              {(sourceName || m.contentRewritten) && <p className="muted small">As listed by {m.contentRewritten ? "the original publisher" : sourceName} in its review.</p>}
+              {(sourceName || m.contentRewritten) && <p className="muted small">{m.contentRewritten ? "As reported in the original review." : "As listed in the review."}</p>}
               <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 {pros.length > 0 && (
                   <div>

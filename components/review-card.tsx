@@ -18,9 +18,9 @@ export function aiPostType(meta: unknown): "ARTICLE" | "GUIDE" {
 export function KindPill({ kind, articleType, contentRewritten = false }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null; contentRewritten?: boolean }) {
   if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "Article" : "Guide"}</TrustLabel>;
   if (contentRewritten) return <TrustLabel kind="ai">{MADE4BUYERS_SOURCE_NAME} rewrite</TrustLabel>;
-  if (kind === "COMPARISON") return <TrustLabel kind="source">Source comparison</TrustLabel>;
-  if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Source buying guide</TrustLabel>;
-  return <TrustLabel kind="source" />;
+  if (kind === "COMPARISON") return <TrustLabel kind="source">Comparison</TrustLabel>;
+  if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Buying guide</TrustLabel>;
+  return <TrustLabel kind="source">Review</TrustLabel>;
 }
 
 /** The noun for a content kind, for sentences like "The full comparison belongs to …". */
@@ -30,7 +30,7 @@ export function kindNoun(kind: string): string {
 
 type CardAttributionFields = Pick<Card, "kind" | "contentRewritten" | "source" | "sourceUrl" | "slug"> & Partial<Pick<Card, "entities" | "author">>;
 
-/** Shared attribution policy for published cards; the card link is also the internal source link. */
+/** Shared public attribution policy for cards; original citations are only shown on excerpt detail pages. */
 export function sourceOf(r: CardAttributionFields): string | null {
   return resolveCardAttribution(r).name;
 }
@@ -46,7 +46,7 @@ function resolveCardAttribution(r: CardAttributionFields) {
   });
 }
 
-/** Source publication date for source content; our publication date for our own guides and rewrites. */
+/** Cards use Made4Buyers' publication date rather than the original publisher's date. */
 export function shownDate(r: CardAttributionFields & Pick<Card, "sourcePublishedAt" | "publishedAt">) {
   const source = resolveSourceAttribution({
     kind: r.kind,

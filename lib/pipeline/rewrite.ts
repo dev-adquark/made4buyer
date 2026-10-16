@@ -89,7 +89,7 @@ export type RewriteOutput = { summary: string; body: string };
 
 function buildPrompt(input: RewriteInput): string {
   return [
-    "Rewrite the following product review in completely original wording: new sentence structure and phrasing throughout. Preserve every factual claim exactly (specifications, numbers, pros, cons, verdict) — invent nothing that is not in the source. Do not reuse any run of 5 or more consecutive words from the source. Write in a neutral, informative tone.",
+    "Rewrite the following product review in completely original wording: new sentence structure and phrasing throughout. Preserve every factual claim exactly (specifications, numbers, pros, cons, verdict) — invent nothing that is not in the source. Do not reuse any run of 5 or more consecutive words from the source. Do not include the source publication's name, the source author's name, or source URLs, and do not imply that Made4Buyers authored the original review. Write in a neutral, informative tone.",
     "",
     `Product: ${input.productName}${input.brand ? ` (${input.brand})` : ""}`,
     `Title: ${input.title}`,

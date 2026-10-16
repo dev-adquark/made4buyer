@@ -24,7 +24,7 @@ describe("review card attribution", () => {
     })).toEqual(publishedAt);
   });
 
-  it("keeps publisher attribution and source publication date for source reviews", () => {
+  it("uses Made4Buyers attribution and publication date for source reviews", () => {
     const sourcePublishedAt = new Date("2026-09-23T00:00:00Z");
     expect(sourceOf({
       kind: "REVIEW",
@@ -34,7 +34,7 @@ describe("review card attribution", () => {
       source: "apify:publisher",
       sourceUrl: "https://publisher.example.org/review",
       slug: "review-1",
-    })).toBe("Publisher");
+    })).toBe("Made4Buyers");
     expect(shownDate({
       kind: "REVIEW",
       contentRewritten: false,
@@ -43,10 +43,10 @@ describe("review card attribution", () => {
       source: "apify:publisher",
       sourceUrl: "https://publisher.example.org/review",
       slug: "review-1",
-    })).toEqual(sourcePublishedAt);
+    })).toEqual(new Date("2026-09-24T00:00:00Z"));
   });
 
-  it("does not publish an ingestion provider as a source name when no real publisher is known", () => {
+  it("uses Made4Buyers for unknown ingestion providers", () => {
     expect(sourceOf({
       kind: "REVIEW",
       contentRewritten: false,
@@ -55,6 +55,6 @@ describe("review card attribution", () => {
       sourceUrl: null,
       slug: "review-1",
       author: "External author",
-    })).toBeNull();
+    })).toBe("Made4Buyers");
   });
 });

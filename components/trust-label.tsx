@@ -1,7 +1,7 @@
 /**
  * Factual trust labels. Each one states something the data proves; none of them is a rating.
  *  verified: legacy label (no longer used on public pages)
- *  source:   the text is a review from a named publisher
+ *  source:   a source review, comparison or buying guide
  *  ai:       our own guide or article (Made4Buyers; never rated)
  *  checked:  a price observed recently at the seller
  */

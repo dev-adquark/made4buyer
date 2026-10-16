@@ -21,7 +21,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 14;
+export const RENDER_MODEL_VERSION = 15;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -100,7 +100,7 @@ export type PageRenderModel = {
   /** Direct "where to buy" links built only from stored URLs (lib/public/retailer-links.ts). Never a price or a deal. */
   retailerLinks?: Array<Pick<RetailerLink, "url" | "label" | "merchant" | "kind">>;
   source: { name: string | null; url: string | null; author: string | null; publishedAt: string | null; isMade4Buyers: boolean };
-  /** True once the body is Made4Buyers' own rewritten wording (lib/pipeline/rewrite.ts): no third-party attribution is shown even though the source was once EXCERPT-rights. */
+  /** True once the body is Made4Buyers' own rewritten wording (lib/pipeline/rewrite.ts). */
   contentRewritten: boolean;
   publishedAt: string | null;
   updatedAt: string;
@@ -218,6 +218,7 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     source: resolveSourceAttribution({
       kind: review.kind ?? "REVIEW",
       contentRewritten,
+      preserveExternalAttribution: effectiveRights === "EXCERPT",
       sourceName: e?.source ?? review.source,
       sourceKey: review.source,
       sourceUrl: review.sourceUrl,

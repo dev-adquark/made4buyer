@@ -48,62 +48,64 @@ describe("public source attribution", () => {
     });
   });
 
-  it("retains legitimate external publisher attribution and citation URL", () => {
+  it("uses the Made4Buyers name and canonical link for third-party reviews by default", () => {
     expect(resolveSourceAttribution({
       kind: "REVIEW",
       sourceName: "Pack Hacker",
       sourceUrl: "https://packhacker.com/reviews/item",
       author: "Alex Doe",
       sourcePublishedAt: "2026-01-02T00:00:00Z",
+      publishedAt: "2026-01-03T00:00:00Z",
       canonicalPath: "/review/item",
+    })).toEqual({
+      name: "Made4Buyers",
+      url: "https://made4buyers.com/review/item",
+      author: null,
+      publishedAt: "2026-01-03T00:00:00.000Z",
+      isMade4Buyers: false,
+    });
+  });
+
+  it("preserves third-party attribution only when explicitly required for an excerpt citation", () => {
+    expect(resolveSourceAttribution({
+      kind: "REVIEW",
+      sourceName: "Pack Hacker",
+      sourceUrl: "https://packhacker.com/reviews/item",
+      author: "Eric Hergenreder",
+      sourcePublishedAt: "2026-01-02T00:00:00Z",
+      preserveExternalAttribution: true,
+      canonicalPath: "/review/high-coast-pro-foldsack-26",
     })).toEqual({
       name: "Pack Hacker",
       url: "https://packhacker.com/reviews/item",
-      author: "Alex Doe",
+      author: "Eric Hergenreder",
       publishedAt: "2026-01-02T00:00:00.000Z",
       isMade4Buyers: false,
     });
   });
 
-  it("omits attribution for the specified Pack Hacker article across public surfaces", () => {
-    expect(resolveSourceAttribution({
-      kind: "REVIEW",
-      sourceName: "Pack Hacker",
-      sourceUrl: "https://www.packhacker.com/travel-gear/fjallraven/high-coast-pro-foldsack-26/",
-      author: "Eric Hergenreder",
-      sourcePublishedAt: "2026-01-02T00:00:00Z",
-      canonicalPath: "/review/high-coast-pro-foldsack-26",
-    })).toEqual({
-      name: null,
-      url: null,
-      author: null,
-      publishedAt: null,
-      isMade4Buyers: false,
-    });
-  });
-
-  it("uses the external source host instead of an ingestion key and omits unknown providers", () => {
+  it("uses Made4Buyers for provider and unknown source records", () => {
     expect(resolveSourceAttribution({
       kind: "REVIEW",
       sourceName: "apify:packhacker",
       sourceUrl: "https://packhacker.com/reviews/item",
       canonicalPath: "/review/item",
-    }).name).toBe("packhacker.com");
+    }).name).toBe("Made4Buyers");
     expect(resolveSourceAttribution({
       kind: "REVIEW",
       sourceName: "apify:unknown",
       canonicalPath: "/review/item",
-    }).name).toBeNull();
+    }).name).toBe("Made4Buyers");
   });
 
-  it("suppresses custom Content API names when they are only ingestion keys", () => {
+  it("suppresses Content API source names from public attribution", () => {
     expect(resolveSourceAttribution({
       kind: "REVIEW",
       sourceName: "Custom feed import",
       sourceKey: "Custom feed import",
       sourceUrl: "https://packhacker.com/reviews/item",
       canonicalPath: "/review/item",
-    }).name).toBe("packhacker.com");
+    }).name).toBe("Made4Buyers");
   });
 
   it("does not allow content to change the Made4Buyers canonical origin", () => {
