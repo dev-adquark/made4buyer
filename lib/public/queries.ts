@@ -31,6 +31,7 @@ export const cardSelect = {
   subcategorySlug: true,
   publishedAt: true,
   sourcePublishedAt: true,
+  contentRewritten: true,
   author: true,
   generationMeta: true,
   entities: { select: { source: true } },

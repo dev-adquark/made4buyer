@@ -26,14 +26,14 @@ export function kindNoun(kind: string): string {
   return kind === "COMPARISON" ? "comparison" : kind === "BUYING_GUIDE" ? "buying guide" : kind === "AI_GUIDE" ? "guide" : "review";
 }
 
-/** Who wrote it: the publisher for reviews; Made4Buyers for our own guides and articles. */
-export function sourceOf(r: Pick<Card, "kind" | "entities" | "author">): string | null {
-  return r.kind === "AI_GUIDE" ? "Made4Buyers" : displayText(r.entities?.source) ?? displayText(r.author);
+/** Who wrote it: the publisher for source content; Made4Buyers for its own guides and rewrites. */
+export function sourceOf(r: Pick<Card, "kind" | "contentRewritten" | "entities" | "author">): string | null {
+  return r.kind === "AI_GUIDE" || r.contentRewritten ? "Made4Buyers" : displayText(r.entities?.source) ?? displayText(r.author);
 }
 
-/** The date the source published it (never our ingestion date, so old reviews don't look new). */
-export function shownDate(r: Pick<Card, "sourcePublishedAt" | "publishedAt">) {
-  return r.sourcePublishedAt ?? r.publishedAt;
+/** Source publication date for source content; our publication date for our own guides and rewrites. */
+export function shownDate(r: Pick<Card, "kind" | "contentRewritten" | "sourcePublishedAt" | "publishedAt">) {
+  return r.kind === "AI_GUIDE" || r.contentRewritten ? r.publishedAt : r.sourcePublishedAt ?? r.publishedAt;
 }
 
 function Meta({ r }: { r: Card }) {

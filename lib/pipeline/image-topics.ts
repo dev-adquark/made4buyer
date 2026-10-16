@@ -18,6 +18,8 @@ export type ImageTopic = {
   competing?: string[];
   /** Words that mean the photo shows something else, wherever they appear ("Singapore Sling cocktail"). */
   reject?: string[];
+  /** A category fallback, chosen by category alone (no product-name match): needs two distinct accept words, not one. */
+  broad?: boolean;
 };
 
 type Rule = ImageTopic & { match: string[] };
@@ -90,15 +92,27 @@ export function imageTopic(input: { title: string; productName: string; category
   const software = !input.categorySlug || SOFTWARE_CATEGORIES.has(input.categorySlug);
   if (software) for (const r of RULES) if (r.match.some((m) => text.includes(` ${tokenize(m).join(" ")} `))) return { key: r.key, label: r.label, queries: r.queries, accept: r.accept };
   const c = input.categorySlug ? CATEGORY_TOPICS[input.categorySlug] : undefined;
-  return c ? { key: `category:${input.categorySlug}`, ...c } : null;
+  return c ? { key: `category:${input.categorySlug}`, ...c, ...(BROAD_CATEGORIES.has(input.categorySlug!) ? { broad: true } : {}) } : null;
 }
+
+/**
+ * Category fallbacks whose accept words are generic office/computer words ("team", "office",
+ * "work", "laptop", "computer", "design"): any desk photo matches one of them. Hardware
+ * categories ("headphones", "tablet", "drone") name the object itself, so one word is enough.
+ */
+const BROAD_CATEGORIES = new Set(["productivity-software", "business-software", "website-ecommerce", "creative-software", "ai-tools", "developer-software", "smart-home"]);
 
 /** True when a photo's own description is about the topic. */
 export function photoMatchesTopic(alt: string, topic: ImageTopic): boolean {
   const words = tokenize(alt);
-  const first = words.findIndex((w) => topic.accept.includes(w));
-  if (first < 0) return false;
+  const matched = [...new Set(words.filter((w) => topic.accept.includes(w)))];
+  if (!matched.length) return false;
   if (topic.reject?.length && words.some((w) => topic.reject!.includes(w))) return false;
+  // A broad category fallback ("team"/"office"/"laptop"…) chosen without any product-name match:
+  // one generic word is too weak, so require a second distinct match (as pickRelevantPhoto does
+  // for multi-word product names). Name-matched rules and product types keep the one-word rule.
+  if (topic.broad && matched.length < 2) return false;
+  const first = words.findIndex((w) => topic.accept.includes(w));
   // "Compact white drone … surrounded by flashlight" is a photo of a drone, not of a flashlight.
   if (topic.competing?.length && words.slice(0, first).some((w) => topic.competing!.includes(w))) return false;
   return true;

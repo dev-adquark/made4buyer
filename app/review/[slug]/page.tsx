@@ -49,7 +49,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: m.title,
     description: m.metaDescription,
     alternates: { canonical: m.canonicalPath },
-    openGraph: { siteName: "Made4Buyers", type: "article", title: m.title, description: m.metaDescription, url: m.canonicalPath, images, publishedTime: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined, modifiedTime: m.updatedAt },
+    openGraph: {
+      siteName: "Made4Buyers",
+      type: "article",
+      title: m.title,
+      description: m.metaDescription,
+      url: m.canonicalPath,
+      images,
+      publishedTime: (m.kind === "AI_GUIDE" || m.contentRewritten ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
+      modifiedTime: m.updatedAt,
+    },
     twitter: { card: images.length ? "summary_large_image" : "summary", title: m.title, description: m.metaDescription, images: images.map((i) => i.url) },
   };
 }
@@ -74,11 +83,9 @@ function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb
   const author = displayText(m.source.author);
   const sourceUrl = displayUrl(m.source.url);
   const rating = validRating(m.rating);
-  // Review markup only for text we publish in full; an excerpt page is an article about the
-  // product that cites the original review, never a review of our own.
+  // A rewritten review can retain a source rating, but that isn't a Made4Buyers rating.
   const excerpt = m.textRights === "EXCERPT";
-  // Review markup only for a single-product review whose full text we publish.
-  if (rating && !excerpt && m.kind === "REVIEW" && product.name) {
+  if (rating && !excerpt && !m.contentRewritten && m.kind === "REVIEW" && product.name) {
     out.push({
       "@context": "https://schema.org",
       "@type": "Review",
@@ -99,9 +106,9 @@ function structuredData(m: PageRenderModel, offers: PublicOffer[], crumbs: Crumb
       url,
       mainEntityOfPage: url,
       ...(m.image.isFallback ? {} : { image: [m.image.url] }),
-      datePublished: (m.kind === "AI_GUIDE" ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
+      datePublished: (m.kind === "AI_GUIDE" || m.contentRewritten ? m.publishedAt : m.source.publishedAt ?? m.publishedAt) ?? undefined,
       dateModified: m.updatedAt,
-      ...(m.kind === "AI_GUIDE" || excerpt ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
+      ...(m.kind === "AI_GUIDE" || excerpt || m.contentRewritten ? { author: publisher } : author ? { author: { "@type": "Person", name: author } } : {}),
       publisher,
       about: (m.products ?? []).length > 1 ? m.products.map((p) => ({ "@type": "Thing", name: p.name })) : { "@type": "Thing", name: m.products?.[0]?.name ?? m.productName },
       ...(excerpt && sourceUrl ? { isBasedOn: sourceUrl, citation: { "@type": "CreativeWork", url: sourceUrl, ...(author ? { author: { "@type": "Person", name: author } } : {}), publisher: { "@type": "Organization", name: displayText(m.source.name) } } } : {}),
@@ -174,6 +181,8 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   const cons = (m.highlights?.cons ?? []).filter((t) => displayText(t));
   const published = displayDate(m.publishedAt);
   const sourceDate = displayDate(m.source.publishedAt);
+  const authoredByMade4Buyers = isGuide || m.contentRewritten;
+  const attributionDate = authoredByMade4Buyers ? published : sourceDate;
   const fact = (label: string) => displayText(m.keyEntities.find((e) => e.label === label)?.value);
   // Key facts: values a source stated (with provenance), never guessed. Rows that cannot apply
   // (a platform for a kettle, a model for a category guide) are left out instead of "Not available".
@@ -279,23 +288,23 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                 {m.productName}
               </dd>
             </div>
-            {(isGuide || sourceName) && (
+            {(authoredByMade4Buyers || sourceName) && (
               <div>
-                <dt>{isGuide ? "Written by" : "Source"}</dt>
-                <dd>{isGuide ? "Made4Buyers" : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}</dd>
+                <dt>{authoredByMade4Buyers ? "Written by" : "Source"}</dt>
+                <dd>{authoredByMade4Buyers ? "Made4Buyers" : sourceAuthor ? `${sourceName}, ${sourceAuthor}` : sourceName}</dd>
               </div>
             )}
-            {(isGuide ? published : sourceDate) && (
+            {attributionDate && (
               <div>
-                <dt>{isGuide ? "Published" : "Reviewed"}</dt>
+                <dt>{authoredByMade4Buyers ? "Published" : "Reviewed"}</dt>
                 <dd>
-                  <time dateTime={(isGuide ? published : sourceDate)!.toISOString()}>{dateline(isGuide ? published : sourceDate)}</time>
+                  <time dateTime={attributionDate.toISOString()}>{dateline(attributionDate)}</time>
                 </dd>
               </div>
             )}
             <div>
               <dt>Rating</dt>
-              <dd>{rating ? `${rating.value} / ${rating.scale}${sourceName ? `, by ${sourceName}` : ""}` : <span className="na">{isGuide ? "Guides are never rated" : "Not given by the source"}</span>}</dd>
+              <dd>{rating ? `${rating.value} / ${rating.scale}${m.contentRewritten ? ", as reported by the original publisher" : sourceName ? `, by ${sourceName}` : ""}` : <span className="na">{isGuide ? "Guides are never rated" : m.contentRewritten ? "Not provided by the original publisher" : "Not given by the source"}</span>}</dd>
             </div>
             {m.kind === "REVIEW" && (
               <div>
@@ -421,7 +430,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
           {(pros.length > 0 || cons.length > 0) && (
             <section id="pros-cons" aria-labelledby="pc-heading">
               <h2 id="pc-heading">Pros and cons</h2>
-              {sourceName && <p className="muted small">As listed by {sourceName} in its review.</p>}
+              {(sourceName || m.contentRewritten) && <p className="muted small">As listed by {m.contentRewritten ? "the original publisher" : sourceName} in its review.</p>}
               <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 {pros.length > 0 && (
                   <div>

@@ -32,6 +32,17 @@ describe("illustrative image topics", () => {
     expect(photoMatchesTopic("Woman smiling in a park", vpn)).toBe(false);
   });
 
+  it("rejects a broad category topic on one generic word alone, accepts it with a second distinct match", () => {
+    // business-software's accept list ("team"/"planning"/"meeting"/"office"/"business"/"work"/
+    // "laptop"/"colleagues") is broad enough that any one of those words also names several other
+    // topics (business-software, productivity-software, project-management, website…): a plain
+    // "person typing on a laptop" photo must not pass for every one of them.
+    const biz = imageTopic({ title: "Acme Suite review", productName: "Acme Suite", categorySlug: "business-software" })!;
+    expect(biz.key).toBe("category:business-software");
+    expect(photoMatchesTopic("Person typing on a laptop", biz)).toBe(false); // "laptop" alone: too generic
+    expect(photoMatchesTopic("Team planning a project on a whiteboard", biz)).toBe(true); // "team" + "planning"
+  });
+
   it("has a real placeholder file for every category (no 404 fallbacks)", () => {
     for (const c of [...CATEGORIES.map((c) => c.slug), null]) {
       const file = path.join(process.cwd(), "public", placeholderPath(c));
