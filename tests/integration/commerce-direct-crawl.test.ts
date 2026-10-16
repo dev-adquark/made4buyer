@@ -31,6 +31,10 @@ vi.mock("@/lib/commerce/discovery", async (importOriginal) => ({
 const { runCommerceDirectCrawl, runDirectBrandCrawl } = await import("@/lib/commerce/pipeline");
 
 const BRAND_HOST = "direct.example.test";
+// A separate hostname (same stub server) stands in for couponvault.net: a true third party, never
+// the brand's own domain, so firstParty detection (hostAllowed) sees it the same way it would the
+// real couponvault.net.
+const COUPONVAULT_HOST = "couponvault.example.test";
 type Page = { status?: number; html?: string; json?: unknown };
 const pages = new Map<string, Page>();
 
@@ -38,6 +42,7 @@ let server: http.Server;
 let port = 0;
 let restoreEnv: () => void;
 const site = () => `http://${BRAND_HOST}:${port}`;
+const couponVaultSite = () => `http://${COUPONVAULT_HOST}:${port}`;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
@@ -64,7 +69,7 @@ beforeAll(async () => {
   const realLookup = dns.lookup.bind(dns) as (...args: unknown[]) => void;
   vi.spyOn(dns, "lookup").mockImplementation(((hostname: string, opts: unknown, cb?: unknown) => {
     const callback = (typeof opts === "function" ? opts : cb) as (err: Error | null, address: unknown, family?: number) => void;
-    if (hostname.toLowerCase() === BRAND_HOST) {
+    if (hostname.toLowerCase() === BRAND_HOST || hostname.toLowerCase() === COUPONVAULT_HOST) {
       const all = typeof opts === "object" && opts !== null && (opts as { all?: boolean }).all;
       return all ? callback(null, [{ address: "127.0.0.1", family: 4 }]) : callback(null, "127.0.0.1", 4);
     }
@@ -171,6 +176,33 @@ describe("direct crawl: no Apify, a plain HTTP fetch per page", () => {
 
     const coupon = await db.commerceCoupon.findFirstOrThrow({ where: { merchant: brand.name, code: "SAVE20" } });
     expect(coupon).toMatchObject({ status: "VERIFIED", discount: "20% off", sourceUrl: promoUrl });
+  });
+
+  it("also reads the brand's CouponVault page (its own coupon site), via its sitemap, as a trusted tier-5 feed", async () => {
+    const restore = withEnv({ COUPONVAULT_BASE_URL: couponVaultSite() });
+    try {
+      const { brand } = await seedReviewAndBrand();
+      discovered.urls = [];
+      // officialDomainsOf() returns the registrable domain (direct.example.test → example.test): that is
+      // the domain CouponVault's own slug ("example-test") would have to match, not the full BRAND_HOST.
+      const cvSlug = "example-test";
+      pages.set("/sitemap.xml", { html: `<?xml version="1.0"?><urlset><url><loc>${couponVaultSite()}/software/${cvSlug}</loc></url></urlset>` });
+      pages.set(`/software/${cvSlug}`, {
+        html:
+          `<!doctype html><title>Offers</title><script type="application/ld+json">` +
+          `{"@context":"https://schema.org","@type":"ItemList","itemListElement":[{"@type":"ListItem","position":1,"item":{"@context":"https://schema.org","@type":"Coupon","name":"Get 20% OFF","description":"","code":"CVAULT20","validThrough":"2086-09-24T00:00:00+00:00","url":"${site()}"}}]}` +
+          `</script><body>CouponVault listing</body>`,
+      });
+      const { fetchCouponVaultMap } = await import("@/lib/commerce/couponvault");
+      const map = await fetchCouponVaultMap();
+      const r = await runDirectBrandCrawl(brand, "test", new Date(), map);
+      expect(r.coupons).toMatchObject({ pages: 1, found: 1 });
+
+      const coupon = await db.commerceCoupon.findFirstOrThrow({ where: { merchant: brand.name, code: "CVAULT20" } });
+      expect(coupon).toMatchObject({ status: "UNVERIFIED", sourceUrl: `${couponVaultSite()}/software/${cvSlug}` });
+    } finally {
+      restore();
+    }
   });
 
   it("commerce-direct-crawl: processes every due brand, no Apify token needed anywhere", async () => {

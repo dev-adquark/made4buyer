@@ -469,6 +469,31 @@ export function isFeedCoupon(sourceUrl: string | null | undefined): boolean {
   return Boolean(sourceUrl?.startsWith(`${feedCouponPrefix()}?`));
 }
 
+/** The stored source URL prefix of codes read from CouponVault (lib/commerce/couponvault.ts): every page is under its own domain. */
+export function couponVaultPrefix(): string {
+  return `${config.couponVault.baseUrl()}/`;
+}
+
+/** A code read from CouponVault (the owner's own coupon-listing site, tier 5): public on its own when fresh (owner decision, 2026-10-16), the same trust tier as Feedico. */
+export function isCouponVaultCoupon(sourceUrl: string | null | undefined): boolean {
+  return Boolean(sourceUrl?.startsWith(couponVaultPrefix()));
+}
+
+/** Either trusted external feed (Feedico or CouponVault): tier 5. */
+export function isTrustedFeedCoupon(sourceUrl: string | null | undefined): boolean {
+  return isFeedCoupon(sourceUrl) || isCouponVaultCoupon(sourceUrl);
+}
+
+/** The feed's own freshness window (days) for a tier-5 source URL. */
+export function trustedFeedMaxAgeDays(sourceUrl: string | null | undefined): number {
+  return isCouponVaultCoupon(sourceUrl) ? config.couponVault.maxAgeDays() : config.feedico.maxFeedAgeDays();
+}
+
+/** The display label for a tier-5 source URL ("Via Feedico" / "Via CouponVault"). */
+export function trustedFeedLabel(sourceUrl: string | null | undefined): string {
+  return isCouponVaultCoupon(sourceUrl) ? "CouponVault" : "Feedico";
+}
+
 /** Country/region subdomains of non-US storefronts (uk.brand.com, ca.brand.com, eu.brand.com …). */
 const NON_US_HOST_LABEL = /^(uk|gb|ca|au|nz|ie|de|fr|es|it|nl|be|at|ch|se|dk|no|fi|pl|pt|cz|eu|europe|jp|kr|cn|hk|tw|sg|my|ph|th|id|in|ae|sa|za|mx|br|ar|cl|co|intl)$/i;
 /** A path locale that is not US/English: /uk/, /en-gb/, /de-de/, /fr/ … */
@@ -507,7 +532,7 @@ export function nonUsFeedMarket(merchantUrl: string | null | undefined, text: st
 }
 
 export function couponSourceTier(sourceUrl: string | null | undefined, brand: DealBrandInput, approved: readonly ApprovedCouponSource[] = []): CouponSourceTier | null {
-  if (isFeedCoupon(sourceUrl)) return 5;
+  if (isTrustedFeedCoupon(sourceUrl)) return 5;
   const host = sourceUrl ? hostOf(sourceUrl) : null;
   if (!host) return null;
   const reg = registrableDomain(host.replace(/^www\./, ""));
@@ -575,10 +600,11 @@ export function couponDealStatus(coupon: DealCouponInput, now: number | Date = D
   else if (tier === null) add("COUPON_NOT_FIRST_PARTY", "the source page is not on the brand's official domain");
   else if (tier === 3 || tier === 4) add("COUPON_NOT_FIRST_PARTY", `${COUPON_TIER_LABEL[tier].toLowerCase()}: a third-party listing never verifies a code on its own`);
   if (feed && coupon.status === "UNVERIFIED") {
-    // Fresh: observed in a Feedico sync within FEEDICO_MAX_FEED_AGE_DAYS (14); the feed's own 14-day rule runs at every sync.
-    const maxAge = config.feedico.maxFeedAgeDays() * DAY_MS;
+    // Fresh: observed in a sync of its own feed within that feed's own max-age window.
+    const feedLabel = trustedFeedLabel(coupon.sourceUrl);
+    const maxAge = trustedFeedMaxAgeDays(coupon.sourceUrl) * DAY_MS;
     const seen = time(coupon.observedAt);
-    if (!Number.isFinite(seen) || nowMs - seen > maxAge) add("COUPON_NOT_RESEEN", Number.isFinite(seen) ? `last listed by Feedico ${Math.floor((nowMs - seen) / DAY_MS)} days ago` : "never listed");
+    if (!Number.isFinite(seen) || nowMs - seen > maxAge) add("COUPON_NOT_RESEEN", Number.isFinite(seen) ? `last listed by ${feedLabel} ${Math.floor((nowMs - seen) / DAY_MS)} days ago` : "never listed");
     const starts = time(coupon.startsAt);
     if (Number.isFinite(starts) && starts > nowMs) add("COUPON_NOT_STARTED", `starts ${new Date(starts).toISOString()}`);
   }
@@ -613,7 +639,7 @@ export function classifyCoupons<C extends DealCouponInput>(rows: readonly C[], n
     if (!active.length) continue;
     // The brand's own page outranks the feed: when an official row is active, terms are judged among
     // official rows only and a feed row of the same code is a duplicate, never a conflict.
-    const isFeed = (x: (typeof out)[number]) => isFeedCoupon(x.coupon.sourceUrl);
+    const isFeed = (x: (typeof out)[number]) => isTrustedFeedCoupon(x.coupon.sourceUrl);
     const official = active.filter((x) => !isFeed(x));
     const judged = official.length ? official : active;
     const storedConflict = group.some((x) => x.coupon.status === "CONFLICTING" && (!official.length || !isFeed(x)) && nowMs - time(x.coupon.observedAt ?? x.coupon.lastVerifiedAt) <= maxAge);

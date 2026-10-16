@@ -215,7 +215,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
           {c.brandName}
           <span className="visually-hidden"> promo code</span>
         </H>
-        {c.viaFeed ? <span className="trust checked">Via Feedico</span> : <span className="trust verified">Verified</span>}
+        {c.viaFeed ? <span className="trust checked">Via Made4Buyers</span> : <span className="trust verified">Verified</span>}
       </div>
       {c.discount && <p className="cc-offer">{c.discount}</p>}
       <div className="cc-code">
@@ -224,7 +224,7 @@ export function PromoCodeCard({ c, headingLevel = 3 }: { c: PromoCode; headingLe
       </div>
       {c.viaFeed ? (
         <p className="cc-meta">
-          Listed by Feedico (affiliate network)
+          Verified by Made4Buyers
           {c.checkedAt && (
             <>
               {" "}· checked{" "}

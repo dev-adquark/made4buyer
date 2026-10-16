@@ -4,7 +4,7 @@ import { hostAllowed, normalizeUrl } from "@/lib/pipeline/apify";
 import { commerceAudit } from "./audit";
 import { recordVerification, type VerificationEventInput } from "./verification-events";
 import { config } from "@/lib/config";
-import { couponVerifiedSince, feedCouponPrefix, publicCoupons } from "./deal-status";
+import { couponVaultPrefix, couponVerifiedSince, feedCouponPrefix, publicCoupons } from "./deal-status";
 import { CODE_SHAPE, findCodesInText } from "./page-functions/coupon";
 
 /**
@@ -269,7 +269,7 @@ export function normalizeCoupons(rawInput: unknown, brand: CouponBrand): Normali
   for (const node of raw.jsonLd) {
     if (!node || typeof node !== "object") continue;
     const n = node as Record<string, unknown>;
-    if (!nodeTypes(n).some((t) => /offer|promotion|saleevent|discount/.test(t))) continue;
+    if (!nodeTypes(n).some((t) => /offer|promotion|saleevent|discount|coupon/.test(t))) continue;
     const name = s(n.name, 200) ?? null;
     const text = [name, s(n.description, 600)].filter(Boolean).join(". ");
     const fieldCodes = ["couponCode", "promoCode", "promotionCode", "discountCode", "code"].map((k) => s(n[k], 40)).filter((x): x is string => Boolean(x));
@@ -481,6 +481,8 @@ function publicCouponWhere(now: Date): Prisma.CommerceCouponWhereInput {
       { status: "VERIFIED", lastVerifiedAt: { gte: since }, AND: current },
       // Feedico feed codes (stored UNVERIFIED), listed in a sync within the feed's 14-day window.
       { status: "UNVERIFIED", sourceUrl: { startsWith: `${feedCouponPrefix()}?` }, observedAt: { gte: new Date(now.getTime() - config.feedico.maxFeedAgeDays() * 86_400_000) }, AND: current },
+      // CouponVault feed codes (stored UNVERIFIED), listed in a sync within its own freshness window.
+      { status: "UNVERIFIED", sourceUrl: { startsWith: couponVaultPrefix() }, observedAt: { gte: new Date(now.getTime() - config.couponVault.maxAgeDays() * 86_400_000) }, AND: current },
       { status: "CONFLICTING", observedAt: { gte: since } },
     ],
   };

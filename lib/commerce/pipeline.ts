@@ -20,6 +20,8 @@ import { discoverProductUrls, type DiscoveryOptions, type DiscoveryResult } from
 import { fetchDirectCouponPage, fetchDirectPage } from "./direct-crawl";
 import { buildExternalScraperInput, EXTERNAL_SCRAPER_ACTOR_ID, rowToRawPayload, type ExternalProductRow } from "./external-scraper";
 import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, recordDisappearances, type NormalizedCoupon, upsertCoupons } from "./coupons";
+import { couponVaultRunnable, couponVaultUrlFor, fetchCouponVaultMap, type CouponVaultMap } from "./couponvault";
+import { officialDomainsOf } from "./deal-status";
 import { recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { loadSummaryFacts } from "@/lib/products/current-facts";
@@ -1006,15 +1008,21 @@ const DIRECT_ACTOR_ID = "direct-fetch";
 export type DirectCrawlResult = { brand: string; status: "OK" | "SKIPPED"; code?: string; reason?: string; pages?: number; extracted?: number; accepted?: number; rejected?: number; offersWritten?: number; coupons?: { pages: number; candidates: number; found: number } };
 
 /**
- * One brand's official promo page(s) (brand.promoUrls), fetched directly (no Apify, no browser):
- * fetchDirectCouponPage reads the raw HTML for "Use code XYZ"-style text and offer-like JSON-LD,
- * then the exact same evidence → verified-code pipeline Apify-sourced pages used (lib/commerce/
- * coupons.ts: normalizeCoupons, markCrossPageConflicts, upsertCoupons, recordDisappearances) decides
- * what is real. A code shown only after a click/reveal interaction (never in the raw HTML) is the
- * one thing this cannot see — a code already printed on the page is read just as reliably.
+ * One brand's official promo page(s) (brand.promoUrls), plus its CouponVault page when
+ * couponVaultMap resolves one (lib/commerce/couponvault.ts) — all fetched directly (no Apify, no
+ * browser): fetchDirectCouponPage reads the raw HTML for "Use code XYZ"-style text and offer-like
+ * JSON-LD, then the exact same evidence → verified-code pipeline Apify-sourced pages used
+ * (lib/commerce/coupons.ts: normalizeCoupons, markCrossPageConflicts, upsertCoupons,
+ * recordDisappearances) decides what is real. A code shown only after a click/reveal interaction
+ * (never in the raw HTML) is the one thing this cannot see — a code already printed on the page is
+ * read just as reliably.
  */
-async function runDirectBrandCoupons(brand: CommerceBrand, now: Date): Promise<{ pages: number; candidates: number; found: number }> {
+async function runDirectBrandCoupons(brand: CommerceBrand, now: Date, couponVaultMap?: CouponVaultMap): Promise<{ pages: number; candidates: number; found: number }> {
   const urls = cleanUrls(brand, brand.promoUrls ?? []);
+  if (couponVaultMap && (await couponVaultRunnable().catch(() => false))) {
+    const cv = couponVaultUrlFor(couponVaultMap, officialDomainsOf(brand));
+    if (cv && !urls.includes(cv)) urls.push(cv);
+  }
   if (!urls.length) return { pages: 0, candidates: 0, found: 0 };
   const pages: Array<{ url: string; page: Record<string, unknown> }> = [];
   for (const url of urls) {
@@ -1054,13 +1062,13 @@ async function runDirectBrandCoupons(brand: CommerceBrand, now: Date): Promise<{
  * does not. Product-catalogue coverage instead comes from sitemap discovery (brandRunUrls), which is
  * unaffected by this limitation.
  */
-export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string, now = new Date()): Promise<DirectCrawlResult> {
+export async function runDirectBrandCrawl(brand: CommerceBrand, trigger: string, now = new Date(), couponVaultMap?: CouponVaultMap): Promise<DirectCrawlResult> {
   if (!(await getSwitches()).commerce_engine) return { brand: brand.slug, status: "SKIPPED", code: "SWITCH_OFF", reason: "paused in Admin → Automation: Commerce engine is off" };
   // Independent of product discovery below: a brand's promo page(s) are tried either way, so a
   // temporary sitemap/product-URL problem never skips its coupon check too.
   const tryCoupons = async (): Promise<DirectCrawlResult["coupons"]> => {
     try {
-      return await runDirectBrandCoupons(brand, now);
+      return await runDirectBrandCoupons(brand, now, couponVaultMap);
     } catch (error) {
       log.warn("commerce direct coupon crawl failed", { stage: "CONTENT_FETCH", brand: brand.slug, error: String(error).slice(0, 200) });
       return undefined;
@@ -1126,9 +1134,13 @@ export async function runCommerceDirectCrawl(trigger: string, now = new Date()) 
   }
   const limit = brandsPerRun();
   const brands = (await dueBrands(now, limit)).slice(0, limit);
+  const couponVaultMap = await fetchCouponVaultMap().catch((error: unknown) => {
+    log.warn("couponvault map fetch failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
+    return new Map() as CouponVaultMap;
+  });
   const results: DirectCrawlResult[] = [];
   for (const brand of brands) {
-    const r = await runDirectBrandCrawl(brand, trigger, now);
+    const r = await runDirectBrandCrawl(brand, trigger, now, couponVaultMap);
     results.push(r);
     if (r.code === "SWITCH_OFF") break; // the same reason applies to every remaining brand
   }

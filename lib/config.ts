@@ -179,6 +179,18 @@ export const config = {
     maxFeedAgeDays: () => num("FEEDICO_MAX_FEED_AGE_DAYS", 14, 1, 14),
   },
 
+  /**
+   * CouponVault (lib/commerce/couponvault.ts): the owner's own coupon-listing site
+   * (couponvault.net), read directly like any other brand page (plain HTTP GET, no API key, no
+   * cost) during the free direct-crawl. Codes it lists for a registry brand are a trusted feed
+   * (tier 5, like Feedico): public while listed within COUPONVAULT_MAX_AGE_DAYS.
+   */
+  couponVault: {
+    /** Overridable only so tests can point at a local stub. */
+    baseUrl: () => (str("COUPONVAULT_BASE_URL") ?? "https://couponvault.net").replace(/\/+$/, ""),
+    maxAgeDays: () => num("COUPONVAULT_MAX_AGE_DAYS", 10, 1, 30),
+  },
+
   /** Test-only escape hatch so integration/E2E suites can verify links against loopback stubs. */
   allowLoopbackForTests: () =>
     bool("UNSAFE_ALLOW_LOOPBACK_FOR_TESTS", false) && process.env.VERCEL_ENV !== "production",

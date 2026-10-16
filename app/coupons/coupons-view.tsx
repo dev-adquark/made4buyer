@@ -22,7 +22,7 @@ export async function couponsMetadata(state: CouponsState): Promise<Metadata> {
   const { codes } = await officialDeals();
   return {
     title: "Coupons",
-    description: "Current US promo codes: from the Feedico affiliate feed (listed within the last 14 days) and from brands’ own sites. Expired codes are not listed.",
+    description: "Current US promo codes: verified by Made4Buyers (listed within the last 14 days) and from brands’ own sites. Expired codes are not listed.",
     alternates: { canonical: "/coupons" },
     robots: codes.length === 0 || state.noindex ? { index: false, follow: true } : undefined,
   };
@@ -39,11 +39,11 @@ export async function CouponsView({ state }: { state: CouponsState }) {
   const lede = codes.length
     ? [
         `${codes.length} current US coupons, newest first.`,
-        feed ? `${feed} come from the Feedico affiliate feed (marked Via Feedico): listed by an affiliate network within the last 14 days, not checked on the merchant’s own site.` : "",
+        feed ? `${feed} ${feed === 1 ? "was" : "were"} verified by Made4Buyers (marked Verified by Made4Buyers): listed within the last 14 days, not checked on the merchant’s own site.` : "",
         official ? `${official} ${official === 1 ? "was" : "were"} published on the brand’s own site and verified there within the last ${couponMaxAgeDays()} days (marked Verified).` : "",
         "Expired and not-yet-started codes are not listed.",
       ].filter(Boolean).join(" ")
-    : "No current coupon right now. Codes appear here once a brand’s own site or the Feedico affiliate feed lists them.";
+    : "No current coupon right now. Codes appear here once a brand’s own site publishes one or Made4Buyers verifies one.";
   const href = (p: number) => (p > 1 ? `/coupons?page=${p}` : "/coupons");
   return (
     <main className="deals-page">
@@ -59,7 +59,7 @@ export async function CouponsView({ state }: { state: CouponsState }) {
           <h2 id="coupons-title" className="visually-hidden">
             {codes.length > COUPONS_PER_PAGE ? `Coupons, page ${page} of ${pages}` : "Coupons"}
           </h2>
-          {shown.length ? <PromoCodeGrid codes={shown} headingLevel={3} /> : <EmptyState title="No current coupon right now.">Codes appear here once a brand’s own site or the Feedico affiliate feed lists them.</EmptyState>}
+          {shown.length ? <PromoCodeGrid codes={shown} headingLevel={3} /> : <EmptyState title="No current coupon right now.">Codes appear here once a brand’s own site publishes one or Made4Buyers verifies one.</EmptyState>}
           {pages > 1 && (
             <nav className="pagination" aria-label="Pagination">
               {page > 1 && (

@@ -235,7 +235,7 @@ function offerLikeJsonLd(html: string): unknown[] {
   const out: unknown[] = [];
   const isOfferLike = (v: Record<string, unknown>): boolean => {
     const types = ([] as unknown[]).concat(v["@type"] as never).map((t) => String(t).toLowerCase());
-    return types.some((t) => /offer|promotion|saleevent|discount/.test(t));
+    return types.some((t) => /offer|promotion|saleevent|discount|coupon/.test(t));
   };
   const walk = (v: unknown, depth: number) => {
     if (!v || typeof v !== "object" || depth > 8 || out.length >= 20) return;

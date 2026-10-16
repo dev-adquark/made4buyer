@@ -28,7 +28,7 @@ export default function HomeCouponCard({ c }: { c: PromoCode }) {
       </span>
       {c.expiresAt && <span className="hc-exp">Ends {fmtDate(c.expiresAt)} (as stated)</span>}
       <p className="hd-verify">
-        {c.viaFeed ? <span className="trust checked">Via Feedico</span> : <span className="trust verified">Verified</span>}
+        {c.viaFeed ? <span className="trust checked">Via Made4Buyers</span> : <span className="trust verified">Verified</span>}
         {checked && when && (
           <span>
             Checked{" "}

@@ -263,7 +263,7 @@ export default async function Home() {
         <section className="section home-deals" aria-labelledby="verified-deals-title">
           <div className="wrap">
             <SectionHeader id="verified-deals-title" label={`${verified.drops.length + verified.codes.length} current`} title="Deals and coupons" action={<Link className="arrow-link" href="/deals">All deals</Link>}>
-              Price drops checked on the brand’s official site within the last 48 hours: in stock, unexpired, with the saving worked out from the page’s own prices. Coupons from brands’ own sites, or listed by the Feedico affiliate feed (marked “Via Feedico”).
+              Price drops checked on the brand’s official site within the last 48 hours: in stock, unexpired, with the saving worked out from the page’s own prices. Coupons from brands’ own sites, or verified by Made4Buyers.
             </SectionHeader>
             {railDrops.length > 0 && (
               <HomeRail id="home-price-drops" label="Price drops" title={`Price drops (${verified.drops.length})`}>
