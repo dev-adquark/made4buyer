@@ -53,8 +53,10 @@ export async function rewriteUsage(now = new Date()): Promise<{ month: string; s
 }
 
 export function rewriteConfigured(): boolean {
-  return Boolean(config.rewrite.apiKey());
+  return Boolean(config.rewrite.openRouterKey() || config.rewrite.apiKey());
 }
+
+const NOT_CONFIGURED = "no rewrite API key configured (OPENROUTER_API_KEY or ANTHROPIC_API_KEY)";
 
 // ── Similarity (pure) ────────────────────────────────────────────────────
 
@@ -85,11 +87,13 @@ export function shingleSimilarity(a: string, b: string, n = 5): number {
 // ── Claude API ───────────────────────────────────────────────────────────
 
 export type RewriteInput = { title: string; productName: string; brand: string | null; body: string };
-export type RewriteOutput = { summary: string; body: string };
+export type RewriteOutput = { title: string | null; summary: string; body: string };
 
 function buildPrompt(input: RewriteInput): string {
   return [
-    "Rewrite the following product review in completely original wording: new sentence structure and phrasing throughout. Preserve every factual claim exactly (specifications, numbers, pros, cons, verdict) — invent nothing that is not in the source. Do not reuse any run of 5 or more consecutive words from the source. Do not include the source publication's name, the source author's name, or source URLs, and do not imply that Made4Buyers authored the original review. Write in a neutral, informative tone.",
+    "Rewrite the following product review in completely original wording: new sentence structure and phrasing throughout. Preserve every factual claim exactly (specifications, numbers, pros, cons, verdict) — invent nothing that is not in the source. Do not reuse any run of 5 or more consecutive words from the source. Do not include the source publication's name, the source author's name, or source URLs.",
+    "Write in a neutral, third-person, informative tone. Never write in the first person (no I, me, my, we, our) and never claim that Made4Buyers tested, used or owned the product: state findings as facts about the product.",
+    "Also write a new headline: original wording, includes the product name, no first person, no publication name.",
     "",
     `Product: ${input.productName}${input.brand ? ` (${input.brand})` : ""}`,
     `Title: ${input.title}`,
@@ -97,39 +101,61 @@ function buildPrompt(input: RewriteInput): string {
     "Source text:",
     input.body.slice(0, 12_000),
     "",
-    'Respond with ONLY a JSON object, no other text: {"summary": "<one sentence>", "body": "<the rewritten review, plain text, paragraphs separated by a blank line>"}',
+    'Respond with ONLY a JSON object, no other text: {"title": "<new headline>", "summary": "<one or two sentences>", "body": "<the rewritten review, plain text, paragraphs separated by a blank line; a line starting with \\"## \\" is a section heading>"}',
   ].join("\n");
 }
 
-type ClaudeError = { kind: "NOT_CONFIGURED" | "AUTH_FAILED" | "RATE_LIMITED" | "RESPONSE_INVALID" | "UNAVAILABLE"; message: string };
+type ModelError = { kind: "NOT_CONFIGURED" | "AUTH_FAILED" | "RATE_LIMITED" | "RESPONSE_INVALID" | "UNAVAILABLE"; message: string };
+type ModelReply = { ok: true; text: string } | { ok: false; error: ModelError };
 
-async function callClaude(prompt: string): Promise<{ ok: true; text: string } | { ok: false; error: ClaudeError }> {
-  const key = config.rewrite.apiKey();
-  if (!key) return { ok: false, error: { kind: "NOT_CONFIGURED", message: "ANTHROPIC_API_KEY not configured" } };
-  const res = await safeFetch(`${config.rewrite.baseUrl()}/v1/messages`, {
-    method: "POST",
-    headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-    body: JSON.stringify({ model: config.rewrite.model(), max_tokens: 3000, messages: [{ role: "user", content: prompt }] }),
-    timeoutMs: 60_000,
-    maxRedirects: 0,
-    readBody: true,
-    maxBytes: 2_000_000,
-  });
+/** One chat completion: OpenRouter when OPENROUTER_API_KEY is set, otherwise the Anthropic Messages API. */
+async function callModel(prompt: string): Promise<ModelReply> {
+  const orKey = config.rewrite.openRouterKey();
+  const key = orKey ?? config.rewrite.apiKey();
+  if (!key) return { ok: false, error: { kind: "NOT_CONFIGURED", message: NOT_CONFIGURED } };
+  const res = orKey
+    ? await safeFetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${orKey}`, "HTTP-Referer": config.siteUrl(), "X-Title": "Made4Buyers", "Content-Type": "application/json" },
+        body: JSON.stringify({ model: config.rewrite.openRouterModel(), max_tokens: 4000, messages: [{ role: "user", content: prompt }] }),
+        timeoutMs: 90_000,
+        maxRedirects: 0,
+        readBody: true,
+        maxBytes: 2_000_000,
+      })
+    : await safeFetch(`${config.rewrite.baseUrl()}/v1/messages`, {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+        body: JSON.stringify({ model: config.rewrite.model(), max_tokens: 4000, messages: [{ role: "user", content: prompt }] }),
+        timeoutMs: 90_000,
+        maxRedirects: 0,
+        readBody: true,
+        maxBytes: 2_000_000,
+      });
+  const provider = orKey ? "OpenRouter" : "Claude API";
   if (res.error) return { ok: false, error: { kind: "UNAVAILABLE", message: String(res.error.kind) } };
-  if (res.status === 401 || res.status === 403) return { ok: false, error: { kind: "AUTH_FAILED", message: "Claude API rejected the key" } };
-  if (res.status === 429) return { ok: false, error: { kind: "RATE_LIMITED", message: "Claude API rate limit" } };
-  if (res.status !== 200) return { ok: false, error: { kind: "UNAVAILABLE", message: `HTTP ${res.status}` } };
+  if (res.status === 401 || res.status === 403) return { ok: false, error: { kind: "AUTH_FAILED", message: `${provider} rejected the key` } };
+  if (res.status === 402) return { ok: false, error: { kind: "AUTH_FAILED", message: `${provider}: insufficient credits` } };
+  if (res.status === 429) return { ok: false, error: { kind: "RATE_LIMITED", message: `${provider} rate limit` } };
+  if (res.status !== 200) return { ok: false, error: { kind: "UNAVAILABLE", message: `${provider} HTTP ${res.status}` } };
   let json: unknown;
   try {
     json = JSON.parse(res.body ?? "");
   } catch {
     return { ok: false, error: { kind: "RESPONSE_INVALID", message: "response is not JSON" } };
   }
-  const content = (json as { content?: unknown })?.content;
-  const text = Array.isArray(content) ? (content[0] as { text?: unknown })?.text : undefined;
+  const text = orKey
+    ? (json as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]?.message?.content
+    : (() => {
+        const content = (json as { content?: unknown })?.content;
+        return Array.isArray(content) ? (content[0] as { text?: unknown })?.text : undefined;
+      })();
   if (typeof text !== "string" || !text.trim()) return { ok: false, error: { kind: "RESPONSE_INVALID", message: "no text content in response" } };
   return { ok: true, text };
 }
+
+/** First-person voice ("I", "we", "our"…): the rewrite would read as if Made4Buyers used the product. */
+const FIRST_PERSON = /(^|[\s"(])(I|I'm|I've|I'd|I'll|me|my|mine|we|we're|we've|our|ours|us)(?=[\s,.!?;:")]|$)/;
 
 /** Validates the model's reply; anything else (prose, missing fields, fenced-but-broken JSON) is null. */
 export function parseRewriteResponse(text: string): RewriteOutput | null {
@@ -143,13 +169,14 @@ export function parseRewriteResponse(text: string): RewriteOutput | null {
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
   if (typeof o.summary !== "string" || typeof o.body !== "string" || !o.summary.trim() || !o.body.trim()) return null;
-  return { summary: o.summary.trim().slice(0, 300), body: o.body.trim() };
+  const title = typeof o.title === "string" && o.title.trim().length >= 8 ? o.title.replace(/\s+/g, " ").trim().slice(0, 160) : null;
+  return { title, summary: o.summary.trim().slice(0, 300), body: o.body.trim() };
 }
 
 // ── One review ───────────────────────────────────────────────────────────
 
 export type RewriteResult =
-  | { status: "OK"; summary: string; body: string; similarity: number; costUsd: number }
+  | { status: "OK"; title: string | null; summary: string; body: string; similarity: number; costUsd: number }
   | { status: "SKIPPED" | "TOO_SIMILAR" | "FAILED"; code: string; reason: string; similarity?: number };
 
 /**
@@ -157,7 +184,7 @@ export type RewriteResult =
  * it also records the attempt) — this is the pure "ask Claude, validate what came back" step.
  */
 export async function rewriteReviewBody(input: RewriteInput & { id: string; attempts: number }, trigger: string, now = new Date()): Promise<RewriteResult> {
-  if (!rewriteConfigured()) return { status: "SKIPPED", code: "REWRITE_NOT_CONFIGURED", reason: "ANTHROPIC_API_KEY not configured" };
+  if (!rewriteConfigured()) return { status: "SKIPPED", code: "REWRITE_NOT_CONFIGURED", reason: NOT_CONFIGURED };
   const state = await readState(now);
   const budget = config.rewrite.monthlyBudgetUsd();
   if (state.spentUsd >= budget) return { status: "SKIPPED", code: "BUDGET_EXHAUSTED", reason: `$${state.spentUsd.toFixed(2)} of $${budget} spent in ${state.month}` };
@@ -169,12 +196,12 @@ export async function rewriteReviewBody(input: RewriteInput & { id: string; atte
     // while a duplicate trigger for the SAME attempt is blocked.
     idempotencyBasis: `attempt:${input.attempts}`,
     trigger,
-    config: [() => (rewriteConfigured() ? null : { code: "REWRITE_NOT_CONFIGURED", reason: "ANTHROPIC_API_KEY not configured" })],
+    config: [() => (rewriteConfigured() ? null : { code: "REWRITE_NOT_CONFIGURED", reason: NOT_CONFIGURED })],
     budget: [() => (state.spentUsd >= budget ? { code: "BUDGET_EXHAUSTED", reason: `budget $${budget} reached for ${state.month}` } : null)],
     call: async () => {
       state.spentUsd += config.rewrite.runEstimateUsd();
       await writeState(state);
-      return callClaude(buildPrompt(input));
+      return callModel(buildPrompt(input));
     },
   });
   if (guarded.status === "SKIPPED") return { status: "SKIPPED", code: guarded.code, reason: guarded.reason };
@@ -183,14 +210,16 @@ export async function rewriteReviewBody(input: RewriteInput & { id: string; atte
   if (!res.ok) return { status: "FAILED", code: res.error.kind, reason: res.error.message };
 
   const parsed = parseRewriteResponse(res.text);
-  if (!parsed) return { status: "FAILED", code: "REWRITE_RESPONSE_INVALID", reason: "Claude's reply was not the documented JSON shape" };
+  if (!parsed) return { status: "FAILED", code: "REWRITE_RESPONSE_INVALID", reason: "the model's reply was not the documented JSON shape" };
+  const voice = `${parsed.title ?? ""}\n${parsed.summary}\n${parsed.body}`.match(FIRST_PERSON);
+  if (voice) return { status: "TOO_SIMILAR", code: "REWRITE_FIRST_PERSON", reason: `the rewrite is written in the first person ("${voice[2]}")` };
 
   const similarity = shingleSimilarity(parsed.body, input.body);
   if (similarity > config.rewrite.maxSimilarityPct()) {
     log.warn("rewrite too similar to source", { stage: "CONTENT_FETCH", reviewId: input.id, similarity });
     return { status: "TOO_SIMILAR", code: "REWRITE_TOO_SIMILAR", reason: `shared ${Math.round(similarity * 100)}% of 5-word phrases with the source (max ${Math.round(config.rewrite.maxSimilarityPct() * 100)}%)`, similarity };
   }
-  return { status: "OK", summary: parsed.summary, body: parsed.body, similarity, costUsd: config.rewrite.runEstimateUsd() };
+  return { status: "OK", title: parsed.title, summary: parsed.summary, body: parsed.body, similarity, costUsd: config.rewrite.runEstimateUsd() };
 }
 
 // ── Batch job ────────────────────────────────────────────────────────────
@@ -214,7 +243,7 @@ export type ContentRewriteSummary = {
  * exhaustion stops the run (the same budget applies to every remaining review this month).
  */
 export async function runContentRewrite(trigger: string, now = new Date()): Promise<ContentRewriteSummary> {
-  if (!rewriteConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "ANTHROPIC_API_KEY not configured", candidates: 0, processed: 0, rewritten: 0, tooSimilar: 0, failed: 0 };
+  if (!rewriteConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: NOT_CONFIGURED, candidates: 0, processed: 0, rewritten: 0, tooSimilar: 0, failed: 0 };
   const maxAttempts = config.rewrite.maxAttempts();
   const limit = config.rewrite.perRunLimit();
   const candidates = await db.normalizedReview.findMany({
@@ -239,7 +268,8 @@ export async function runContentRewrite(trigger: string, now = new Date()): Prom
     processed++;
     const result = await rewriteReviewBody({ id: r.id, title: r.canonicalTitle, productName: r.productName, brand: r.brand, body: r.body, attempts: r.rewriteAttempts }, trigger, now);
     if (result.status === "OK") {
-      await db.normalizedReview.update({ where: { id: r.id }, data: { body: result.body, summary: result.summary, contentRewritten: true, rewrittenAt: now, rewriteAttempts: { increment: 1 } } });
+      // The URL (slug) is kept; only the visible headline changes.
+      await db.normalizedReview.update({ where: { id: r.id }, data: { body: result.body, summary: result.summary, ...(result.title ? { canonicalTitle: result.title } : {}), contentRewritten: true, rewrittenAt: now, rewriteAttempts: { increment: 1 } } });
       if (r.status === "PUBLISHED") {
         // Already live (the backfill case): refresh its cached page and purge it now, rather than
         // waiting for the page's own next rebuild, so the rewritten body is live immediately.

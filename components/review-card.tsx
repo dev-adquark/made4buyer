@@ -17,7 +17,7 @@ export function aiPostType(meta: unknown): "ARTICLE" | "GUIDE" {
 
 export function KindPill({ kind, articleType, contentRewritten = false }: { kind: string; articleType?: "ARTICLE" | "GUIDE" | null; contentRewritten?: boolean }) {
   if (kind === "AI_GUIDE") return <TrustLabel kind="ai">{articleType === "ARTICLE" ? "Article" : "Guide"}</TrustLabel>;
-  if (contentRewritten) return <TrustLabel kind="ai">{MADE4BUYERS_SOURCE_NAME} rewrite</TrustLabel>;
+  if (contentRewritten) return <TrustLabel kind="ai">{MADE4BUYERS_SOURCE_NAME}</TrustLabel>;
   if (kind === "COMPARISON") return <TrustLabel kind="source">Comparison</TrustLabel>;
   if (kind === "BUYING_GUIDE") return <TrustLabel kind="source">Buying guide</TrustLabel>;
   return <TrustLabel kind="source">Review</TrustLabel>;

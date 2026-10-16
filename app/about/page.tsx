@@ -9,7 +9,7 @@ export default function About() {
         <h1>About Made4Buyers</h1>
         <p className="lede">Made4Buyers is a buying guide: it organises reviews around what buyers need, and shows prices only while they have been checked recently.</p>
         <h2>How reviews are processed</h2>
-        <p>Reviews are based on content from publishing partners. Each one is checked for completeness, de-duplicated, and classified by category, use case, platform and price tier. Some are rewritten in Made4Buyers’ own wording; when we reproduce a source excerpt, we identify and link to its publisher. Only recent source reviews (published or updated within the last 7 days) are published automatically.</p>
+        <p>Made4Buyers reviews are written in our own words from publicly available product information. Each one is checked for completeness, de-duplicated, and classified by category, use case, platform and price tier before it is published.</p>
         <h2>How prices are checked</h2>
         <p>Prices and seller links come from our own commerce data: we read the maker’s official product pages and retailer product pages for the exact product and record what they state, and when. A price is shown only while that observation is recent; otherwise the review says “We couldn’t verify a current price from an authoritative source.” Links to sellers are plain links to their own pages.</p>
         <h2>How buying guides are written</h2>

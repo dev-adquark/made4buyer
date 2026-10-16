@@ -237,7 +237,7 @@ export default async function Home() {
       <section className="section" aria-labelledby="now-title">
         <div className="wrap">
           <SectionHeader id="now-title" label={`${stats.published} published`} title="Worth buying now" action={reviews.length ? <Link className="arrow-link" href="/reviews">All reviews</Link> : undefined}>
-            The newest publisher reviews and Made4Buyers rewrites, each by its publication date.
+            The newest reviews, each by its publication date.
           </SectionHeader>
           {lead ? (
             <div className="lead-grid">
@@ -252,7 +252,7 @@ export default async function Home() {
             </div>
           ) : (
             <EmptyState title="The first reviews are on their way." label="Reviews" compact action={<Link className="btn" href="/about">How reviews get here</Link>}>
-              Publisher reviews and Made4Buyers rewrites pass our checks before they’re published. Nothing here is a placeholder.
+              Every review passes our checks before it’s published. Nothing here is a placeholder.
             </EmptyState>
           )}
         </div>

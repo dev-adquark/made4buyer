@@ -199,6 +199,9 @@ export const config = {
    * not stored, and retried later (up to REWRITE_MAX_ATTEMPTS).
    */
   rewrite: {
+    /** OpenRouter (OpenAI-compatible chat completions); used first when set. */
+    openRouterKey: () => str("OPENROUTER_API_KEY"),
+    openRouterModel: () => str("OPENROUTER_MODEL") ?? "openai/gpt-4o",
     apiKey: () => str("ANTHROPIC_API_KEY"),
     baseUrl: () => (str("ANTHROPIC_API_BASE_URL") ?? "https://api.anthropic.com").replace(/\/+$/, ""),
     model: () => str("REWRITE_MODEL") ?? "claude-sonnet-5-5",

@@ -95,7 +95,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     "inspect-index": integrations.gsc !== "READY" ? "Search Console not configured" : undefined,
     "scrape-sources": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
     "collect-scrapes": apifyConfigured() ? undefined : "APIFY_API_TOKEN not configured",
-    "content-rewrite": rewrite.nature === "PAID_UNTRACKED" && rewrite.label.includes("not configured") ? "ANTHROPIC_API_KEY not configured" : undefined,
+    "content-rewrite": rewrite.nature === "PAID_UNTRACKED" && rewrite.label.includes("not configured") ? "OPENROUTER_API_KEY / ANTHROPIC_API_KEY not configured" : undefined,
   };
   return (
     <>

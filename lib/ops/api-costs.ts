@@ -137,7 +137,7 @@ export const analyticsCost = (): CostInfo => ({ nature: "FREE", label: "Free", d
 
 /** Content rewrite (Claude API): budget tracked by this app's own per-call estimate (Claude does not report cost back to us), never the exact invoice figure. */
 export async function rewriteCost(): Promise<CostInfo> {
-  if (!config.rewrite.apiKey()) return { nature: "PAID_UNTRACKED", label: "Paid (Claude API) — not configured", detail: "ANTHROPIC_API_KEY is not set, so no rewrite can run." };
+  if (!config.rewrite.openRouterKey() && !config.rewrite.apiKey()) return { nature: "PAID_UNTRACKED", label: "Paid (rewrite API) — not configured", detail: "Neither OPENROUTER_API_KEY nor ANTHROPIC_API_KEY is set, so no rewrite can run." };
   try {
     const { spentUsd, budgetUsd } = await rewriteUsage();
     return {

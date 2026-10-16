@@ -309,7 +309,7 @@ export async function integrationReadiness(now = new Date()): Promise<Integratio
   // Content rewrite (Claude API)
   {
     const ok = await jobRun("content-rewrite", "SUCCEEDED");
-    rows.push(row({ key: "rewrite", name: "Content rewrite (Claude)", missingEnv: need("ANTHROPIC_API_KEY"), optionalMissing: [], success: ok?.startedAt ?? null, error: liveError("rewrite"), note: "Rewritten reviews publish in full as Made4Buyers' own content, with no third-party name or link." }));
+    rows.push(row({ key: "rewrite", name: "Content rewrite (OpenRouter / Claude)", missingEnv: isSet("OPENROUTER_API_KEY") || isSet("ANTHROPIC_API_KEY") ? [] : ["OPENROUTER_API_KEY"], optionalMissing: [], success: ok?.startedAt ?? null, error: liveError("rewrite"), note: "Rewritten reviews publish in full as Made4Buyers' own content, with no third-party name or link." }));
   }
   // Keyword-to-Blog
   {

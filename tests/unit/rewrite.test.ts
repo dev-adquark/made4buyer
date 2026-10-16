@@ -24,12 +24,12 @@ describe("shingleSimilarity", () => {
 describe("parseRewriteResponse", () => {
   it("parses the documented {summary, body} JSON", () => {
     const text = '{"summary": "A quick take.", "body": "Paragraph one.\\n\\nParagraph two."}';
-    expect(parseRewriteResponse(text)).toEqual({ summary: "A quick take.", body: "Paragraph one.\n\nParagraph two." });
+    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "A quick take.", body: "Paragraph one.\n\nParagraph two." });
   });
 
   it("strips a markdown code fence around the JSON", () => {
     const text = '```json\n{"summary": "S", "body": "B"}\n```';
-    expect(parseRewriteResponse(text)).toEqual({ summary: "S", body: "B" });
+    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "S", body: "B" });
   });
 
   it("returns null for prose, missing fields, or broken JSON", () => {
@@ -37,5 +37,10 @@ describe("parseRewriteResponse", () => {
     expect(parseRewriteResponse('{"summary": "only a summary"}')).toBeNull();
     expect(parseRewriteResponse('{"summary": "", "body": "x"}')).toBeNull();
     expect(parseRewriteResponse("{not json")).toBeNull();
+  });
+
+  it("keeps a new headline when the model returns one, ignores a too-short one", () => {
+    expect(parseRewriteResponse('{"title": "Pixel 11 Review: A Real Upgrade", "summary": "S", "body": "B"}')?.title).toBe("Pixel 11 Review: A Real Upgrade");
+    expect(parseRewriteResponse('{"title": "Hi", "summary": "S", "body": "B"}')?.title).toBeNull();
   });
 });
