@@ -192,6 +192,18 @@
     {
       "path": "/api/cron/commerce-direct-crawl",
       "schedule": "30 5 */2 * *"
+    },
+    {
+      "path": "/api/cron/commerce-classify-deals",
+      "schedule": "50 12 1,15 * *"
+    },
+    {
+      "path": "/api/cron/affiliate-links",
+      "schedule": "20 13 1,15 * *"
+    },
+    {
+      "path": "/api/cron/reclassify-content",
+      "schedule": "40 7 * * 1"
     }
   ]
 }
