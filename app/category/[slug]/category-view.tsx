@@ -360,7 +360,7 @@ export async function CategoryView({ slug, state }: { slug: string; state: Categ
         <section className="section" id="guides" aria-labelledby="cg-title">
           <div className="wrap">
             <SectionHeader id="cg-title" label="Latest" title={`${def.name} buying guides`}>
-              Buying guides from named publishers and from Made4Buyers.
+              Buying guides from Made4Buyers.
             </SectionHeader>
             <ReviewGrid reviews={guides} />
           </div>

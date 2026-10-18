@@ -209,8 +209,8 @@ export default async function Home() {
                   <span className="clip-body">
                     <span className="label">What we check</span>
                     <dl>
-                      <dt>Source</dt>
-                      <dd>Named publisher</dd>
+                      <dt>Content</dt>
+                      <dd>Written in our own words</dd>
                       <dt>Product</dt>
                       <dd>Brand, model, platform</dd>
                       <dt>Offer</dt>
@@ -408,8 +408,8 @@ export default async function Home() {
               <p>Prices, sellers and availability are what the seller’s own page stated when we checked. Missing information is shown as missing.</p>
             </li>
             <li>
-              <h3>Ratings only when they exist</h3>
-              <p>We show a rating only when the original reviewer gave one. Our own guides never carry a rating.</p>
+              <h3>No made-up scores</h3>
+              <p>We never invent a rating or a score, and our guides are never rated.</p>
             </li>
             <li>
               <h3>Commission never picks the seller</h3>

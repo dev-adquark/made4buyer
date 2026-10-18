@@ -198,7 +198,9 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
   };
   const via = (k: string) => {
     const f = pd?.fields[k];
-    if (!f || !displayText(f.sourceName)) return null;
+    // Only the brand's own page, a retailer or a product feed is named as a fact's origin; a fact read
+    // from another publication carries no source label (that publication is never named on the page).
+    if (!f || !displayText(f.sourceName) || !["MANUFACTURER", "RETAILER", "STRUCTURED_FEED"].includes(f.source ?? "")) return null;
     const sourceType = f.source === "MANUFACTURER" ? "Manufacturer" : f.source === "RETAILER" ? "Retailer" : f.source === "STRUCTURED_FEED" ? "Product feed" : "Source";
     return `${sourceType}${dateline(f.observedAt) ? `, checked ${dateline(f.observedAt)}` : ""}`;
   };
@@ -314,7 +316,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
             )}
             <div>
               <dt>Rating</dt>
-              <dd>{rating ? `${rating.value} / ${rating.scale}${m.contentRewritten ? ", as reported by the original publisher" : excerptCitation && sourceName ? `, by ${sourceName}` : !excerptCitation ? ", as reported in the original review" : ""}` : <span className="na">{isGuide ? "Guides are never rated" : m.contentRewritten ? "Not provided by the original publisher" : "Not given by the source"}</span>}</dd>
+              <dd>{rating ? `${rating.value} / ${rating.scale}${excerptCitation && sourceName ? `, by ${sourceName}` : ""}` : <span className="na">{isGuide ? "Guides are never rated" : "Not rated"}</span>}</dd>
             </div>
             {m.kind === "REVIEW" && (
               <div>
@@ -374,14 +376,14 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
                   {quote && i === quote.after && (
                     <blockquote className="pullquote" aria-hidden="true">
                       <p style={{ margin: 0, fontSize: "inherit", lineHeight: "inherit" }}>{quote.text}</p>
-                      <footer>{isGuide ? "From this guide" : "From the review"}</footer>
+                      <footer>{isGuide ? "From this guide" : "From this review"}</footer>
                     </blockquote>
                   )}
                 </Fragment>
               ))}
             </div>
             {isGuide ? (
-              <p className="small muted">Drafted with an AI writing tool and edited by Made4Buyers.</p>
+              <p className="small muted">Drafted with an AI writing tool and published by Made4Buyers.</p>
             ) : (
               excerptCitation && sourceName && (
                 <p className="small muted">
@@ -439,7 +441,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ slug: s
           {(pros.length > 0 || cons.length > 0) && (
             <section id="pros-cons" aria-labelledby="pc-heading">
               <h2 id="pc-heading">Pros and cons</h2>
-              {(sourceName || m.contentRewritten) && <p className="muted small">{m.contentRewritten ? "As reported in the original review." : "As listed in the review."}</p>}
+              {excerptCitation && sourceName && <p className="muted small">As listed in the review.</p>}
               <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
                 {pros.length > 0 && (
                   <div>

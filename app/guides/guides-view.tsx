@@ -13,7 +13,7 @@ export async function guidesMetadata(state: GuidesState): Promise<Metadata> {
   const { total } = await publishedGuides(1);
   return {
     title: "Buying guides",
-    description: "Buying guides and articles from named publishers and from Made4Buyers.",
+    description: "Buying guides and articles from Made4Buyers.",
     alternates: { canonical: "/guides" },
     robots: total === 0 || state.noindex ? { index: false, follow: true } : undefined,
   };

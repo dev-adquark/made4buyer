@@ -24,12 +24,12 @@ describe("shingleSimilarity", () => {
 describe("parseRewriteResponse", () => {
   it("parses the documented {summary, body} JSON", () => {
     const text = '{"summary": "A quick take.", "body": "Paragraph one.\\n\\nParagraph two."}';
-    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "A quick take.", body: "Paragraph one.\n\nParagraph two." });
+    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "A quick take.", body: "Paragraph one.\n\nParagraph two.", pros: [], cons: [] });
   });
 
   it("strips a markdown code fence around the JSON", () => {
     const text = '```json\n{"summary": "S", "body": "B"}\n```';
-    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "S", body: "B" });
+    expect(parseRewriteResponse(text)).toEqual({ title: null, summary: "S", body: "B", pros: [], cons: [] });
   });
 
   it("returns null for prose, missing fields, or broken JSON", () => {
@@ -42,5 +42,10 @@ describe("parseRewriteResponse", () => {
   it("keeps a new headline when the model returns one, ignores a too-short one", () => {
     expect(parseRewriteResponse('{"title": "Pixel 11 Review: A Real Upgrade", "summary": "S", "body": "B"}')?.title).toBe("Pixel 11 Review: A Real Upgrade");
     expect(parseRewriteResponse('{"title": "Hi", "summary": "S", "body": "B"}')?.title).toBeNull();
+  });
+
+  it("returns rewritten pros and cons when the model provides them", () => {
+    const r = parseRewriteResponse('{"pros": ["Light", "  Fast "], "cons": ["Pricey"], "summary": "S", "body": "B"}');
+    expect(r).toMatchObject({ pros: ["Light", "Fast"], cons: ["Pricey"] });
   });
 });

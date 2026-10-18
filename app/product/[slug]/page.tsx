@@ -76,7 +76,7 @@ export async function generateMetadata({
   const { entity, content } = data;
   return {
     title: `${entity.name}: reviews, comparisons and guides`,
-    description: `Everything Made4Buyers has filed about ${entity.name}${entity.brand && !entity.name.startsWith(entity.brand) ? ` by ${entity.brand}` : ""}: source reviews, comparisons and buying guides.`,
+    description: `Everything Made4Buyers has filed about ${entity.name}${entity.brand && !entity.name.startsWith(entity.brand) ? ` by ${entity.brand}` : ""}: reviews, comparisons and buying guides.`,
     alternates: { canonical: `/product/${slug}` },
     // No published content yet: a thin page, not indexed.
     robots: content.length ? undefined : { index: false, follow: true },

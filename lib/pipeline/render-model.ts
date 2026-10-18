@@ -21,7 +21,7 @@ import { PLACEHOLDER_SIZE, publicImageUrl, relevantImage } from "./images";
  */
 
 /** Bump whenever the model shape or a rights rule changes: older stored models are rebuilt on read. */
-export const RENDER_MODEL_VERSION = 15;
+export const RENDER_MODEL_VERSION = 16;
 
 /** The public subset of a product's resolved facts: values with their source, never internal scores. */
 export type ProductData = {
@@ -212,7 +212,9 @@ export function composeRenderModel({ review, entities: e, assignments, image, of
     products,
     productData,
     // A rating belongs to a single-product review; comparisons and guides never carry one.
-    rating: (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
+    // A rating belongs to a single-product review; comparisons and guides never carry one. A
+    // rewritten review is Made4Buyers' own write-up: the original publisher's score is not ours to show.
+    rating: !contentRewritten && (review.kind ?? "REVIEW") === "REVIEW" && e?.rating != null && e.ratingScale ? { value: e.rating, scale: e.ratingScale } : null,
     offers,
     retailerLinks: dedupeRetailerLinks(retailerLinks, offers).map(({ url, label, merchant, kind }) => ({ url, label, merchant, kind })),
     source: resolveSourceAttribution({

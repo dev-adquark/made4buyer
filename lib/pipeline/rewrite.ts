@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { config } from "@/lib/config";
 import { log } from "@/lib/log";
@@ -86,8 +87,8 @@ export function shingleSimilarity(a: string, b: string, n = 5): number {
 
 // ── Claude API ───────────────────────────────────────────────────────────
 
-export type RewriteInput = { title: string; productName: string; brand: string | null; body: string };
-export type RewriteOutput = { title: string | null; summary: string; body: string };
+export type RewriteInput = { title: string; productName: string; brand: string | null; body: string; pros?: string[]; cons?: string[] };
+export type RewriteOutput = { title: string | null; summary: string; body: string; pros: string[]; cons: string[] };
 
 function buildPrompt(input: RewriteInput): string {
   return [
@@ -100,8 +101,9 @@ function buildPrompt(input: RewriteInput): string {
     "",
     "Source text:",
     input.body.slice(0, 12_000),
+    ...(input.pros?.length || input.cons?.length ? ["", `Source pros: ${JSON.stringify(input.pros ?? [])}`, `Source cons: ${JSON.stringify(input.cons ?? [])}`, "Rewrite each pro and con in new wording (same meaning, same number of items)."] : []),
     "",
-    'Respond with ONLY a JSON object, no other text: {"title": "<new headline>", "summary": "<one or two sentences>", "body": "<the rewritten review, plain text, paragraphs separated by a blank line; a line starting with \\"## \\" is a section heading>"}',
+    'Respond with ONLY a JSON object, no other text: {"pros": ["<rewritten pro>"], "cons": ["<rewritten con>"], "title": "<new headline>", "summary": "<one or two sentences>", "body": "<the rewritten review, plain text, paragraphs separated by a blank line; a line starting with \\"## \\" is a section heading>"}',
   ].join("\n");
 }
 
@@ -170,13 +172,14 @@ export function parseRewriteResponse(text: string): RewriteOutput | null {
   const o = obj as Record<string, unknown>;
   if (typeof o.summary !== "string" || typeof o.body !== "string" || !o.summary.trim() || !o.body.trim()) return null;
   const title = typeof o.title === "string" && o.title.trim().length >= 8 ? o.title.replace(/\s+/g, " ").trim().slice(0, 160) : null;
-  return { title, summary: o.summary.trim().slice(0, 300), body: o.body.trim() };
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.replace(/\s+/g, " ").trim().slice(0, 200)).slice(0, 8) : []);
+  return { title, summary: o.summary.trim().slice(0, 300), body: o.body.trim(), pros: list(o.pros), cons: list(o.cons) };
 }
 
 // ── One review ───────────────────────────────────────────────────────────
 
 export type RewriteResult =
-  | { status: "OK"; title: string | null; summary: string; body: string; similarity: number; costUsd: number }
+  | { status: "OK"; title: string | null; summary: string; body: string; pros: string[]; cons: string[]; similarity: number; costUsd: number }
   | { status: "SKIPPED" | "TOO_SIMILAR" | "FAILED"; code: string; reason: string; similarity?: number };
 
 /**
@@ -219,7 +222,7 @@ export async function rewriteReviewBody(input: RewriteInput & { id: string; atte
     log.warn("rewrite too similar to source", { stage: "CONTENT_FETCH", reviewId: input.id, similarity });
     return { status: "TOO_SIMILAR", code: "REWRITE_TOO_SIMILAR", reason: `shared ${Math.round(similarity * 100)}% of 5-word phrases with the source (max ${Math.round(config.rewrite.maxSimilarityPct() * 100)}%)`, similarity };
   }
-  return { status: "OK", title: parsed.title, summary: parsed.summary, body: parsed.body, similarity, costUsd: config.rewrite.runEstimateUsd() };
+  return { status: "OK", title: parsed.title, summary: parsed.summary, body: parsed.body, pros: parsed.pros, cons: parsed.cons, similarity, costUsd: config.rewrite.runEstimateUsd() };
 }
 
 // ── Batch job ────────────────────────────────────────────────────────────
@@ -251,7 +254,7 @@ export async function runContentRewrite(trigger: string, now = new Date()): Prom
     // freshly ingested content the publish QA gate (lib/pipeline/publish.ts CONTENT_NOT_REWRITTEN)
     // is holding back until it's rewritten. REJECTED/UNPUBLISHED are owner decisions, left alone.
     where: { status: { in: ["PUBLISHED", "NEEDS_REVIEW", "QUEUED"] }, contentRewritten: false, rewriteAttempts: { lt: maxAttempts }, kind: { not: "AI_GUIDE" } },
-    select: { id: true, canonicalTitle: true, productName: true, brand: true, body: true, source: true, rewriteAttempts: true, status: true, slug: true, categorySlug: true, brandSlug: true },
+    select: { id: true, canonicalTitle: true, productName: true, brand: true, body: true, source: true, sourceData: true, rewriteAttempts: true, status: true, slug: true, categorySlug: true, brandSlug: true },
     orderBy: { publishedAt: "desc" },
     take: limit * 4, // over-fetch: most will already be FULL rights (licensed/content-api) and need no rewrite
   });
@@ -266,10 +269,14 @@ export async function runContentRewrite(trigger: string, now = new Date()): Prom
     const rights = await textRightsFor(r.source);
     if (rights !== "EXCERPT") continue; // already full rights: nothing to rewrite
     processed++;
-    const result = await rewriteReviewBody({ id: r.id, title: r.canonicalTitle, productName: r.productName, brand: r.brand, body: r.body, attempts: r.rewriteAttempts }, trigger, now);
+    const sd = (r.sourceData && typeof r.sourceData === "object" && !Array.isArray(r.sourceData) ? r.sourceData : {}) as Record<string, unknown>;
+    const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+    const result = await rewriteReviewBody({ id: r.id, title: r.canonicalTitle, productName: r.productName, brand: r.brand, body: r.body, pros: strings(sd.pros), cons: strings(sd.cons), attempts: r.rewriteAttempts }, trigger, now);
     if (result.status === "OK") {
       // The URL (slug) is kept; only the visible headline changes.
-      await db.normalizedReview.update({ where: { id: r.id }, data: { body: result.body, summary: result.summary, ...(result.title ? { canonicalTitle: result.title } : {}), contentRewritten: true, rewrittenAt: now, rewriteAttempts: { increment: 1 } } });
+      // Pros/cons are shown on the page: only the rewritten lists, never the publisher's own wording.
+      const sourceData = { ...sd, pros: result.pros, cons: result.cons } as Prisma.InputJsonValue;
+      await db.normalizedReview.update({ where: { id: r.id }, data: { body: result.body, summary: result.summary, sourceData, ...(result.title ? { canonicalTitle: result.title } : {}), contentRewritten: true, rewrittenAt: now, rewriteAttempts: { increment: 1 } } });
       if (r.status === "PUBLISHED") {
         // Already live (the backfill case): refresh its cached page and purge it now, rather than
         // waiting for the page's own next rebuild, so the rewritten body is live immediately.

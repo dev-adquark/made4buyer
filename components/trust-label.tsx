@@ -6,6 +6,6 @@
  *  checked:  a price observed recently at the seller
  */
 export default function TrustLabel({ kind, children }: { kind: "verified" | "source" | "ai" | "checked" | "none"; children?: React.ReactNode }) {
-  const text = children ?? { verified: "Verified offer", source: "Source review", ai: "Guide", checked: "Checked", none: "No current price" }[kind];
+  const text = children ?? { verified: "Verified offer", source: "Review", ai: "Guide", checked: "Checked", none: "No current price" }[kind];
   return <span className={`trust ${kind}`}>{text}</span>;
 }
