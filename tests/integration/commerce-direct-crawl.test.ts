@@ -28,7 +28,7 @@ vi.mock("@/lib/commerce/discovery", async (importOriginal) => ({
   discoverProductUrls: async () => ({ status: "OK", urls: [...discovered.urls] }),
 }));
 
-const { runCommerceDirectCrawl, runDirectBrandCrawl } = await import("@/lib/commerce/pipeline");
+const { runCommerceDirectCrawl, runDealPriceRecheck, runDirectBrandCrawl } = await import("@/lib/commerce/pipeline");
 
 const BRAND_HOST = "direct.example.test";
 // A separate hostname (same stub server) stands in for couponvault.net: a true third party, never
@@ -203,6 +203,27 @@ describe("direct crawl: no Apify, a plain HTTP fetch per page", () => {
     } finally {
       restore();
     }
+  });
+
+  it("deal-price-recheck: re-reads a deal whose price is getting old and updates it from the brand's own page", async () => {
+    const { brand } = await seedReviewAndBrand();
+    discovered.urls = [`${site()}/products/laptop13`];
+    const shopifyPage = { html: `<!doctype html><html><head><title>Laptop 13</title><script src="https://cdn.shopify.com/s/files/1/0001/theme.js"></script><script>var Shopify = Shopify || {}; Shopify.currency = {"active":"USD","rate":"1.0"};</script></head><body><h1>Laptop 13</h1></body></html>` };
+    pages.set("/products/laptop13", shopifyPage);
+    pages.set("/products/laptop13.js", { json: { title: "Laptop 13", variants: [{ id: 123, sku: "LAP13", price: 89900, compare_at_price: 99900, available: true }] } });
+    await runDirectBrandCrawl(brand, "test");
+    const offer = await db.commerceOffer.findFirstOrThrow({ where: { product: { brandId: brand.id } } });
+    expect(offer).toMatchObject({ price: 899, listPrice: 999 });
+    // 30 h later the brand's price has moved: the re-check reads it again.
+    await db.commerceOffer.update({ where: { id: offer.id }, data: { observedAt: new Date(Date.now() - 30 * 3_600_000) } });
+    pages.set("/products/laptop13.js", { json: { title: "Laptop 13", variants: [{ id: 123, sku: "LAP13", price: 84900, compare_at_price: 99900, available: true }] } });
+    const r = await runDealPriceRecheck("test");
+    expect(r).toMatchObject({ status: "OK", brands: 1, pages: 1 });
+    const after = await db.commerceOffer.findUniqueOrThrow({ where: { id: offer.id } });
+    expect(after).toMatchObject({ price: 849, listPrice: 999, status: "FRESH" });
+    expect(Date.now() - after.observedAt.getTime()).toBeLessThan(3_600_000);
+    // Nothing older than the re-check window: nothing to do.
+    expect(await runDealPriceRecheck("test")).toMatchObject({ brands: 0, pages: 0 });
   });
 
   it("commerce-direct-crawl: processes every due brand, no Apify token needed anywhere", async () => {

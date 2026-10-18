@@ -23,7 +23,7 @@ import { buildExternalScraperInput, EXTERNAL_SCRAPER_ACTOR_ID, rowToRawPayload, 
 import { markCrossPageConflicts, markExpiredCoupons, normalizeCoupons, recordDisappearances, type NormalizedCoupon, upsertCoupons } from "./coupons";
 import { couponVaultRunnable, couponVaultUrlFor, fetchCouponVaultMap, type CouponVaultMap } from "./couponvault";
 import { officialDomainsOf } from "./deal-status";
-import { recheckCandidates, type RecheckResult } from "./recheck";
+import { offerRecheckHours, recheckCandidates, type RecheckResult } from "./recheck";
 import { normalizeCommerceRecord, type NormalizedCommerceRecord } from "./normalize";
 import { loadSummaryFacts } from "@/lib/products/current-facts";
 import { verifyOfficial } from "./official";
@@ -1134,14 +1134,18 @@ export async function runCommerceDirectCrawl(trigger: string, now = new Date()) 
   } catch (error) {
     log.warn("commerce seed sync failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
   }
-  const limit = brandsPerRun();
+  // Free (plain HTTP GETs), so it has its own, larger per-run brand count than the Apify jobs'
+  // COMMERCE_BRANDS_PER_RUN; the time guard keeps one invocation inside the function's limit.
+  const limit = directBrandsPerRun();
   const brands = (await dueBrands(now, limit)).slice(0, limit);
   const couponVaultMap = await fetchCouponVaultMap().catch((error: unknown) => {
     log.warn("couponvault map fetch failed", { stage: "COMMERCE", error: String(error).slice(0, 200) });
     return new Map() as CouponVaultMap;
   });
+  const deadline = Date.now() + DIRECT_RUN_BUDGET_MS;
   const results: DirectCrawlResult[] = [];
   for (const brand of brands) {
+    if (Date.now() > deadline) break; // the rest stay due for the next pass
     const r = await runDirectBrandCrawl(brand, trigger, now, couponVaultMap);
     results.push(r);
     if (r.code === "SWITCH_OFF") break; // the same reason applies to every remaining brand
@@ -1154,6 +1158,81 @@ export async function runCommerceDirectCrawl(trigger: string, now = new Date()) 
   const started = results.filter((r) => r.status === "OK").length;
   const stopped = results.find((r) => r.status === "SKIPPED" && r.code === "SWITCH_OFF");
   return { status: stopped && !started ? "SKIPPED" : "OK", reason: stopped?.reason, brands: brands.length, started, results };
+}
+
+/** Brands per commerce-direct-crawl pass (COMMERCE_DIRECT_BRANDS_PER_RUN, default 15): free, so not tied to the Apify count. */
+export const directBrandsPerRun = () => Math.floor(envNum("COMMERCE_DIRECT_BRANDS_PER_RUN", 15, 1, 200));
+/** Wall-clock budget for one direct pass: no new brand/page starts after it (the cron function allows 300 s). */
+const DIRECT_RUN_BUDGET_MS = 230_000;
+
+export type DealRecheckResult = { status: "OK" | "SKIPPED"; reason?: string; brands: number; pages: number; extracted: number; offersWritten: number; failed: number; timedOut: boolean };
+
+/**
+ * deal-price-recheck (free, no Apify): re-reads, straight from each brand's official product page,
+ * the price of every offer that is or could be a public deal and was last observed more than
+ * COMMERCE_OFFER_RECHECK_HOURS (20) ago — deal candidates (list price above price) first, brands
+ * with the most of them first, oldest first. Same fetch → normalize → offer pipeline as the direct
+ * crawl (robots.txt checked, official domain only), so a price that moved is updated, a deal that
+ * ended stops being a deal, and one still on stays FRESH inside the 48 h public window. Runs several
+ * times a day; it never touches a brand's discovery schedule.
+ */
+export async function runDealPriceRecheck(trigger: string, now = new Date(), opts: { budgetMs?: number; perBrand?: number } = {}): Promise<DealRecheckResult> {
+  const out: DealRecheckResult = { status: "OK", brands: 0, pages: 0, extracted: 0, offersWritten: 0, failed: 0, timedOut: false };
+  if (!(await getSwitches()).commerce_engine) return { ...out, status: "SKIPPED", reason: "paused in Admin → Automation: Commerce engine is off" };
+  const deadline = Date.now() + (opts.budgetMs ?? DIRECT_RUN_BUDGET_MS);
+  const cutoff = new Date(now.getTime() - offerRecheckHours() * 3_600_000);
+  const due = await db.commerceOffer.findMany({
+    where: { status: { in: ["FRESH", "STALE"] }, observedAt: { lt: cutoff }, listPrice: { not: null }, product: { brand: { enabled: true } } },
+    select: { price: true, listPrice: true, product: { select: { brandId: true } } },
+  });
+  const deals = new Map<string, number>();
+  for (const o of due) if (o.product.brandId && typeof o.price === "number" && typeof o.listPrice === "number" && o.listPrice > o.price) deals.set(o.product.brandId, (deals.get(o.product.brandId) ?? 0) + 1);
+  const brandIds = [...deals.keys()].sort((a, b) => (deals.get(b) ?? 0) - (deals.get(a) ?? 0));
+  if (!brandIds.length) return { ...out, reason: "no deal price due for a re-check" };
+  const brands = await db.commerceBrand.findMany({ where: { id: { in: brandIds } } });
+  const ordered = brandIds.map((id) => brands.find((b) => b.id === id)).filter((b): b is CommerceBrand => Boolean(b));
+  for (const brand of ordered) {
+    if (Date.now() > deadline) {
+      out.timedOut = true;
+      break;
+    }
+    const pick = await recheckCandidates(brand, now, opts.perBrand ?? 25).catch(() => ({ urls: [] as string[], due: 0, skipped: [] }));
+    if (!pick.urls.length) continue;
+    out.brands++;
+    const run = await db.commerceRun.create({ data: { purpose: "PRODUCT", brandId: brand.id, actorId: DIRECT_ACTOR_ID, trigger, status: "COLLECTING", startUrls: pick.urls.length } });
+    const items: unknown[] = [];
+    for (const url of pick.urls) {
+      if (Date.now() > deadline) {
+        out.timedOut = true;
+        break;
+      }
+      const r = await fetchDirectPage(url, "PRODUCT");
+      if (r.ok) items.push(r.page);
+      else out.failed++;
+    }
+    const raws = await storeRaws(run, items);
+    const cache = new Map<string, Candidate[]>();
+    let extracted = 0;
+    let written = 0;
+    for (const raw of raws) {
+      try {
+        const o = await processRaw(brand, raw, now, cache);
+        if (o.result !== "NOT_EXTRACTED" && o.result !== "ERROR") extracted++;
+        written += o.offersWritten ?? 0;
+      } catch (error) {
+        log.warn("deal re-check record failed", { stage: "CONTENT_FETCH", brand: brand.slug, url: raw.url, error: String(error).slice(0, 200) });
+      }
+    }
+    out.pages += raws.length;
+    out.extracted += extracted;
+    out.offersWritten += written;
+    await db.commerceRun.update({ where: { id: run.id }, data: { status: "COLLECTED", pagesProcessed: raws.length, extracted, collectedAt: now, finishedAt: new Date() } });
+  }
+  // Offers the re-check did not reach before their 48 h window ended stop being shown as current.
+  const stale = await markStaleOffers(now);
+  if (out.offersWritten || stale) await revalidateCommerce();
+  log.info("deal price re-check", { stage: "CONTENT_FETCH", trigger, ...out, stale });
+  return out;
 }
 
 /** commerce-collect: collect finished runs, then age offers. */

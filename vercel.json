@@ -190,10 +190,6 @@
       "schedule": "30 0 1,15 * *"
     },
     {
-      "path": "/api/cron/commerce-direct-crawl",
-      "schedule": "30 5 */2 * *"
-    },
-    {
       "path": "/api/cron/commerce-classify-deals",
       "schedule": "50 12 1,15 * *"
     },
@@ -204,6 +200,30 @@
     {
       "path": "/api/cron/reclassify-content",
       "schedule": "40 7 * * 1"
+    },
+    {
+      "path": "/api/cron/commerce-direct-crawl",
+      "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/cron/commerce-direct-crawl?pass=pm",
+      "schedule": "30 17 * * *"
+    },
+    {
+      "path": "/api/cron/deal-price-recheck",
+      "schedule": "15 1 * * *"
+    },
+    {
+      "path": "/api/cron/deal-price-recheck?pass=2",
+      "schedule": "15 7 * * *"
+    },
+    {
+      "path": "/api/cron/deal-price-recheck?pass=3",
+      "schedule": "15 13 * * *"
+    },
+    {
+      "path": "/api/cron/deal-price-recheck?pass=4",
+      "schedule": "15 19 * * *"
     }
   ]
 }
