@@ -153,7 +153,17 @@ export async function checkRobots(url: string): Promise<{ allowed: boolean; reas
 export const PAGE_FUNCTION = `async function pageFunction(context) {
   const { request, customData } = context;
   const url = request.loadedUrl || request.url;
-  const patterns = (customData && customData.reviewPatterns) || [];
+  let patterns = (customData && customData.reviewPatterns) || [];
+  let sourceSlug = (customData && customData.source) || null;
+  // One run for several sources: the page's own host decides which source (and patterns) it belongs to.
+  if (customData && customData.sourcesByHost) {
+    let host = "";
+    try { host = new URL(url).hostname.toLowerCase().replace(/^www\\./, ""); } catch (e) {}
+    const key = Object.keys(customData.sourcesByHost).find((k) => host === k || host.endsWith("." + k));
+    if (!key) return null;
+    patterns = customData.sourcesByHost[key].reviewPatterns || [];
+    sourceSlug = customData.sourcesByHost[key].source;
+  }
   if (!patterns.some((p) => new RegExp(p).test(url))) return null;
   const meta = (sel) => { const el = document.querySelector(sel); return el ? (el.getAttribute("content") || el.getAttribute("href") || "").trim() || null : null; };
   const metas = (sel) => [...document.querySelectorAll(sel)].map((el) => (el.getAttribute("content") || "").trim()).filter(Boolean);
@@ -226,6 +236,7 @@ export const PAGE_FUNCTION = `async function pageFunction(context) {
   }
   return {
     m4b: 1,
+    m4bSource: sourceSlug,
     url,
     canonicalUrl: meta('link[rel="canonical"]') || meta('meta[property="og:url"]') || url,
     title: (article && (article.headline || article.name)) || meta('meta[property="og:title"]') || text(document.querySelector("h1")),
@@ -281,6 +292,36 @@ export function buildActorInput(source: Pick<ReviewSource, "slug" | "startUrls" 
     proxyConfiguration: { useApifyProxy: true },
     pageFunction: PAGE_FUNCTION,
     customData: { source: source.slug, reviewPatterns: source.reviewUrlPatterns.map(globToRegex) },
+  };
+}
+
+/**
+ * ONE Apify run for several review sources: every source's start URLs and review-URL patterns, a
+ * page budget that is the sum of theirs, and a host → source map the page function uses to tag each
+ * page with its source (customData.sourcesByHost). Same actor, same rules (robots.txt, depth 1).
+ */
+export function buildCombinedActorInput(sources: Array<Pick<ReviewSource, "slug" | "startUrls" | "reviewUrlPatterns" | "maxPagesPerRun" | "allowedDomains">>) {
+  const sourcesByHost: Record<string, { source: string; reviewPatterns: string[] }> = {};
+  for (const s of sources) {
+    const hosts = [...s.allowedDomains, ...s.startUrls.map((u) => { try { return new URL(u).hostname; } catch { return ""; } })];
+    for (const h of hosts) {
+      const key = h.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+      if (key && !sourcesByHost[key]) sourcesByHost[key] = { source: s.slug, reviewPatterns: s.reviewUrlPatterns.map(globToRegex) };
+    }
+  }
+  return {
+    startUrls: sources.flatMap((s) => s.startUrls.map((url) => ({ url }))),
+    linkSelector: "a[href]",
+    globs: [...new Set(sources.flatMap((s) => s.reviewUrlPatterns))].map((glob) => ({ glob })),
+    maxCrawlingDepth: 1,
+    maxPagesPerCrawl: Math.max(1, sources.reduce((n, s) => n + s.maxPagesPerRun + s.startUrls.length, 0)),
+    // Several hosts in one run: a little more parallelism than one source's 2, still polite per host.
+    maxConcurrency: Math.min(8, 2 * sources.length),
+    respectRobotsTxtFile: true,
+    injectJQuery: false,
+    proxyConfiguration: { useApifyProxy: true },
+    pageFunction: PAGE_FUNCTION,
+    customData: { sourcesByHost },
   };
 }
 
@@ -506,13 +547,95 @@ async function startSourceRunUnderCap(source: ReviewSource, trigger: string): Pr
   }
 }
 
-/** Starts runs for enabled sources whose crawl interval has elapsed. */
+/**
+ * Starts ONE Apify run for every due source (one call, one run, one dataset), under the same
+ * review-scraping cap as a single-source run. One ApifyRun row per source shares the run id, so
+ * collection, source health and Admin keep working per source. Fail closed like startSourceRun.
+ */
+export async function startCombinedRun(sources: ReviewSource[], trigger: string): Promise<{ status: string; runId?: string; reason?: string; sources: string[] }> {
+  try {
+    return await withLock(REVIEW_BUDGET_LOCK, 2 * 60_000, async () => {
+      const ready: ReviewSource[] = [];
+      for (const s of sources) {
+        const active = await db.apifyRun.findFirst({ where: { sourceId: s.id, status: { in: [...ACTIVE, "SUCCEEDED", "COLLECTING"] } } });
+        if (active) continue;
+        let blocked: string | null = null;
+        for (const url of s.startUrls) {
+          const robots = await checkRobots(url);
+          if (!robots.allowed) {
+            blocked = robots.reason ?? `robots.txt disallows ${url}`;
+            break;
+          }
+        }
+        if (blocked) {
+          await recordFailure({ stage: "CONTENT_FETCH", code: "ROBOTS_DISALLOWED", message: blocked, entityType: "review_source", entityId: s.id });
+          continue;
+        }
+        if (s.startUrls.length) ready.push(s);
+      }
+      if (!ready.length) return { status: "SKIPPED", reason: "no due source is ready (a run is active, or robots.txt disallows its start URLs)", sources: [] };
+      // A combined run does every source's crawl: it is budgeted at one expected run PER source, and
+      // only as many sources as the remaining cap allows go into it (the rest wait for the next run).
+      let fit = ready.length;
+      try {
+        const b = await reviewScrapeBudget();
+        fit = Math.max(0, Math.floor((b.budgetUsd - b.spentUsd) / b.perRunUsd + 1e-9));
+      } catch {
+        /* the guarded call's own budget check fails closed */
+      }
+      if (fit < ready.length) ready.splice(Math.max(1, fit));
+      const q = new URLSearchParams({ timeout: String(config.apify.runTimeoutSecs()), memory: String(config.apify.memoryMb()) });
+      const ids = ready.map((s) => s.id).sort();
+      const last = await db.apifyRun.findMany({ where: { sourceId: { in: ids } }, orderBy: { startedAt: "desc" }, distinct: ["sourceId"], select: { apifyRunId: true } });
+      const guarded = await guardedApiCall({
+        api: "apify",
+        unit: `start:sources:${ids.join(",").slice(0, 120)}`,
+        // The sources' previous runs: a duplicate trigger that saw the same ones starts nothing.
+        idempotencyBasis: last.map((r) => r.apifyRunId).sort().join(",") || "first",
+        trigger,
+        config: [() => (apifyConfigured() ? null : { code: "APIFY_NOT_CONFIGURED", reason: "APIFY_API_TOKEN not configured" })],
+        budget: [
+          async () => {
+            let b: Awaited<ReturnType<typeof reviewScrapeBudget>>;
+            try {
+              b = await reviewScrapeBudget();
+            } catch (error) {
+              return { code: "BUDGET_UNVERIFIED", reason: `review-scraping spend could not be read: ${String(error).slice(0, 160)}` };
+            }
+            const need = b.perRunUsd * ready.length;
+            return b.spentUsd + need <= b.budgetUsd ? null : { code: "BUDGET_EXHAUSTED", reason: `review-scraping budget would be exceeded: spent ≈$${b.spentUsd.toFixed(2)} + this run ≈$${need.toFixed(2)} (${ready.length} source(s)) of $${b.budgetUsd.toFixed(2)} (REVIEW_SCRAPE_MONTHLY_BUDGET_USD)` };
+          },
+        ],
+        call: () => apifyRequest<{ data?: ApifyRunData }>(`${actorPath()}/runs?${q}`, { method: "POST", body: buildCombinedActorInput(ready) }),
+        validate: (r) => (r?.data?.id ? null : { code: "APIFY_RESPONSE_INVALID", reason: "Apify did not return a run id" }),
+      });
+      if (guarded.status === "SKIPPED") return { status: guarded.code === "BUDGET_EXHAUSTED" || guarded.code === "BUDGET_UNVERIFIED" ? guarded.code : "SKIPPED", reason: `${guarded.code}: ${guarded.reason}`, sources: [] };
+      if (guarded.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", guarded.reason);
+      const { data } = guarded.value;
+      if (!data?.id) throw new PipelineError("APIFY_RESPONSE_INVALID", "Apify did not return a run id");
+      for (const s of ready) {
+        await db.apifyRun.create({ data: { sourceId: s.id, apifyRunId: data.id, datasetId: data.defaultDatasetId ?? null, status: data.status ?? "READY", trigger } });
+        await db.reviewSource.update({ where: { id: s.id }, data: { lastRunAt: new Date() } });
+        await resolveFailures({ stage: "CONTENT_FETCH", entityType: "review_source", entityId: s.id });
+      }
+      log.info("apify combined run started", { stage: "CONTENT_FETCH", sources: ready.map((s) => s.slug), runId: data.id });
+      return { status: "STARTED", runId: data.id, sources: ready.map((s) => s.slug) };
+    });
+  } catch (error) {
+    if (error instanceof LockHeldError) return { status: "SKIPPED", reason: "REVIEW_BUDGET_BUSY: another review run is being started", sources: [] };
+    const e = error instanceof PipelineError ? error : new PipelineError("APIFY_RUN_FAILED", String(error));
+    return { status: e.code, reason: e.message, sources: [] };
+  }
+}
+
+/** Starts runs for enabled sources whose crawl interval has elapsed: ONE combined run when several are due. */
 export async function runScrapeSources(trigger: string) {
   if (!apifyConfigured()) return { status: "BLOCKED_BY_ENVIRONMENT", reason: "APIFY_API_TOKEN not configured", started: 0 };
   // Healthy, high-priority sources first; a source paused by source health waits out its backoff.
   const sources = await db.reviewSource.findMany({ where: { enabled: true }, orderBy: [{ priority: "desc" }, { lastRunAt: { sort: "asc", nulls: "first" } }] });
   const now = Date.now();
   const results: Array<{ source: string; status: string; reason?: string }> = [];
+  const due: typeof sources = [];
   for (const s of sources) {
     if (s.pausedUntil && s.pausedUntil.getTime() > now) {
       results.push({ source: s.slug, status: "PAUSED", reason: s.healthNote ?? `paused until ${s.pausedUntil.toISOString()}` });
@@ -520,10 +643,16 @@ export async function runScrapeSources(trigger: string) {
     }
     // 30 minutes of slack: a daily cron lands a few seconds short of 24 h, which must not skip a day.
     if (s.lastRunAt && now - s.lastRunAt.getTime() < s.crawlFrequencyHours * 3_600_000 - 30 * 60_000) continue;
-    const r = await startSourceRun(s, trigger);
-    results.push({ source: s.slug, status: r.status, reason: r.reason });
+    due.push(s);
   }
-  return { status: "OK", started: results.filter((r) => r.status === "STARTED").length, results };
+  if (due.length === 1) {
+    const r = await startSourceRun(due[0], trigger);
+    results.push({ source: due[0].slug, status: r.status, reason: r.reason });
+  } else if (due.length > 1) {
+    const r = await startCombinedRun(due, trigger);
+    for (const s of due) results.push({ source: s.slug, status: r.sources.includes(s.slug) ? r.status : r.status === "STARTED" ? "NOT_READY" : r.status, reason: r.reason });
+  }
+  return { status: "OK", started: results.filter((r) => r.status === "STARTED").length, apifyRuns: results.some((r) => r.status === "STARTED") ? 1 : 0, results };
 }
 
 async function refreshRun(run: ApifyRun): Promise<ApifyRun> {
@@ -564,7 +693,8 @@ export async function collectRun(run: ApifyRun, trigger: string): Promise<Collec
     if (got.status === "SKIPPED") throw new PipelineError("APIFY_RUN_FAILED", `${got.code}: ${got.reason}`);
     if (got.status === "INVALID_RESPONSE") throw new PipelineError("APIFY_RESPONSE_INVALID", got.reason);
     const items = got.value as unknown[];
-    const pages = items.filter((i): i is ApifyItem => Boolean(i) && typeof i === "object" && (i as ApifyItem).m4b === 1);
+    // A combined run's dataset holds every source's pages: only this source's (tagged by the page function).
+    const pages = items.filter((i): i is ApifyItem => Boolean(i) && typeof i === "object" && (i as ApifyItem).m4b === 1 && (!(i as ApifyItem).m4bSource || (i as ApifyItem).m4bSource === source.slug));
     const rejections: Record<string, number> = {};
     const valid: Record<string, unknown>[] = [];
     const seen = new Set<string>();

@@ -38,7 +38,8 @@ export async function reviewScrapeBudget(now = new Date()): Promise<ReviewBudget
   const recordedUsd = recorded.reduce((s, n) => s + n, 0);
   const avg = recorded.length ? recordedUsd / recorded.length : 0;
   const perRunUsd = Math.max(config.apify.reviewRunEstimateUsd(), avg);
-  const unknownRuns = runs.filter((r) => !(r.apifyRunId in ledger)).length;
+  // One Apify run can have several rows (a combined run serves several sources): count each run once.
+  const unknownRuns = new Set(runs.filter((r) => !(r.apifyRunId in ledger)).map((r) => r.apifyRunId)).size;
   const spentUsd = recordedUsd + unknownRuns * perRunUsd;
   const budgetUsd = config.apify.reviewMonthlyBudgetUsd();
   return { budgetUsd, recordedUsd, unknownRuns, perRunUsd, spentUsd, remainingUsd: Math.max(0, budgetUsd - spentUsd), allowed: spentUsd + perRunUsd <= budgetUsd };

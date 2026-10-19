@@ -116,7 +116,7 @@ async function callModel(prompt: string): Promise<ModelReply> {
   const key = orKey ?? config.rewrite.apiKey();
   if (!key) return { ok: false, error: { kind: "NOT_CONFIGURED", message: NOT_CONFIGURED } };
   const res = orKey
-    ? await safeFetch("https://openrouter.ai/api/v1/chat/completions", {
+    ? await safeFetch(`${config.rewrite.openRouterBaseUrl()}/chat/completions`, {
         method: "POST",
         headers: { Authorization: `Bearer ${orKey}`, "HTTP-Referer": config.siteUrl(), "X-Title": "Made4Buyers", "Content-Type": "application/json" },
         body: JSON.stringify({ model: config.rewrite.openRouterModel(), max_tokens: 4000, messages: [{ role: "user", content: prompt }] }),

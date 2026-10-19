@@ -71,20 +71,21 @@ describe("review-scraping spending cap", () => {
 
   it("records the usage Apify reports and stops starting runs once the next one would pass the cap", async () => {
     for (const slug of ["a", "b", "c", "d"]) await addSource(slug);
-    // $0.50 expected per run, $2 cap: 4 starts would reach $2.00; a fifth never starts.
-    expect(await runScrapeSources("cron")).toMatchObject({ started: 4 });
-    expect(stub.starts).toBe(4);
-    // Apify reports $0.80 per run: recorded spend $3.20 is over the cap.
+    // Four due sources: ONE combined Apify run ($0.50 expected, $2 cap).
+    expect(await runScrapeSources("cron")).toMatchObject({ started: 4, apifyRuns: 1 });
+    expect(stub.starts).toBe(1);
+    // Apify reports $1.80 for that run (counted once, not per source): the next run would pass the cap.
+    stub.usage = 1.8;
     await runCollectScrapes("cron");
     const b = await reviewScrapeBudget();
-    expect(b).toMatchObject({ recordedUsd: expect.closeTo(3.2, 5), unknownRuns: 0, allowed: false });
+    expect(b).toMatchObject({ recordedUsd: expect.closeTo(1.8, 5), unknownRuns: 0, allowed: false });
     await db.reviewSource.updateMany({ data: { lastRunAt: null } });
     await db.apifyRun.updateMany({ data: { status: "COLLECTED" } }); // no active run blocks the next start
     const again = await runScrapeSources("cron");
     expect(again.started).toBe(0);
     expect(again.results?.every((r) => r.status === "BUDGET_EXHAUSTED")).toBe(true);
     expect(again.results?.[0].reason).toMatch(/REVIEW_SCRAPE_MONTHLY_BUDGET_USD/);
-    expect(stub.starts).toBe(4); // no paid call
+    expect(stub.starts).toBe(1); // no paid call
   });
 
   it("applies to every trigger: the scheduler job, a second scheduler and Admin 'Run now'", async () => {
@@ -105,8 +106,9 @@ describe("review-scraping spending cap", () => {
     const results = await Promise.all([runScrapeSources("cron-1"), runScrapeSources("cron-2"), runScrapeSources("cron-3")]);
     budget();
     expect(stub.starts).toBe(1);
-    expect(results.reduce((n, r) => n + r.started, 0)).toBe(1);
-    expect(await db.apifyRun.count()).toBe(1);
+    // Exactly one Apify run (it serves both due sources: one row each, the same run id).
+    expect(results.reduce((n, r) => n + (r.apifyRuns ?? 0), 0)).toBe(1);
+    expect(new Set((await db.apifyRun.findMany({ select: { apifyRunId: true } })).map((r) => r.apifyRunId)).size).toBe(1);
   });
 
   it("fails closed: when the spend cannot be read, nothing starts and the reason is reported", async () => {

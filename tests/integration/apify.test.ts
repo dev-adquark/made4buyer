@@ -6,6 +6,7 @@ import { seedTaxonomy } from "@/lib/taxonomy/persist";
 import { startStubServer } from "../../scripts/support/stub-server";
 import { resetDb } from "../support/db";
 import { withEnv } from "../support/env";
+import { withApiInvocation } from "@/lib/ops/api-guard";
 
 // All Apify responses here come from the local stub and fixtures/sample-apify-items.json (SAMPLE data).
 let stub: Awaited<ReturnType<typeof startStubServer>>;
@@ -58,6 +59,27 @@ describe("Apify scrape → collect → ingestion", () => {
     expect(await runCollectScrapes("test")).toMatchObject({ checked: 0, collected: 0 });
     expect(await runScrapeSources("test")).toMatchObject({ started: 0 });
     expect(await db.normalizedReview.count({ where: { source: sourceKey("example") } })).toBe(1);
+  });
+
+  it("several due sources: ONE Apify call and one dataset download, collected per source", async () => {
+    await addSource();
+    await db.reviewSource.create({ data: { slug: "second", name: "Second Reviews", homepageUrl: `${stub.base}/`, allowedDomains: ["second.example.test"], startUrls: [`${stub.base}/listing`], reviewUrlPatterns: ["https://second.example.test/reviews/**"], enabled: true, rights: "LICENSED" } });
+    const before = stub.requests.length;
+    const started = await runScrapeSources("test");
+    expect(started).toMatchObject({ started: 2, apifyRuns: 1 });
+    const posts = stub.requests.slice(before).filter((r) => r.method === "POST" && r.path.includes("/runs"));
+    expect(posts).toHaveLength(1);
+    const rows = await db.apifyRun.findMany({ select: { apifyRunId: true, source: { select: { slug: true } } } });
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.apifyRunId)).size).toBe(1);
+
+    // Inside one job invocation (as every scheduled run is), the shared dataset is read once.
+    const collected = await withApiInvocation(() => runCollectScrapes("test"));
+    expect(collected).toMatchObject({ collected: 2 });
+    // The shared dataset is downloaded once per invocation, not once per source.
+    expect(stub.requests.slice(before).filter((r) => r.method === "GET" && /\/datasets\//.test(r.path))).toHaveLength(1);
+    expect(await db.normalizedReview.count({ where: { source: sourceKey("example") } })).toBe(1);
+    expect(await db.normalizedReview.count({ where: { source: sourceKey("second") } })).toBe(0); // its host has no pages in the dataset
   });
 
   it("shows scraped text as an excerpt unless the source is licensed", async () => {

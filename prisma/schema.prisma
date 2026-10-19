@@ -971,7 +971,8 @@ model ReviewSource {
 model ApifyRun {
   id          String       @id @default(cuid())
   sourceId    String
-  apifyRunId  String       @unique
+  /// One Apify run can serve several sources (runScrapeSources starts ONE run for every due source): one row per source.
+  apifyRunId  String
   datasetId   String?
   /// Apify status (READY, RUNNING, SUCCEEDED, FAILED, ABORTED, TIMED-OUT) or ours (COLLECTING, COLLECTED, COLLECT_FAILED).
   status      String
@@ -990,6 +991,7 @@ model ApifyRun {
   staleCount            Int?
   unknownFreshnessCount Int?
 
+  @@unique([apifyRunId, sourceId])
   @@index([status, startedAt])
   @@index([sourceId, startedAt])
   @@map("apify_runs")
