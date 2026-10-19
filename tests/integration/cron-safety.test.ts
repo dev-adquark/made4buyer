@@ -146,7 +146,7 @@ describe("schedules read model", () => {
     expect(cleanup.lastFailure?.error).toContain("disk full");
     expect(cleanup.lock).toEqual({ state: "free" });
     const daily = rows.find((r) => r.job === "daily-article")!;
-    expect(daily.schedules.map((s) => s.origin)).toEqual(["vercel"]);
+    expect(daily.schedules.map((s) => s.origin)).toEqual(["vercel", "vercel"]); // the morning guide and the evening article
     expect(daily.lastRun).toBeNull();
     expect(daily.lastAudit).toBeNull();
     expect(daily.last30.rate).toBeNull();

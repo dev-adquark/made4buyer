@@ -28,7 +28,13 @@ describe("cron parsing", () => {
 describe("next / previous run (UTC)", () => {
   // Jobs that call no paid/budget-limited API (plain HTTP GETs we fully control the volume of) may run
   // on their own cadence: there is no cost to pace against, unlike every Apify-calling job below.
-  const COST_FREE_EXEMPT: Record<string, [string, string]> = { "/api/cron/commerce-direct-crawl": ["*", "*"], "/api/cron/deal-price-recheck": ["*", "*"] };
+  const COST_FREE_EXEMPT: Record<string, [string, string]> = {
+    "/api/cron/commerce-direct-crawl": ["*", "*"],
+    "/api/cron/deal-price-recheck": ["*", "*"],
+    // Keyword-to-Blog is a flat-fee plan capped per day (KEYWORD_TO_BLOG_DAILY_LIMIT), not billed per call:
+    // a morning guide and an evening article every day (owner decision, 2026-10-19).
+    "/api/cron/daily-article": ["*", "*"],
+  };
 
   it("every vercel.json schedule is cost-free-job cadence, weekly (Monday-only) or biweekly (the 1st and 15th), never more often than that", () => {
     // Coupons and other Apify-calling jobs aside, data this site tracks (reviews, prices, images,
@@ -123,7 +129,7 @@ describe("scheduled jobs", () => {
     const entries = scheduledEntries();
     const vercel = entries.filter((e) => e.origin === "vercel");
     expect(vercel).toHaveLength((vercelConfig as { crons: unknown[] }).crons.length);
-    expect(vercel.filter((e) => e.job === "daily-article").map((e) => e.query)).toEqual([undefined]);
+    expect(vercel.filter((e) => e.job === "daily-article").map((e) => e.query)).toEqual([undefined, "slot=evening"]);
     expect(entries.filter((e) => e.origin === "github-actions")).toEqual([]);
     expect(jobFromCronPath("/api/cron/commerce-collect")).toEqual({ job: "commerce-collect", query: undefined });
     expect(jobFromCronPath("/elsewhere")).toBeNull();
